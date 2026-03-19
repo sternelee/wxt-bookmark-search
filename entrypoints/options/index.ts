@@ -4,7 +4,7 @@ import {
   getIndexStats,
   clearAll,
 } from "../../src/db";
-import { testApiKey } from "../../src/embedding";
+import { testApiKey, getCacheStats, clearEmbeddingCache } from "../../src/embedding";
 
 // DOM 元素
 const apiKeyInput = document.getElementById("apiKey") as HTMLInputElement;
@@ -30,6 +30,7 @@ const startIndexBtn = document.getElementById(
   "startIndexBtn",
 ) as HTMLButtonElement;
 const retryBtn = document.getElementById("retryBtn") as HTMLButtonElement;
+const clearCacheBtn = document.getElementById("clearCacheBtn") as HTMLButtonElement;
 
 const apiStatus = document.getElementById("apiStatus") as HTMLElement;
 const indexStatus = document.getElementById("indexStatus") as HTMLElement;
@@ -40,6 +41,7 @@ const progressBar = document.getElementById(
   "progressBar",
 ) as HTMLProgressElement;
 const progressText = document.getElementById("progressText") as HTMLElement;
+const cacheStats = document.getElementById("cacheStats") as HTMLElement;
 
 const totalStat = document.getElementById("totalStat") as HTMLElement;
 const indexedStat = document.getElementById("indexedStat") as HTMLElement;
@@ -90,6 +92,10 @@ async function loadStats() {
   indexedStat.textContent = String(stats.indexed);
   pendingStat.textContent = String(stats.pending);
   failedStat.textContent = String(stats.failed);
+
+  // 更新缓存统计
+  const cache = getCacheStats();
+  cacheStats.textContent = `${cache.size}/${cache.maxSize}`;
 }
 
 // 显示状态消息
@@ -223,6 +229,14 @@ retryBtn.addEventListener("click", async () => {
   } catch (error) {
     showStatus(indexStatus, `启动失败: ${error}`, "error");
   }
+});
+
+// 清空缓存
+clearCacheBtn.addEventListener("click", () => {
+  clearEmbeddingCache();
+  const cache = getCacheStats();
+  cacheStats.textContent = `${cache.size}/${cache.maxSize}`;
+  showStatus(indexStatus, "✓ 查询缓存已清空", "success");
 });
 
 // 监听索引进度
