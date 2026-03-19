@@ -190,7 +190,7 @@
       }
 
       .folder-list {
-        max-height: 200px;
+        max-height: 300px;
         overflow-y: auto;
         border: 1px solid #ddd;
         border-radius: 6px;
@@ -201,7 +201,7 @@
       .folder-item {
         display: flex;
         align-items: center;
-        padding: 6px 8px;
+        padding: 4px 8px;
         margin: 2px 0;
         border-radius: 4px;
         transition: background 0.2s;
@@ -221,6 +221,39 @@
         font-size: 13px;
         cursor: pointer;
       }
+
+      .folder-toggle {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 12px;
+        color: #666;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 4px;
+        transition: transform 0.2s;
+      }
+
+      .folder-toggle:hover {
+        color: #333;
+      }
+
+      .folder-toggle.collapsed {
+        transform: rotate(-90deg);
+      }
+
+      .folder-children {
+        margin-left: 24px;
+        display: none;
+      }
+
+      .folder-children.expanded {
+        display: block;
+      }
     </style>
   </head>
   <body>
@@ -232,9 +265,7 @@
       <div class="form-group">
         <label for="apiKey">API Key</label>
         <input type="password" id="apiKey" placeholder="sk-..." />
-        <p class="hint">
-          使用 BAAI/bge-m3 模型，支持中英文语义检索
-        </p>
+        <p class="hint">使用 BAAI/bge-m3 模型，支持中英文语义检索</p>
       </div>
       <div class="button-group">
         <button id="saveBtn">保存设置</button>
@@ -301,13 +332,23 @@
         <button id="retryBtn" class="btn-secondary">重试失败</button>
         <button id="clearCacheBtn" class="btn-secondary">清空缓存</button>
       </div>
-      <div id="cacheInfo" style="margin-top: 8px; font-size: 12px; color: #888;">
+      <div id="cacheInfo" style="margin-top: 8px; font-size: 12px; color: #888">
         查询缓存: <span id="cacheStats">0/100</span>
       </div>
       <div id="indexStatus" class="status hidden"></div>
       <div id="progressContainer" class="progress hidden">
         <progress id="progressBar" value="0" max="100"></progress>
-        <div id="progressText" style="text-align: center; font-size: 12px; color: #666; margin-top: 4px;">0%</div>
+        <div
+          id="progressText"
+          style="
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+          "
+        >
+          0%
+        </div>
       </div>
     </div>
 

@@ -77,7 +77,7 @@ async function loadFolders() {
     console.log('[options] Loading bookmark folders...');
     const response = await browser.runtime.sendMessage({ type: 'GET_BOOKMARK_FOLDERS' }) as {
       success: boolean;
-      folders?: Array<{ id: string; title: string; path: string }>;
+      folders?: Array<{ id: string; title: string; path: string; children?: any[] }>;
       error?: string;
     };
 
@@ -97,26 +97,78 @@ async function loadFolders() {
     // 清空列表
     folderList.innerHTML = '';
 
-    // 添加复选框
-    response.folders.forEach(folder => {
-      const div = document.createElement('div');
-      div.className = 'folder-item';
+    // 递归渲染文件夹树
+    function renderFolderTree(folders: Array<{ id: string; title: string; path: string; children?: any[] }>, container: HTMLElement) {
+      folders.forEach(folder => {
+        const hasChildren = folder.children && folder.children.length > 0;
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `folder-${folder.id}`;
-      checkbox.value = folder.id;
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'folder-item';
 
-      const label = document.createElement('label');
-      label.htmlFor = `folder-${folder.id}`;
-      label.textContent = folder.path;
+        // 展开/折叠按钮
+        if (hasChildren) {
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'folder-toggle';
+          toggleBtn.textContent = '▼';
+          toggleBtn.onclick = (e) => {
+            e.preventDefault();
+            const childContainer = itemDiv.nextElementSibling as HTMLElement;
+            if (childContainer && childContainer.classList.contains('folder-children')) {
+              childContainer.classList.toggle('expanded');
+              toggleBtn.classList.toggle('collapsed');
+            }
+          };
+          itemDiv.appendChild(toggleBtn);
+        } else {
+          // 占位符
+          const spacer = document.createElement('span');
+          spacer.style.width = '24px';
+          spacer.style.display = 'inline-block';
+          itemDiv.appendChild(spacer);
+        }
 
-      div.appendChild(checkbox);
-      div.appendChild(label);
-      folderList.appendChild(div);
-    });
+        // 复选框
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `folder-${folder.id}`;
+        checkbox.value = folder.id;
+        checkbox.style.marginRight = '8px';
+        itemDiv.appendChild(checkbox);
 
-    console.log(`[options] Loaded ${response.folders.length} folders`);
+        // 标签
+        const label = document.createElement('label');
+        label.htmlFor = `folder-${folder.id}`;
+        label.textContent = folder.title;
+        label.style.flex = '1';
+        label.style.cursor = 'pointer';
+        itemDiv.appendChild(label);
+
+        container.appendChild(itemDiv);
+
+        // 递归渲染子文件夹
+        if (hasChildren) {
+          const childContainer = document.createElement('div');
+          childContainer.className = 'folder-children expanded';
+          container.appendChild(childContainer);
+          renderFolderTree(folder.children!, childContainer);
+        }
+      });
+    }
+
+    renderFolderTree(response.folders, folderList);
+
+    // 统计总文件夹数
+    let totalFolders = 0;
+    function countFolders(folders: any[]): number {
+      let count = folders.length;
+      folders.forEach(f => {
+        if (f.children) count += countFolders(f.children);
+      });
+      return count;
+    }
+    totalFolders = countFolders(response.folders);
+
+    console.log(`[options] Loaded ${totalFolders} folders in tree structure`);
   } catch (error) {
     console.error('Failed to load folders:', error);
     folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';

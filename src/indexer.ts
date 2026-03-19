@@ -414,11 +414,11 @@ export function resumeIndexing(): void {
 }
 
 /**
- * 获取所有书签文件夹
+ * 获取所有书签文件夹（树形结构）
  */
-export async function getBookmarkFolders(): Promise<Array<{ id: string; title: string; path: string }>> {
+export async function getBookmarkFolders(): Promise<Array<{ id: string; title: string; path: string; children?: any[] }>> {
   const allBookmarks = await browser.bookmarks.getTree();
-  const folders: Array<{ id: string; title: string; path: string }> = [];
+  const folders: Array<{ id: string; title: string; path: string; children?: any[] }> = [];
 
   type BookmarkNode = {
     id: string;
@@ -427,34 +427,38 @@ export async function getBookmarkFolders(): Promise<Array<{ id: string; title: s
     children?: BookmarkNode[];
   };
 
-  function traverse(nodes: BookmarkNode[], parentPath: string = '') {
+  function buildTree(nodes: BookmarkNode[], parentPath: string = ''): Array<{ id: string; title: string; path: string; children?: any[] }> {
+    const result: Array<{ id: string; title: string; path: string; children?: any[] }> = [];
+
     for (const node of nodes) {
       // 如果是文件夹（有 children 且没有 url）
       if (node.children && !node.url) {
-        // 使用标题，如果没有标题则使用 "未命名"
-        const title = node.title || '未命名';
-
-        // 构建路径（跳过根节点）
+        const title = node.title || '根目录';
         const currentPath = parentPath ? `${parentPath}/${title}` : title;
 
-        // 只添加有实际名称的文件夹（跳过根级别的 "书签栏" 等系统文件夹）
-        if (node.title && parentPath) {
-          folders.push({
-            id: node.id,
-            title: node.title,
-            path: currentPath,
-          });
+        const folderItem: { id: string; title: string; path: string; children?: any[] } = {
+          id: node.id,
+          title: title,
+          path: currentPath,
+        };
+
+        // 递归处理子文件夹
+        const childFolders = buildTree(node.children, currentPath);
+        if (childFolders.length > 0) {
+          folderItem.children = childFolders;
         }
 
-        // 递归遍历子文件夹
-        traverse(node.children, currentPath);
+        result.push(folderItem);
       }
     }
+
+    return result;
   }
 
-  traverse(allBookmarks);
+  // 从根节点开始构建树
+  folders.push(...buildTree(allBookmarks));
 
-  console.log(`[indexer] Found ${folders.length} bookmark folders`);
+  console.log(`[indexer] Built folder tree with ${folders.length} root folders`);
   return folders;
 }
 
