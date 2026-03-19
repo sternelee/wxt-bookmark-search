@@ -414,6 +414,88 @@ export function resumeIndexing(): void {
 }
 
 /**
+ * 获取所有书签文件夹
+ */
+export async function getBookmarkFolders(): Promise<Array<{ id: string; title: string; path: string }>> {
+  const allBookmarks = await browser.bookmarks.getTree();
+  const folders: Array<{ id: string; title: string; path: string }> = [];
+
+  type BookmarkNode = {
+    id: string;
+    title?: string;
+    url?: string;
+    children?: BookmarkNode[];
+  };
+
+  function traverse(nodes: BookmarkNode[], parentPath: string = '') {
+    for (const node of nodes) {
+      // 跳过根节点和无标题节点
+      if (node.id === '0' || !node.title) continue;
+
+      // 如果是文件夹（有 children 且没有 url）
+      if (node.children && !node.url) {
+        const currentPath = parentPath ? `${parentPath}/${node.title}` : node.title;
+        folders.push({
+          id: node.id,
+          title: node.title,
+          path: currentPath,
+        });
+        traverse(node.children, currentPath);
+      }
+    }
+  }
+
+  traverse(allBookmarks);
+  return folders;
+}
+
+/**
+ * 索引指定文件夹的书签
+ */
+export async function indexFolders(folderIds: string[]): Promise<{ total: number; skipped: number; queued: number }> {
+  const allBookmarks = await browser.bookmarks.getTree();
+  const flatBookmarks: Array<{ id: string; url: string; title: string }> = [];
+
+  type BookmarkNode = {
+    id: string;
+    title?: string;
+    url?: string;
+    children?: BookmarkNode[];
+  };
+
+  function traverse(nodes: BookmarkNode[], collect: boolean = false) {
+    for (const node of nodes) {
+      const shouldCollect = collect || folderIds.includes(node.id);
+
+      if (node.url && shouldCollect) {
+        flatBookmarks.push({
+          id: node.id,
+          url: node.url,
+          title: node.title || '',
+        });
+      }
+
+      if (node.children) {
+        traverse(node.children, shouldCollect);
+      }
+    }
+  }
+
+  traverse(allBookmarks);
+
+  console.log(`[indexer] Found ${flatBookmarks.length} bookmarks in selected folders`);
+
+  // 增量索引：自动过滤已索引的书签
+  const queued = await enqueueBookmarks(flatBookmarks);
+
+  return {
+    total: flatBookmarks.length,
+    skipped: flatBookmarks.length - queued,
+    queued,
+  };
+}
+
+/**
  * 增量索引：只索引新增或未索引的书签
  */
 export async function indexAllBookmarks(): Promise<{ total: number; skipped: number; queued: number }> {

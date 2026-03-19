@@ -9,7 +9,7 @@ import { highlightBookmark } from "../src/highlight";
 import { getSettings, getIndexedBookmarks, hasApiKey } from "../src/db";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
-import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus } from "../src/indexer";
+import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus, getBookmarkFolders, indexFolders } from "../src/indexer";
 
 export default defineBackground(() => {
   // 加载频率缓存
@@ -157,6 +157,20 @@ export default defineBackground(() => {
         const status = getIndexingStatus();
         sendResponse(status);
         break;
+      case 'GET_BOOKMARK_FOLDERS':
+        getBookmarkFolders().then(folders => {
+          sendResponse({ success: true, folders });
+        }).catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+        return true; // 异步响应
+      case 'INDEX_FOLDERS':
+        indexFolders(message.folderIds).then(result => {
+          sendResponse({ success: true, ...result });
+        }).catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+        return true; // 异步响应
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
     }

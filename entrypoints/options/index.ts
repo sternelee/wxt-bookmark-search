@@ -33,6 +33,7 @@ const pauseBtn = document.getElementById("pauseBtn") as HTMLButtonElement;
 const resumeBtn = document.getElementById("resumeBtn") as HTMLButtonElement;
 const retryBtn = document.getElementById("retryBtn") as HTMLButtonElement;
 const clearCacheBtn = document.getElementById("clearCacheBtn") as HTMLButtonElement;
+const folderList = document.getElementById("folderList") as HTMLElement;
 
 const apiStatus = document.getElementById("apiStatus") as HTMLElement;
 const indexStatus = document.getElementById("indexStatus") as HTMLElement;
@@ -63,8 +64,57 @@ async function init() {
   // 更新权重滑块显示
   updateWeightVisibility();
 
+  // 加载文件夹列表
+  await loadFolders();
+
   // 加载统计
   await loadStats();
+}
+
+// 加载文件夹列表
+async function loadFolders() {
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'GET_BOOKMARK_FOLDERS' }) as {
+      success: boolean;
+      folders?: Array<{ id: string; title: string; path: string }>;
+      error?: string;
+    };
+
+    if (!response.success || !response.folders) {
+      console.error('Failed to load folders:', response.error);
+      return;
+    }
+
+    // 清空列表
+    folderList.innerHTML = '';
+
+    // 添加复选框
+    response.folders.forEach(folder => {
+      const div = document.createElement('div');
+      div.className = 'folder-item';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `folder-${folder.id}`;
+      checkbox.value = folder.id;
+
+      const label = document.createElement('label');
+      label.htmlFor = `folder-${folder.id}`;
+      label.textContent = folder.path;
+
+      div.appendChild(checkbox);
+      div.appendChild(label);
+      folderList.appendChild(div);
+    });
+  } catch (error) {
+    console.error('Failed to load folders:', error);
+  }
+}
+
+// 获取选中的文件夹 ID
+function getSelectedFolders(): string[] {
+  const checkboxes = folderList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
 }
 
 // 获取实际书签总数
@@ -210,7 +260,18 @@ startIndexBtn.addEventListener("click", async () => {
   showStatus(indexStatus, "正在索引...", "info");
 
   try {
-    await browser.runtime.sendMessage({ type: "START_INDEXING" });
+    const selectedFolders = getSelectedFolders();
+
+    if (selectedFolders.length > 0) {
+      // 索引选中的文件夹
+      await browser.runtime.sendMessage({
+        type: 'INDEX_FOLDERS',
+        folderIds: selectedFolders
+      });
+    } else {
+      // 索引全部书签
+      await browser.runtime.sendMessage({ type: "START_INDEXING" });
+    }
   } catch (error) {
     showStatus(indexStatus, `启动失败: ${error}`, "error");
     startIndexBtn.disabled = false;
