@@ -9,7 +9,7 @@ import { highlightBookmark } from "../src/highlight";
 import { getSettings, getIndexedBookmarks, hasApiKey } from "../src/db";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
-import { initIndexer, enqueueBookmark, indexAllBookmarks } from "../src/indexer";
+import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus } from "../src/indexer";
 
 export default defineBackground(() => {
   // 加载频率缓存
@@ -140,9 +140,25 @@ export default defineBackground(() => {
 
   // 监听来自 Options 页面的消息
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'START_INDEXING') {
-      indexAllBookmarks();
-      sendResponse({ success: true });
+    switch (message.type) {
+      case 'START_INDEXING':
+        indexAllBookmarks();
+        sendResponse({ success: true });
+        break;
+      case 'PAUSE_INDEXING':
+        pauseIndexing();
+        sendResponse({ success: true });
+        break;
+      case 'RESUME_INDEXING':
+        resumeIndexing();
+        sendResponse({ success: true });
+        break;
+      case 'GET_INDEXING_STATUS':
+        const status = getIndexingStatus();
+        sendResponse(status);
+        break;
+      default:
+        sendResponse({ success: false, error: 'Unknown message type' });
     }
     return true;
   });

@@ -29,6 +29,8 @@ const applySettingsBtn = document.getElementById(
 const startIndexBtn = document.getElementById(
   "startIndexBtn",
 ) as HTMLButtonElement;
+const pauseBtn = document.getElementById("pauseBtn") as HTMLButtonElement;
+const resumeBtn = document.getElementById("resumeBtn") as HTMLButtonElement;
 const retryBtn = document.getElementById("retryBtn") as HTMLButtonElement;
 const clearCacheBtn = document.getElementById("clearCacheBtn") as HTMLButtonElement;
 
@@ -202,6 +204,8 @@ startIndexBtn.addEventListener("click", async () => {
   }
 
   startIndexBtn.disabled = true;
+  pauseBtn.disabled = false;
+  resumeBtn.disabled = true;
   progressContainer.classList.remove("hidden");
   showStatus(indexStatus, "正在索引...", "info");
 
@@ -210,7 +214,32 @@ startIndexBtn.addEventListener("click", async () => {
   } catch (error) {
     showStatus(indexStatus, `启动失败: ${error}`, "error");
     startIndexBtn.disabled = false;
+    pauseBtn.disabled = true;
     progressContainer.classList.add("hidden");
+  }
+});
+
+// 暂停索引
+pauseBtn.addEventListener("click", async () => {
+  try {
+    await browser.runtime.sendMessage({ type: "PAUSE_INDEXING" });
+    showStatus(indexStatus, "索引已暂停", "info");
+    pauseBtn.disabled = true;
+    resumeBtn.disabled = false;
+  } catch (error) {
+    showStatus(indexStatus, `暂停失败: ${error}`, "error");
+  }
+});
+
+// 恢复索引
+resumeBtn.addEventListener("click", async () => {
+  try {
+    await browser.runtime.sendMessage({ type: "RESUME_INDEXING" });
+    showStatus(indexStatus, "索引已恢复", "info");
+    pauseBtn.disabled = false;
+    resumeBtn.disabled = true;
+  } catch (error) {
+    showStatus(indexStatus, `恢复失败: ${error}`, "error");
   }
 });
 
@@ -253,14 +282,24 @@ browser.runtime.onMessage.addListener((message) => {
     if (progress.status === "processing") {
       const currentUrl = progress.current ? ` (${progress.current.slice(0, 50)}...)` : "";
       showStatus(indexStatus, `索引中 ${progress.processed}/${progress.total}${currentUrl}`, "info");
+      pauseBtn.disabled = false;
+      resumeBtn.disabled = true;
+    } else if (progress.status === "paused") {
+      showStatus(indexStatus, `索引已暂停 (${progress.processed}/${progress.total})`, "info");
+      pauseBtn.disabled = true;
+      resumeBtn.disabled = false;
     } else if (progress.status === "complete") {
       showStatus(indexStatus, `✓ 索引完成，共处理 ${progress.processed} 个书签`, "success");
       startIndexBtn.disabled = false;
+      pauseBtn.disabled = true;
+      resumeBtn.disabled = true;
       progressContainer.classList.add("hidden");
       loadStats(); // 刷新统计
     } else if (progress.status === "error") {
       showStatus(indexStatus, `索引出错: ${progress.error || '未知错误'}`, "error");
       startIndexBtn.disabled = false;
+      pauseBtn.disabled = true;
+      resumeBtn.disabled = true;
       progressContainer.classList.add("hidden");
     }
   }

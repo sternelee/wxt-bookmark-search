@@ -27,6 +27,7 @@ interface IndexJob {
 /** 索引队列 */
 const queue: IndexJob[] = [];
 let isProcessing = false;
+let isPaused = false; // 暂停标志
 let totalToProcess = 0; // 总待处理数
 let processedCount = 0; // 已处理数
 const MAX_RETRIES = 2;
@@ -48,7 +49,7 @@ export interface IndexingProgress {
   total: number;
   processed: number;
   current?: string; // 当前正在处理的 URL
-  status: 'processing' | 'complete' | 'error';
+  status: 'processing' | 'complete' | 'error' | 'paused';
   error?: string;
 }
 
@@ -248,6 +249,14 @@ async function processQueue(): Promise<void> {
   notifyProgress({ total: totalToProcess, processed: 0, status: 'processing' });
 
   while (queue.length > 0) {
+    // 检查暂停标志
+    if (isPaused) {
+      console.log('[indexer] Indexing paused');
+      isProcessing = false;
+      notifyProgress({ total: totalToProcess, processed: processedCount, status: 'paused' });
+      return;
+    }
+
     const job = queue.shift()!;
 
     // 通知当前处理的 URL
@@ -376,14 +385,32 @@ export async function enqueueBookmarks(bookmarks: Array<{ id: string; url: strin
 /**
  * 获取索引状态
  */
-export function getIndexingStatus(): { queueLength: number; isProcessing: boolean; progress: IndexingProgress | null } {
+export function getIndexingStatus(): { queueLength: number; isProcessing: boolean; isPaused: boolean; progress: IndexingProgress | null } {
   return {
     queueLength: queue.length,
     isProcessing,
+    isPaused,
     progress: isProcessing
-      ? { total: totalToProcess, processed: processedCount, status: 'processing' }
+      ? { total: totalToProcess, processed: processedCount, status: isPaused ? 'paused' : 'processing' }
       : null,
   };
+}
+
+/** 暂停索引 */
+export function pauseIndexing(): void {
+  if (isProcessing) {
+    isPaused = true;
+    console.log('[indexer] Pause requested');
+  }
+}
+
+/** 恢复索引 */
+export function resumeIndexing(): void {
+  if (isPaused) {
+    isPaused = false;
+    console.log('[indexer] Resuming indexing');
+    processQueue();
+  }
 }
 
 /**
