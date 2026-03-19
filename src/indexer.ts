@@ -30,8 +30,18 @@ let isProcessing = false;
 let totalToProcess = 0; // 总待处理数
 let processedCount = 0; // 已处理数
 const MAX_RETRIES = 2;
-const BATCH_SIZE = 5;
-const DELAY_BETWEEN_BATCHES = 1000; // 1秒
+
+/** 自适应限流配置 */
+const RATE_LIMIT_CONFIG = {
+  minDelay: 200,           // 最小延迟 200ms
+  maxDelay: 10000,         // 最大延迟 10s
+  currentDelay: 500,       // 当前延迟
+  baseDelay: 500,          // 基础延迟
+  backoffMultiplier: 2,    // 退避倍数
+  recoveryMultiplier: 0.9, // 恢复倍数 (每次成功稍微加快)
+  consecutiveSuccesses: 0, // 连续成功次数
+  successThreshold: 5,     // 连续成功 N 次后开始加速
+};
 
 /** 进度信息 */
 export interface IndexingProgress {
@@ -168,6 +178,54 @@ async function indexBookmark(
 }
 
 /**
+ * 计算下一个延迟
+ */
+function calculateDelay(): number {
+  return Math.min(
+    Math.max(RATE_LIMIT_CONFIG.currentDelay, RATE_LIMIT_CONFIG.minDelay),
+    RATE_LIMIT_CONFIG.maxDelay
+  );
+}
+
+/**
+ * 请求成功，逐渐加速
+ */
+function onSuccess(): void {
+  RATE_LIMIT_CONFIG.consecutiveSuccesses++;
+
+  if (RATE_LIMIT_CONFIG.consecutiveSuccesses >= RATE_LIMIT_CONFIG.successThreshold) {
+    // 连续成功多次，可以加速
+    RATE_LIMIT_CONFIG.currentDelay = Math.max(
+      RATE_LIMIT_CONFIG.minDelay,
+      RATE_LIMIT_CONFIG.currentDelay * RATE_LIMIT_CONFIG.recoveryMultiplier
+    );
+    RATE_LIMIT_CONFIG.consecutiveSuccesses = 0;
+  }
+}
+
+/**
+ * 遇到限流错误，指数退避
+ */
+function onRateLimit(): void {
+  RATE_LIMIT_CONFIG.currentDelay = Math.min(
+    RATE_LIMIT_CONFIG.maxDelay,
+    RATE_LIMIT_CONFIG.currentDelay * RATE_LIMIT_CONFIG.backoffMultiplier
+  );
+  RATE_LIMIT_CONFIG.consecutiveSuccesses = 0;
+  console.warn(`[indexer] Rate limit detected, increasing delay to ${RATE_LIMIT_CONFIG.currentDelay}ms`);
+}
+
+/**
+ * 检查是否是限流错误
+ */
+function isRateLimitError(error: string): boolean {
+  return error.includes('429') ||
+         error.includes('rate limit') ||
+         error.includes('too many requests') ||
+         error.includes('quota');
+}
+
+/**
  * 处理索引队列
  */
 async function processQueue(): Promise<void> {
@@ -190,40 +248,54 @@ async function processQueue(): Promise<void> {
   notifyProgress({ total: totalToProcess, processed: 0, status: 'processing' });
 
   while (queue.length > 0) {
-    const batch = queue.splice(0, BATCH_SIZE);
+    const job = queue.shift()!;
 
-    for (const job of batch) {
-      // 通知当前处理的 URL
-      notifyProgress({ total: totalToProcess, processed: processedCount, current: job.url, status: 'processing' });
+    // 通知当前处理的 URL
+    notifyProgress({ total: totalToProcess, processed: processedCount, current: job.url, status: 'processing' });
 
-      const result = await indexBookmark(job, settings);
-      processedCount++;
+    const result = await indexBookmark(job, settings);
+    processedCount++;
 
-      if (!result.success) {
-        console.warn(`[indexer] Failed to index ${job.url}:`, result.error);
+    if (!result.success) {
+      const errorMessage = result.error || '';
+      console.warn(`[indexer] Failed to index ${job.url}:`, errorMessage);
 
-        // 重试逻辑
-        if (job.retryCount < MAX_RETRIES) {
-          queue.push({ ...job, retryCount: job.retryCount + 1 });
-          totalToProcess++; // 重试也算在总数里
-        } else {
-          // 标记失败
-          await updateBookmark(job.bookmarkId, {
-            status: 'failed',
-            error: result.error,
-          });
-        }
-      } else {
-        console.log(`[indexer] Indexed: ${job.url}`);
+      // 检测限流错误
+      if (isRateLimitError(errorMessage)) {
+        onRateLimit();
+        // 限流时重新入队，延迟后重试
+        queue.unshift({ ...job, retryCount: job.retryCount + 1 });
+
+        // 等待更长时间
+        const delay = calculateDelay();
+        console.log(`[indexer] Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
       }
 
-      // 更新进度
-      notifyProgress({ total: totalToProcess, processed: processedCount, status: 'processing' });
+      // 其他错误的重试逻辑
+      if (job.retryCount < MAX_RETRIES) {
+        queue.push({ ...job, retryCount: job.retryCount + 1 });
+        totalToProcess++;
+      } else {
+        // 标记失败
+        await updateBookmark(job.bookmarkId, {
+          status: 'failed',
+          error: result.error,
+        });
+      }
+    } else {
+      console.log(`[indexer] Indexed: ${job.url}`);
+      onSuccess();
     }
 
-    // 批次间延迟，避免 API 限流
+    // 更新进度
+    notifyProgress({ total: totalToProcess, processed: processedCount, status: 'processing' });
+
+    // 动态延迟
     if (queue.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+      const delay = calculateDelay();
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
