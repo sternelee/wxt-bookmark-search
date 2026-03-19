@@ -36,6 +36,28 @@ export async function getBookmarkByUrl(url: string): Promise<BookmarkRecord | un
   return db.bookmarks.where('url').equals(url).first();
 }
 
+/** 批量查询 URL 是否已索引 (返回已索引的 URL Set) */
+export async function getIndexedUrls(urls: string[]): Promise<Set<string>> {
+  const indexedUrls = new Set<string>();
+
+  // 批量查询，每次最多 100 个避免性能问题
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+    const batch = urls.slice(i, i + BATCH_SIZE);
+    const records = await db.bookmarks
+      .where('url')
+      .anyOf(batch)
+      .filter(r => r.status === 'indexed')
+      .toArray();
+
+    for (const r of records) {
+      indexedUrls.add(r.url);
+    }
+  }
+
+  return indexedUrls;
+}
+
 /** 批量插入或更新书签记录 */
 export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> {
   await db.transaction('rw', db.bookmarks, async () => {
@@ -74,6 +96,11 @@ export async function getIndexStats(): Promise<{
 /** 清空数据库 */
 export async function clearAll(): Promise<void> {
   await db.bookmarks.clear();
+}
+
+/** 获取所有失败的书签 */
+export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
+  return db.bookmarks.where('status').equals('failed').toArray();
 }
 
 // === 设置管理 ===

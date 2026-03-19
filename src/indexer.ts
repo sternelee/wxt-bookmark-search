@@ -10,6 +10,9 @@ import {
   updateBookmark,
   getIndexedBookmarks,
   getIndexStats,
+  getIndexedUrls,
+  getFailedBookmarks,
+  db,
 } from './db';
 import { getEmbedding, testApiKey } from './embedding';
 
@@ -186,12 +189,20 @@ async function processQueue(): Promise<void> {
 }
 
 /**
- * 添加书签到索引队列
+ * 添加书签到索引队列 (增量索引)
+ * 检查是否已索引，避免重复处理
  */
-export function enqueueBookmark(bookmark: { id: string; url: string; title: string }): void {
+export async function enqueueBookmark(bookmark: { id: string; url: string; title: string }): Promise<boolean> {
   // 检查是否已在队列中
-  const exists = queue.some(j => j.url === bookmark.url);
-  if (exists) return;
+  const existsInQueue = queue.some(j => j.url === bookmark.url);
+  if (existsInQueue) return false;
+
+  // 检查是否已索引
+  const indexedUrls = await getIndexedUrls([bookmark.url]);
+  if (indexedUrls.has(bookmark.url)) {
+    console.log(`[indexer] Skip already indexed: ${bookmark.url}`);
+    return false;
+  }
 
   queue.push({
     bookmarkId: bookmark.id,
@@ -202,15 +213,45 @@ export function enqueueBookmark(bookmark: { id: string; url: string; title: stri
 
   // 触发队列处理
   processQueue();
+  return true;
 }
 
 /**
- * 批量添加书签到队列
+ * 批量添加书签到队列 (增量索引)
+ * 自动过滤已索引的书签
  */
-export function enqueueBookmarks(bookmarks: Array<{ id: string; url: string; title: string }>): void {
-  for (const bookmark of bookmarks) {
-    enqueueBookmark(bookmark);
+export async function enqueueBookmarks(bookmarks: Array<{ id: string; url: string; title: string }>): Promise<number> {
+  if (bookmarks.length === 0) return 0;
+
+  // 批量查询已索引的 URL
+  const urls = bookmarks.map(b => b.url);
+  const indexedUrls = await getIndexedUrls(urls);
+
+  // 过滤出未索引的书签
+  const toIndex = bookmarks.filter(b => !indexedUrls.has(b.url));
+
+  // 过滤已在队列中的
+  const queuedUrls = new Set(queue.map(j => j.url));
+  const newBookmarks = toIndex.filter(b => !queuedUrls.has(b.url));
+
+  // 加入队列
+  for (const bookmark of newBookmarks) {
+    queue.push({
+      bookmarkId: bookmark.id,
+      url: bookmark.url,
+      title: bookmark.title,
+      retryCount: 0,
+    });
   }
+
+  console.log(`[indexer] ${bookmarks.length} total, ${indexedUrls.size} indexed, ${newBookmarks.length} to queue`);
+
+  // 触发队列处理
+  if (newBookmarks.length > 0) {
+    processQueue();
+  }
+
+  return newBookmarks.length;
 }
 
 /**
@@ -224,9 +265,9 @@ export function getIndexingStatus(): { queueLength: number; isProcessing: boolea
 }
 
 /**
- * 全量索引所有书签
+ * 增量索引：只索引新增或未索引的书签
  */
-export async function indexAllBookmarks(): Promise<void> {
+export async function indexAllBookmarks(): Promise<{ total: number; skipped: number; queued: number }> {
   const allBookmarks = await browser.bookmarks.getTree();
   const flatBookmarks: Array<{ id: string; url: string; title: string }> = [];
 
@@ -254,33 +295,49 @@ export async function indexAllBookmarks(): Promise<void> {
 
   traverse(allBookmarks);
 
-  console.log(`[indexer] Found ${flatBookmarks.length} bookmarks to index`);
+  console.log(`[indexer] Found ${flatBookmarks.length} bookmarks total`);
 
-  // 先创建待索引记录
-  const records: BookmarkRecord[] = flatBookmarks.map(bm => ({
-    id: bm.id,
-    url: bm.url,
-    title: bm.title,
-    summary: '',
-    status: 'pending' as const,
-  }));
+  // 增量索引：自动过滤已索引的书签
+  const queued = await enqueueBookmarks(flatBookmarks);
 
-  await upsertBookmarks(records);
-
-  // 加入队列
-  enqueueBookmarks(flatBookmarks);
+  return {
+    total: flatBookmarks.length,
+    skipped: flatBookmarks.length - queued,
+    queued,
+  };
 }
 
 /**
  * 重新索引失败的书签
  */
-export async function retryFailed(): Promise<void> {
-  const stats = await getIndexStats();
-  console.log(`[indexer] Retrying ${stats.failed} failed bookmarks`);
+export async function retryFailed(): Promise<number> {
+  const failedRecords = await getFailedBookmarks();
+  console.log(`[indexer] Retrying ${failedRecords.length} failed bookmarks`);
 
-  // 这里需要重新获取所有失败的书签并加入队列
-  // 简化实现：直接触发全量索引
-  await indexAllBookmarks();
+  if (failedRecords.length === 0) return 0;
+
+  // 将失败状态重置为 pending，然后加入队列
+  const toRetry = failedRecords.map(r => ({
+    id: r.id,
+    url: r.url,
+    title: r.title,
+  }));
+
+  // 批量更新状态为 pending
+  await db.bookmarks.where('status').equals('failed').modify({ status: 'pending' });
+
+  // 加入队列
+  for (const bookmark of toRetry) {
+    queue.push({
+      bookmarkId: bookmark.id,
+      url: bookmark.url,
+      title: bookmark.title,
+      retryCount: 0,
+    });
+  }
+
+  processQueue();
+  return toRetry.length;
 }
 
 /**
@@ -290,6 +347,7 @@ export function initIndexer(): void {
   // 新增书签
   browser.bookmarks.onCreated.addListener((id, bookmark) => {
     if (bookmark.url) {
+      // 异步入队，不等待结果
       enqueueBookmark({
         id: bookmark.id,
         url: bookmark.url,

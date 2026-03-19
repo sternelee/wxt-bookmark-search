@@ -7,10 +7,10 @@ async function getBookmarkCount(): Promise<number> {
   const tree = await browser.bookmarks.getTree();
   let count = 0;
 
-  function traverse(nodes: browser.bookmarks.BookmarkTreeNode[]) {
+  function traverse(nodes: { url?: string; children?: unknown[] }[]) {
     for (const node of nodes) {
       if (node.url) count++;
-      if (node.children) traverse(node.children);
+      if (node.children) traverse(node.children as typeof nodes);
     }
   }
 
