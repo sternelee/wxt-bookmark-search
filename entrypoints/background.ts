@@ -99,12 +99,12 @@ export default defineBackground(() => {
 
       if (mode === 'vector') {
         // 纯向量搜索
-        results = vectorSearch(indexedBookmarks, queryVector, {
+        results = await vectorSearch(indexedBookmarks, queryVector, {
           limit: settings.searchMode ? 9 : undefined,
         });
       } else {
         // 混合搜索 (默认) 或关键词搜索
-        results = hybridSearch(valid, indexedBookmarks, queryVector, {
+        results = await hybridSearch(valid, indexedBookmarks, queryVector, {
           mode,
           vectorWeight: settings.vectorWeight || 0.4,
           limit: 9,
