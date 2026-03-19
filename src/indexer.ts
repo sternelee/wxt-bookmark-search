@@ -27,9 +27,42 @@ interface IndexJob {
 /** 索引队列 */
 const queue: IndexJob[] = [];
 let isProcessing = false;
+let totalToProcess = 0; // 总待处理数
+let processedCount = 0; // 已处理数
 const MAX_RETRIES = 2;
 const BATCH_SIZE = 5;
 const DELAY_BETWEEN_BATCHES = 1000; // 1秒
+
+/** 进度信息 */
+export interface IndexingProgress {
+  total: number;
+  processed: number;
+  current?: string; // 当前正在处理的 URL
+  status: 'processing' | 'complete' | 'error';
+  error?: string;
+}
+
+/** 进度监听器 */
+type ProgressListener = (progress: IndexingProgress) => void;
+const progressListeners: ProgressListener[] = [];
+
+/** 注册进度监听器 */
+export function onProgress(listener: ProgressListener): () => void {
+  progressListeners.push(listener);
+  return () => {
+    const index = progressListeners.indexOf(listener);
+    if (index > -1) progressListeners.splice(index, 1);
+  };
+}
+
+/** 通知进度监听器 */
+function notifyProgress(progress: IndexingProgress): void {
+  for (const listener of progressListeners) {
+    listener(progress);
+  }
+  // 同时广播到其他页面 (如 Options)
+  browser.runtime.sendMessage({ type: 'INDEXING_PROGRESS', progress }).catch(() => {});
+}
 
 /**
  * 使用 Jina AI Reader 获取网页 Markdown 内容
@@ -141,21 +174,30 @@ async function processQueue(): Promise<void> {
   if (isProcessing || queue.length === 0) return;
 
   isProcessing = true;
+  totalToProcess = queue.length;
+  processedCount = 0;
+
   const settings = await getSettings();
 
   if (!settings.openaiApiKey) {
     console.warn('[indexer] No API key, skipping queue processing');
     isProcessing = false;
+    notifyProgress({ total: 0, processed: 0, status: 'error', error: 'No API key configured' });
     return;
   }
 
-  console.log(`[indexer] Processing ${queue.length} items in queue`);
+  console.log(`[indexer] Processing ${totalToProcess} items in queue`);
+  notifyProgress({ total: totalToProcess, processed: 0, status: 'processing' });
 
   while (queue.length > 0) {
     const batch = queue.splice(0, BATCH_SIZE);
 
     for (const job of batch) {
+      // 通知当前处理的 URL
+      notifyProgress({ total: totalToProcess, processed: processedCount, current: job.url, status: 'processing' });
+
       const result = await indexBookmark(job, settings);
+      processedCount++;
 
       if (!result.success) {
         console.warn(`[indexer] Failed to index ${job.url}:`, result.error);
@@ -163,6 +205,7 @@ async function processQueue(): Promise<void> {
         // 重试逻辑
         if (job.retryCount < MAX_RETRIES) {
           queue.push({ ...job, retryCount: job.retryCount + 1 });
+          totalToProcess++; // 重试也算在总数里
         } else {
           // 标记失败
           await updateBookmark(job.bookmarkId, {
@@ -173,6 +216,9 @@ async function processQueue(): Promise<void> {
       } else {
         console.log(`[indexer] Indexed: ${job.url}`);
       }
+
+      // 更新进度
+      notifyProgress({ total: totalToProcess, processed: processedCount, status: 'processing' });
     }
 
     // 批次间延迟，避免 API 限流
@@ -185,6 +231,7 @@ async function processQueue(): Promise<void> {
   console.log('[indexer] Queue processing complete');
 
   // 广播索引完成事件
+  notifyProgress({ total: totalToProcess, processed: processedCount, status: 'complete' });
   browser.runtime.sendMessage({ type: 'INDEXING_COMPLETE' }).catch(() => {});
 }
 
@@ -257,10 +304,13 @@ export async function enqueueBookmarks(bookmarks: Array<{ id: string; url: strin
 /**
  * 获取索引状态
  */
-export function getIndexingStatus(): { queueLength: number; isProcessing: boolean } {
+export function getIndexingStatus(): { queueLength: number; isProcessing: boolean; progress: IndexingProgress | null } {
   return {
     queueLength: queue.length,
     isProcessing,
+    progress: isProcessing
+      ? { total: totalToProcess, processed: processedCount, status: 'processing' }
+      : null,
   };
 }
 

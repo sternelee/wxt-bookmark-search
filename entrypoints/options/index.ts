@@ -39,6 +39,7 @@ const progressContainer = document.getElementById(
 const progressBar = document.getElementById(
   "progressBar",
 ) as HTMLProgressElement;
+const progressText = document.getElementById("progressText") as HTMLElement;
 
 const totalStat = document.getElementById("totalStat") as HTMLElement;
 const indexedStat = document.getElementById("indexedStat") as HTMLElement;
@@ -200,18 +201,6 @@ startIndexBtn.addEventListener("click", async () => {
 
   try {
     await browser.runtime.sendMessage({ type: "START_INDEXING" });
-    showStatus(indexStatus, "✓ 索引任务已启动", "success");
-
-    // 定期更新统计
-    const interval = setInterval(async () => {
-      await loadStats();
-      const stats = await getIndexStats();
-      if (stats.pending === 0) {
-        clearInterval(interval);
-        startIndexBtn.disabled = false;
-        progressContainer.classList.add("hidden");
-      }
-    }, 2000);
   } catch (error) {
     showStatus(indexStatus, `启动失败: ${error}`, "error");
     startIndexBtn.disabled = false;
@@ -234,6 +223,34 @@ retryBtn.addEventListener("click", async () => {
   } catch (error) {
     showStatus(indexStatus, `启动失败: ${error}`, "error");
   }
+});
+
+// 监听索引进度
+browser.runtime.onMessage.addListener((message) => {
+  if (message.type === "INDEXING_PROGRESS") {
+    const progress = message.progress as { total: number; processed: number; current?: string; status: string; error?: string };
+
+    // 更新进度条
+    const percent = progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+    progressBar.value = percent;
+    progressText.textContent = `${percent}% (${progress.processed}/${progress.total})`;
+
+    // 更新状态文本
+    if (progress.status === "processing") {
+      const currentUrl = progress.current ? ` (${progress.current.slice(0, 50)}...)` : "";
+      showStatus(indexStatus, `索引中 ${progress.processed}/${progress.total}${currentUrl}`, "info");
+    } else if (progress.status === "complete") {
+      showStatus(indexStatus, `✓ 索引完成，共处理 ${progress.processed} 个书签`, "success");
+      startIndexBtn.disabled = false;
+      progressContainer.classList.add("hidden");
+      loadStats(); // 刷新统计
+    } else if (progress.status === "error") {
+      showStatus(indexStatus, `索引出错: ${progress.error || '未知错误'}`, "error");
+      startIndexBtn.disabled = false;
+      progressContainer.classList.add("hidden");
+    }
+  }
+  return true;
 });
 
 // 初始化
