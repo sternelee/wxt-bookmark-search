@@ -1,6 +1,14 @@
-import type { ChromeBookmark, OmniboxSuggestion } from "./types.js";
+import type { OmniboxSuggestion } from "./types.js";
 import { highlightBookmark } from "./highlight.js";
 import { getFreqCache } from "./freq.js";
+
+/** 书签类型 (兼容 browser.bookmarks.BookmarkTreeNode) */
+type BookmarkInput = {
+  id: string;
+  title: string;
+  url?: string;
+  dateAdded?: number;
+};
 
 /** Split query into lowercase words. */
 function queryWords(query: string): string[] {
@@ -59,7 +67,7 @@ const SCORE_CHROME_FALLBACK = 15;
 const SCORE_LEVENSHTEIN = 20; // applied only when query.length >= 3
 
 interface ScoredBookmark {
-  bookmark: ChromeBookmark;
+  bookmark: BookmarkInput;
   baseScore: number;
   /** For ties, sort by highlight order (prefix > contains) */
   tieBreaker: number;
@@ -69,7 +77,7 @@ interface ScoredBookmark {
  * Score a single bookmark given the query and its position in Chrome results.
  */
 function scoreBookmark(
-  bookmark: ChromeBookmark,
+  bookmark: BookmarkInput,
   query: string,
   chromeResultIndex: number,
 ): ScoredBookmark | null {
@@ -122,7 +130,7 @@ function scoreBookmark(
  */
 export function rerankBookmarks(
   query: string,
-  chromeResults: ChromeBookmark[],
+  chromeResults: BookmarkInput[],
 ): OmniboxSuggestion[] {
   const freqCache = getFreqCache();
   const maxFreq = Math.max(1, ...Object.values(freqCache));

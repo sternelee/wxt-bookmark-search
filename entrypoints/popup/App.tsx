@@ -1,34 +1,83 @@
-import { createSignal } from "solid-js";
-import solidLogo from "@/assets/solid.svg";
-import wxtLogo from "/wxt.svg";
+import { createSignal, onMount } from "solid-js";
+import { getIndexStats, hasApiKey } from "../../src/db";
 import "./App.css";
 
+/** 获取实际书签总数 */
+async function getBookmarkCount(): Promise<number> {
+  const tree = await browser.bookmarks.getTree();
+  let count = 0;
+
+  function traverse(nodes: browser.bookmarks.BookmarkTreeNode[]) {
+    for (const node of nodes) {
+      if (node.url) count++;
+      if (node.children) traverse(node.children);
+    }
+  }
+
+  traverse(tree);
+  return count;
+}
+
 function App() {
-  const [count, setCount] = createSignal(0);
+  const [isConfigured, setIsConfigured] = createSignal(false);
+  const [indexed, setIndexed] = createSignal(0);
+  const [total, setTotal] = createSignal(0);
+
+  onMount(async () => {
+    const configured = await hasApiKey();
+    setIsConfigured(configured);
+
+    // 获取实际书签总数
+    const bookmarkCount = await getBookmarkCount();
+    setTotal(bookmarkCount);
+
+    // 获取已索引数量
+    const stats = await getIndexStats();
+    setIndexed(stats.indexed);
+  });
+
+  const openSettings = () => {
+    browser.runtime.openOptionsPage();
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://wxt.dev" target="_blank">
-          <img src={wxtLogo} class="logo" alt="WXT logo" />
-        </a>
-        <a href="https://solidjs.com" target="_blank">
-          <img src={solidLogo} class="logo solid" alt="Solid logo" />
-        </a>
+    <div class="popup-container">
+      <div class="header">
+        <h1>🤖 书签 AI 搜索</h1>
+        <span class={`status-badge ${isConfigured() ? 'ready' : 'not-configured'}`}>
+          {isConfigured() ? '已配置' : '未配置'}
+        </span>
       </div>
-      <h1>WXT + Solid</h1>
-      <div class="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count()}
-        </button>
-        <p>
-          Edit <code>popup/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p class="read-the-docs">
-        Click on the WXT and Solid logos to learn more
+
+      <p class="hint">
+        在地址栏输入 <code>bi</code> + 空格，然后输入关键词搜索书签。
       </p>
-    </>
+
+      <div class="usage-box">
+        <strong>示例：</strong>
+        <ul>
+          <li><code>bi 如何学习编程</code></li>
+          <li><code>bi react 教程</code></li>
+        </ul>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-value">{indexed()}</div>
+          <div class="stat-label">已索引</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{total()}</div>
+          <div class="stat-label">总书签</div>
+        </div>
+      </div>
+
+      <button class="settings-btn" onClick={openSettings}>
+        打开设置
+      </button>
+    </div>
   );
 }
 
