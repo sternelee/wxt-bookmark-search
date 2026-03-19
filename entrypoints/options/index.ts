@@ -74,14 +74,23 @@ async function init() {
 // 加载文件夹列表
 async function loadFolders() {
   try {
+    console.log('[options] Loading bookmark folders...');
     const response = await browser.runtime.sendMessage({ type: 'GET_BOOKMARK_FOLDERS' }) as {
       success: boolean;
       folders?: Array<{ id: string; title: string; path: string }>;
       error?: string;
     };
 
+    console.log('[options] Folders response:', response);
+
     if (!response.success || !response.folders) {
       console.error('Failed to load folders:', response.error);
+      folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
+      return;
+    }
+
+    if (response.folders.length === 0) {
+      folderList.innerHTML = '<div style="padding: 8px; color: #999;">未找到书签文件夹</div>';
       return;
     }
 
@@ -106,8 +115,11 @@ async function loadFolders() {
       div.appendChild(label);
       folderList.appendChild(div);
     });
+
+    console.log(`[options] Loaded ${response.folders.length} folders`);
   } catch (error) {
     console.error('Failed to load folders:', error);
+    folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
   }
 }
 

@@ -429,23 +429,32 @@ export async function getBookmarkFolders(): Promise<Array<{ id: string; title: s
 
   function traverse(nodes: BookmarkNode[], parentPath: string = '') {
     for (const node of nodes) {
-      // 跳过根节点和无标题节点
-      if (node.id === '0' || !node.title) continue;
-
       // 如果是文件夹（有 children 且没有 url）
       if (node.children && !node.url) {
-        const currentPath = parentPath ? `${parentPath}/${node.title}` : node.title;
-        folders.push({
-          id: node.id,
-          title: node.title,
-          path: currentPath,
-        });
+        // 使用标题，如果没有标题则使用 "未命名"
+        const title = node.title || '未命名';
+
+        // 构建路径（跳过根节点）
+        const currentPath = parentPath ? `${parentPath}/${title}` : title;
+
+        // 只添加有实际名称的文件夹（跳过根级别的 "书签栏" 等系统文件夹）
+        if (node.title && parentPath) {
+          folders.push({
+            id: node.id,
+            title: node.title,
+            path: currentPath,
+          });
+        }
+
+        // 递归遍历子文件夹
         traverse(node.children, currentPath);
       }
     }
   }
 
   traverse(allBookmarks);
+
+  console.log(`[indexer] Found ${folders.length} bookmark folders`);
   return folders;
 }
 
