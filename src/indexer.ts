@@ -76,27 +76,6 @@ function notifyProgress(progress: IndexingProgress): void {
 }
 
 /**
- * 使用 Jina AI Reader 获取网页 Markdown 内容
- * https://r.jina.ai/ 提取网页正文并转为 Markdown
- */
-async function fetchPageMarkdown(url: string): Promise<string> {
-  const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
-
-  const response = await fetch(readerUrl, {
-    headers: {
-      'Accept': 'text/markdown',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const markdown = await response.text();
-  return markdown;
-}
-
-/**
  * 从 Markdown 提取标题和摘要
  */
 function extractFromMarkdown(markdown: string, fallbackTitle: string): { title: string; summary: string } {
@@ -136,6 +115,108 @@ function extractFromMarkdown(markdown: string, fallbackTitle: string): { title: 
   return { title, summary };
 }
 
+import { Readability } from "@mozilla/readability";
+import { parseHTML } from "linkedom";
+import TurndownService from "turndown";
+
+/**
+ * 核心内容提取策略器
+ */
+async function fetchPageContent(url: string): Promise<{ markdown: string; title?: string; summary?: string }> {
+  let localBestEffort: { markdown: string; title?: string; summary?: string } | null = null;
+
+  try {
+    // 策略 1: 检查活跃标签页 (利用已登录的权限)
+    const tabs = await browser.tabs.query({ url });
+    for (const tab of tabs) {
+      if (tab.id) {
+        try {
+          const result = await browser.tabs.sendMessage(tab.id, { type: "EXTRACT_CONTENT" });
+          if (result && result.success) {
+            console.log(`[indexer] Strategy 1: Active tab success: ${url}`);
+            return { markdown: result.markdown, title: result.title, summary: result.excerpt };
+          }
+        } catch (e) {
+          console.debug(`[indexer] Tab extraction failed for ${url}`);
+        }
+      }
+    }
+
+    // 策略 2: 后台本地 Fetch + Readability (via linkedom)
+    try {
+      console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
+      const response = await fetch(url, { 
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      
+      if (response.ok) {
+        const html = await response.text();
+        const { document } = parseHTML(html);
+        
+        // 尝试提取元数据作为兜底
+        const metaDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                                document.querySelector('meta[property="og:description"]')?.getAttribute('content');
+
+        const reader = new Readability(document as unknown as Document);
+        const article = reader.parse();
+
+        if (article && article.content) {
+          const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+          const markdown = `# ${article.title}\n\n${turndown.turndown(article.content)}`;
+          
+          localBestEffort = { 
+            markdown, 
+            title: article.title, 
+            summary: article.excerpt || metaDescription || "" 
+          };
+
+          // 如果内容足够丰富 (>150字符)，直接返回，不再走 Jina
+          if (article.textContent.length > 150) {
+            console.log(`[indexer] Strategy 2: High quality local extraction (${article.textContent.length} chars)`);
+            return localBestEffort;
+          }
+          console.log(`[indexer] Strategy 2: Local extraction successful but short (${article.textContent.length} chars), will try Jina as backup`);
+        }
+      }
+    } catch (e) {
+      console.debug(`[indexer] Strategy 2: Local fetch failed:`, e);
+    }
+
+    // 策略 3: 回退到 Jina Reader (r.jina.ai)
+    try {
+      console.log(`[indexer] Strategy 3: Requesting Jina Reader for ${url}`);
+      const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+      const jinaResponse = await fetch(readerUrl, {
+        headers: { 'Accept': 'text/markdown' },
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (jinaResponse.ok) {
+        const markdown = await jinaResponse.text();
+        const { title, summary } = extractFromMarkdown(markdown, "");
+        console.log(`[indexer] Strategy 3: Jina Reader success`);
+        return { markdown, title, summary };
+      }
+    } catch (e) {
+      console.warn(`[indexer] Strategy 3: Jina Reader failed:`, e);
+    }
+
+    // 最终兜底：如果 Jina 失败了，但我们有本地的 Best Effort 结果，就用它
+    if (localBestEffort) {
+      console.log(`[indexer] Using local best-effort result as final fallback`);
+      return localBestEffort;
+    }
+
+    throw new Error("All extraction strategies exhausted");
+
+  } catch (error) {
+    throw error;
+  }
+}
+
 /**
  * 处理单个书签索引
  */
@@ -148,22 +229,21 @@ async function indexBookmark(
   }
 
   try {
-    // 1. 获取网页 Markdown 内容
-    const markdown = await fetchPageMarkdown(job.url);
+    // 1. 根据优先级策略获取网页内容
+    const { markdown, title: extractedTitle, summary: extractedSummary } = await fetchPageContent(job.url);
 
-    // 2. 提取标题和摘要
-    const { title, summary } = extractFromMarkdown(markdown, job.title);
-
-    // 3. 生成向量
+    // 2. 生成向量输入
+    const title = extractedTitle || job.title;
+    const summary = extractedSummary || "";
     const textToEmbed = `${title}\n${summary}`;
     const { embedding } = await getEmbedding(textToEmbed, settings.openaiApiKey);
 
-    // 4. 更新数据库
+    // 3. 更新数据库
     const record: BookmarkRecord = {
       id: job.bookmarkId,
       url: job.url,
-      title: job.title || title,
-      summary,
+      title: title,
+      summary: summary,
       embedding,
       status: 'indexed',
       indexedAt: Date.now(),
@@ -469,6 +549,11 @@ export async function indexFolders(folderIds: string[]): Promise<{ total: number
   const allBookmarks = await browser.bookmarks.getTree();
   const flatBookmarks: Array<{ id: string; url: string; title: string }> = [];
 
+  // 如果没有选中任何文件夹，直接返回（交由 indexAllBookmarks 处理或提示）
+  if (folderIds.length === 0) {
+    return { total: 0, skipped: 0, queued: 0 };
+  }
+
   type BookmarkNode = {
     id: string;
     title?: string;
@@ -476,9 +561,15 @@ export async function indexFolders(folderIds: string[]): Promise<{ total: number
     children?: BookmarkNode[];
   };
 
+  /**
+   * 递归遍历：如果当前节点在 folderIds 中，则收集其下所有书签
+   * 如果当前节点不在，但其祖先在，也收集（由 collect 参数控制）
+   */
   function traverse(nodes: BookmarkNode[], collect: boolean = false) {
     for (const node of nodes) {
-      const shouldCollect = collect || folderIds.includes(node.id);
+      // 当前节点被选中，或者父辈已被选中
+      const isSelected = folderIds.includes(node.id);
+      const shouldCollect = collect || isSelected;
 
       if (node.url && shouldCollect) {
         flatBookmarks.push({
@@ -489,6 +580,7 @@ export async function indexFolders(folderIds: string[]): Promise<{ total: number
       }
 
       if (node.children) {
+        // 递归处理子节点，如果当前节点已选中，子节点全部 collect=true
         traverse(node.children, shouldCollect);
       }
     }
@@ -496,9 +588,9 @@ export async function indexFolders(folderIds: string[]): Promise<{ total: number
 
   traverse(allBookmarks);
 
-  console.log(`[indexer] Found ${flatBookmarks.length} bookmarks in selected folders`);
+  console.log(`[indexer] Selective Indexing: Found ${flatBookmarks.length} bookmarks in ${folderIds.length} target folders`);
 
-  // 增量索引：自动过滤已索引的书签
+  // 执行增量索引：过滤掉已存在且状态为 indexed 的
   const queued = await enqueueBookmarks(flatBookmarks);
 
   return {

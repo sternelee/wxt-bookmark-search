@@ -109,6 +109,7 @@ const defaultSettings: Settings = {
   openaiApiKey: undefined,
   searchMode: 'hybrid',
   vectorWeight: 0.4,
+  selectedFolderIds: [],
 };
 
 /** 获取设置 */

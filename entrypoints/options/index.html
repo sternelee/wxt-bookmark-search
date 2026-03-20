@@ -5,6 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>书签 AI 搜索 - 设置</title>
     <style>
+      :root {
+        --primary-color: #5c7cfa;
+        --secondary-color: #748ffc;
+        --bg-color: #f8f9fa;
+        --card-bg: #ffffff;
+        --text-main: #212529;
+        --text-muted: #868e96;
+        --border-color: #e9ecef;
+        --success: #40c057;
+        --error: #fa5252;
+        --info: #339af0;
+        --input-bg: #ffffff;
+        --stat-card-bg: #f8f9fa;
+      }
+
+      /* 深色模式适配 */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-color: #1a1b1e;
+          --card-bg: #25262b;
+          --text-main: #c1c2c5;
+          --text-muted: #909296;
+          --border-color: #373a40;
+          --input-bg: #2c2e33;
+          --stat-card-bg: #2c2e33;
+        }
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -12,344 +40,453 @@
       }
 
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-          sans-serif;
-        background: #f5f5f5;
-        color: #333;
-        padding: 20px;
-        max-width: 600px;
-        margin: 0 auto;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-color);
+        color: var(--text-main);
+        padding: 40px 20px;
+        line-height: 1.5;
       }
 
-      h1 {
-        font-size: 24px;
-        margin-bottom: 24px;
-        color: #1a1a1a;
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 32px;
+      }
+
+      header h1 {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+      }
+
+      .ai-gradient {
+        background: linear-gradient(135deg, #5c7cfa, #d63384);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
 
       .card {
-        background: white;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        border: 1px solid var(--border-color);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
       }
 
       .card h2 {
-        font-size: 16px;
-        margin-bottom: 16px;
-        color: #444;
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
       .form-group {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
       }
 
       label {
         display: block;
         font-size: 14px;
-        font-weight: 500;
-        margin-bottom: 6px;
-        color: #555;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #495057;
       }
 
       input[type="text"],
       input[type="password"],
       select {
         width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
+        padding: 12px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
         font-size: 14px;
-        transition: border-color 0.2s;
+        background: var(--input-bg);
+        color: var(--text-main);
+        transition: all 0.2s;
       }
 
       input:focus,
       select:focus {
         outline: none;
-        border-color: #4a90d9;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(92, 124, 250, 0.1);
       }
 
       .hint {
         font-size: 12px;
-        color: #888;
-        margin-top: 4px;
+        color: var(--text-muted);
+        margin-top: 6px;
+      }
+
+      .slider-container {
+        background: #f1f3f5;
+        padding: 16px;
+        border-radius: 12px;
       }
 
       .slider-group {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 16px;
       }
 
       input[type="range"] {
         flex: 1;
+        accent-color: var(--primary-color);
       }
 
       .slider-value {
-        font-size: 14px;
-        color: #666;
-        min-width: 50px;
-        text-align: right;
-      }
-
-      button {
-        background: #4a90d9;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 6px;
-        font-size: 14px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-
-      button:hover {
-        background: #357abd;
-      }
-
-      button:disabled {
-        background: #ccc;
-        cursor: not-allowed;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--primary-color);
+        min-width: 45px;
       }
 
       .button-group {
         display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         gap: 8px;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      button:hover {
+        background: var(--secondary-color);
+        transform: translateY(-1px);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        background: #dee2e6;
+        cursor: not-allowed;
+        transform: none;
       }
 
       .btn-secondary {
-        background: #6c757d;
+        background: var(--card-bg);
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
       }
 
       .btn-secondary:hover {
-        background: #5a6268;
+        background: var(--stat-card-bg);
+        border-color: var(--text-muted);
       }
 
-      .stats {
+      .btn-danger {
+        background: var(--card-bg);
+        color: var(--error);
+        border: 1px solid var(--error);
+        opacity: 0.8;
+      }
+
+      .btn-danger:hover {
+        background: var(--error);
+        color: #fff;
+        opacity: 1;
+      }
+
+      /* Stats Grid - 强制 2x2 布局 */
+      .stats-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: 1fr 1fr;
         gap: 12px;
-        margin-top: 16px;
+        margin-bottom: 24px;
+        width: 100%;
       }
 
-      .stat-item {
-        text-align: center;
+      .stat-card {
+        background: var(--stat-card-bg);
         padding: 12px;
-        background: #f8f9fa;
-        border-radius: 6px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+        min-width: 0; /* 防止内容撑开 grid */
       }
 
-      .stat-value {
-        font-size: 24px;
+      .stat-card:hover {
+        background: var(--card-bg);
+        border-color: var(--primary-color);
+      }
+
+      .stat-val {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--primary-color);
+      }
+
+      .stat-lab {
+        font-size: 11px;
         font-weight: 600;
-        color: #4a90d9;
-      }
-
-      .stat-label {
-        font-size: 12px;
-        color: #888;
+        color: var(--text-muted);
+        text-transform: uppercase;
         margin-top: 4px;
       }
 
-      .status {
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 13px;
-        margin-top: 12px;
+      .status-box {
+        padding: 14px 16px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 500;
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
-      .status.success {
-        background: #d4edda;
-        color: #155724;
-      }
+      .status-box.success { background: #ebfbee; color: #2b8a3e; border: 1px solid #d3f9d8; }
+      .status-box.error { background: #fff5f5; color: #c92a2a; border: 1px solid #ffc9c9; }
+      .status-box.info { background: #e7f5ff; color: #1864ab; border: 1px solid #a5d8ff; }
 
-      .status.error {
-        background: #f8d7da;
-        color: #721c24;
-      }
-
-      .status.info {
-        background: #cce5ff;
-        color: #004085;
-      }
-
-      .progress {
-        margin-top: 12px;
+      .progress-wrapper {
+        margin-top: 20px;
+        background: #f1f3f5;
+        padding: 12px;
+        border-radius: 12px;
       }
 
       progress {
         width: 100%;
         height: 8px;
-        border-radius: 4px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: none;
+        background: #e9ecef;
       }
 
-      .hidden {
-        display: none;
+      progress::-webkit-progress-bar { background: #e9ecef; }
+      progress::-webkit-progress-value { 
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); 
+        box-shadow: 0 0 10px rgba(92, 124, 250, 0.3);
       }
 
-      .folder-list {
-        max-height: 300px;
+      .hidden { display: none; }
+
+      /* Folder Tree */
+      .folder-tree {
+        max-height: 320px;
         overflow-y: auto;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 8px;
-        background: #fff;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px;
+        background: var(--input-bg);
       }
 
       .folder-item {
         display: flex;
         align-items: center;
-        padding: 4px 8px;
+        padding: 6px 10px;
         margin: 2px 0;
-        border-radius: 4px;
+        border-radius: 8px;
         transition: background 0.2s;
       }
 
-      .folder-item:hover {
-        background: #f5f5f5;
-      }
-
-      .folder-item input[type="checkbox"] {
-        margin-right: 8px;
-      }
-
-      .folder-item label {
-        flex: 1;
-        margin: 0;
-        font-size: 13px;
-        cursor: pointer;
-      }
+      .folder-item:hover { background: #f1f3f5; }
 
       .folder-toggle {
         width: 20px;
         height: 20px;
-        padding: 0;
         border: none;
-        background: transparent;
+        background: none;
+        padding: 0;
+        font-size: 10px;
         cursor: pointer;
-        font-size: 12px;
-        color: #666;
-        display: inline-flex;
+        display: flex;
         align-items: center;
         justify-content: center;
-        margin-right: 4px;
-        transition: transform 0.2s;
-      }
-
-      .folder-toggle:hover {
-        color: #333;
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
       }
 
       .folder-toggle.collapsed {
-        transform: rotate(-90deg);
+        transform: rotate(-90deg); /* 折叠时旋转箭头 */
       }
 
       .folder-children {
-        margin-left: 24px;
-        display: none;
+        margin-left: 20px;
+        border-left: 1px dashed #dee2e6;
+        padding-left: 4px;
+        display: none; /* 默认隐藏 */
       }
 
       .folder-children.expanded {
-        display: block;
+        display: block; /* 展开时显示 */
       }
+
+      /* 失败列表项优化 */
+      .failed-item {
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border-color);
+        gap: 12px;
+        transition: all 0.2s ease;
+      }
+      
+      .failed-item:hover { 
+        background: var(--stat-card-bg); 
+        padding-left: 22px;
+      }
+
+      .failed-info { flex: 1; overflow: hidden; }
+      .failed-title { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .failed-url { display: block; font-size: 12px; color: var(--text-muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .failed-url:hover { color: var(--primary-color); text-decoration: underline; }
+      .failed-error { font-size: 11px; color: var(--error); margin-top: 2px; opacity: 0.8; }
+      
+      .btn-del { 
+        padding: 8px 12px; 
+        font-size: 12px; 
+        background: var(--card-bg); 
+        color: var(--error); 
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        white-space: nowrap;
+        transition: all 0.2s;
+      }
+      .btn-del:hover { background: var(--error); color: #fff; box-shadow: 0 4px 12px rgba(250, 82, 82, 0.2); border-color: var(--error); }
     </style>
   </head>
   <body>
-    <h1>🤖 书签 AI 搜索设置</h1>
+    <div class="container">
+      <header>
+        <h1>🤖 <span class="ai-gradient">书签 AI 搜索</span> 设置</h1>
+      </header>
 
-    <!-- API 配置 -->
-    <div class="card">
-      <h2>SiliconFlow API 配置</h2>
-      <div class="form-group">
-        <label for="apiKey">API Key</label>
-        <input type="password" id="apiKey" placeholder="sk-..." />
-        <p class="hint">使用 BAAI/bge-m3 模型，支持中英文语义检索</p>
-      </div>
-      <div class="button-group">
-        <button id="saveBtn">保存设置</button>
-        <button id="testBtn" class="btn-secondary">测试连接</button>
-      </div>
-      <div id="apiStatus" class="status hidden"></div>
-    </div>
+      <!-- 1. API 配置 -->
+      <section class="card">
+        <h2>🔑 SiliconFlow API 配置</h2>
+        <div class="form-group">
+          <label for="apiKey">API Key</label>
+          <input type="password" id="apiKey" placeholder="sk-..." />
+          <p class="hint">建议使用 SiliconFlow 平台，响应速度快且价格极低</p>
+        </div>
 
-    <!-- 搜索设置 -->
-    <div class="card">
-      <h2>搜索设置</h2>
-      <div class="form-group">
-        <label for="searchMode">搜索模式</label>
-        <select id="searchMode">
-          <option value="hybrid">混合搜索 (关键词 + 向量)</option>
-          <option value="vector">纯向量搜索</option>
-          <option value="keyword">纯关键词搜索</option>
-        </select>
-      </div>
-      <div id="vectorWeightGroup" class="form-group">
-        <label>向量搜索权重</label>
-        <div class="slider-group">
-          <input type="range" id="vectorWeight" min="0" max="100" value="40" />
-          <span class="slider-value" id="vectorWeightValue">40%</span>
+        <div class="button-group">
+          <button id="saveBtn">💾 保存 API 设置</button>
+          <button id="testBtn" class="btn-secondary">⚡ 测试连接</button>
         </div>
-        <p class="hint">值越高，语义相似性越重要；值越低，关键词匹配越重要</p>
-      </div>
-      <button id="applySettings">应用设置</button>
-    </div>
+        <div id="apiStatus" class="status-box hidden"></div>
+      </section>
 
-    <!-- 索引管理 -->
-    <div class="card">
-      <h2>索引管理</h2>
-      <div class="stats">
-        <div class="stat-item">
-          <div class="stat-value" id="totalStat">0</div>
-          <div class="stat-label">总书签</div>
+      <!-- 2. 搜索设置 -->
+      <section class="card">
+        <h2>🔍 检索策略</h2>
+        <div class="form-group">
+          <label for="searchMode">搜索模式</label>
+          <select id="searchMode">
+            <option value="hybrid">混合检索 (Hybrid - 推荐)</option>
+            <option value="vector">纯向量检索 (Semantic Only)</option>
+            <option value="keyword">纯关键词匹配 (Classic)</option>
+          </select>
+          <p class="hint">混合检索结合了关键词的精准度和 AI 向量的语义理解</p>
         </div>
-        <div class="stat-item">
-          <div class="stat-value" id="indexedStat">0</div>
-          <div class="stat-label">已索引</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value" id="pendingStat">0</div>
-          <div class="stat-label">待处理</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value" id="failedStat">0</div>
-          <div class="stat-label">失败</div>
-        </div>
-      </div>
 
-      <!-- 文件夹选择 -->
-      <div class="form-group" style="margin-top: 16px">
-        <label>索引范围</label>
-        <div id="folderList" class="folder-list"></div>
-        <p class="hint">选择要索引的书签文件夹（不选择则索引全部）</p>
-      </div>
-
-      <div class="button-group" style="margin-top: 16px">
-        <button id="startIndexBtn">开始索引</button>
-        <button id="pauseBtn" class="btn-secondary" disabled>暂停</button>
-        <button id="resumeBtn" class="btn-secondary" disabled>恢复</button>
-        <button id="retryBtn" class="btn-secondary">重试失败</button>
-        <button id="clearCacheBtn" class="btn-secondary">清空缓存</button>
-      </div>
-      <div id="cacheInfo" style="margin-top: 8px; font-size: 12px; color: #888">
-        查询缓存: <span id="cacheStats">0/100</span>
-      </div>
-      <div id="indexStatus" class="status hidden"></div>
-      <div id="progressContainer" class="progress hidden">
-        <progress id="progressBar" value="0" max="100"></progress>
-        <div
-          id="progressText"
-          style="
-            text-align: center;
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
-          "
-        >
-          0%
+        <div id="vectorWeightGroup" class="form-group">
+          <label>向量检索权重 (Vector Weight)</label>
+          <div class="slider-container">
+            <div class="slider-group">
+              <input type="range" id="vectorWeight" min="0" max="100" value="40" />
+              <span class="slider-value" id="vectorWeightValue">40%</span>
+            </div>
+          </div>
+          <p class="hint">调高此值将让搜索结果更偏向“意思相近”，调低则更偏向“字面匹配”</p>
         </div>
-      </div>
+        <button id="applySettings">✨ 应用检索策略</button>
+      </section>
+
+      <!-- 3. 索引引擎 -->
+      <section class="card">
+        <h2>⚙️ 索引引擎管理</h2>
+        
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-val" id="totalStat">0</div>
+            <div class="stat-lab">总书签</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="indexedStat">0</div>
+            <div class="stat-lab">已索引</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="pendingStat">0</div>
+            <div class="stat-lab">待处理</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="failedStat">0</div>
+            <div class="stat-lab">失败项</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>索引范围选择</label>
+          <div id="folderList" class="folder-tree"></div>
+          <p class="hint">不勾选任何文件夹将默认对所有书签进行增量索引</p>
+        </div>
+
+        <div class="button-group">
+          <button id="startIndexBtn">🚀 开始全量/增量索引</button>
+          <button id="pauseBtn" class="btn-secondary" disabled>⏸️ 暂停</button>
+          <button id="resumeBtn" class="btn-secondary" disabled>▶️ 恢复</button>
+          <button id="retryBtn" class="btn-secondary">🔄 重试失败</button>
+          <button id="clearCacheBtn" class="btn-danger">🧹 清空缓存</button>
+        </div>
+
+        <div id="indexStatus" class="status-box hidden"></div>
+
+        <div id="progressContainer" class="progress-wrapper hidden">
+          <progress id="progressBar" value="0" max="100"></progress>
+          <div id="progressText" style="text-align: right; font-size: 12px; color: var(--text-muted); margin-top: 4px;">0%</div>
+        </div>
+
+        <div id="cacheInfo" style="margin-top: 16px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 12px;">
+          🧠 向量查询缓存状态: <span id="cacheStats" style="font-weight: 700;">0/100</span> (已缓存最近的查询结果，提升搜索速度)
+        </div>
+      </section>
+
+      <!-- 4. 异常管理 -->
+      <section class="card" id="failedSection">
+        <h2>⚠️ 失效 / 索引失败管理</h2>
+        <p class="hint" style="margin-bottom: 12px;">以下书签在索引过程中遇到错误，可能是网址已失效。你可以点击链接测试或直接删除书签。</p>
+        
+        <div id="failedList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 12px;">
+          <!-- 动态加载 -->
+        </div>
+      </section>
     </div>
 
     <script type="module" src="./index.ts"></script>

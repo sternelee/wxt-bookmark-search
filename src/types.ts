@@ -37,4 +37,5 @@ export interface Settings {
   openaiApiKey?: string;
   searchMode: SearchMode;
   vectorWeight: number;
+  selectedFolderIds?: string[]; // 新增：持久化存储选中的文件夹 ID
 }

@@ -45,6 +45,8 @@ const progressBar = document.getElementById(
 ) as HTMLProgressElement;
 const progressText = document.getElementById("progressText") as HTMLElement;
 const cacheStats = document.getElementById("cacheStats") as HTMLElement;
+const failedList = document.getElementById("failedList") as HTMLElement;
+const failedSection = document.getElementById("failedSection") as HTMLElement;
 
 const totalStat = document.getElementById("totalStat") as HTMLElement;
 const indexedStat = document.getElementById("indexedStat") as HTMLElement;
@@ -69,11 +71,17 @@ async function init() {
 
   // 加载统计
   await loadStats();
+
+  // 加载失败列表
+  await loadFailedBookmarks();
 }
 
 // 加载文件夹列表
 async function loadFolders() {
   try {
+    const settings = await getSettings();
+    const savedIds = settings.selectedFolderIds || [];
+    
     console.log('[options] Loading bookmark folders...');
     const response = await browser.runtime.sendMessage({ type: 'GET_BOOKMARK_FOLDERS' }) as {
       success: boolean;
@@ -81,20 +89,11 @@ async function loadFolders() {
       error?: string;
     };
 
-    console.log('[options] Folders response:', response);
-
     if (!response.success || !response.folders) {
-      console.error('Failed to load folders:', response.error);
       folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
       return;
     }
 
-    if (response.folders.length === 0) {
-      folderList.innerHTML = '<div style="padding: 8px; color: #999;">未找到书签文件夹</div>';
-      return;
-    }
-
-    // 清空列表
     folderList.innerHTML = '';
 
     // 递归渲染文件夹树
@@ -114,13 +113,18 @@ async function loadFolders() {
             e.preventDefault();
             const childContainer = itemDiv.nextElementSibling as HTMLElement;
             if (childContainer && childContainer.classList.contains('folder-children')) {
-              childContainer.classList.toggle('expanded');
-              toggleBtn.classList.toggle('collapsed');
+              const isExpanded = childContainer.classList.contains('expanded');
+              if (isExpanded) {
+                childContainer.classList.remove('expanded');
+                toggleBtn.classList.add('collapsed');
+              } else {
+                childContainer.classList.add('expanded');
+                toggleBtn.classList.remove('collapsed');
+              }
             }
           };
           itemDiv.appendChild(toggleBtn);
         } else {
-          // 占位符
           const spacer = document.createElement('span');
           spacer.style.width = '24px';
           spacer.style.display = 'inline-block';
@@ -133,6 +137,28 @@ async function loadFolders() {
         checkbox.id = `folder-${folder.id}`;
         checkbox.value = folder.id;
         checkbox.style.marginRight = '8px';
+        
+        // 恢复勾选状态
+        if (savedIds.includes(folder.id)) {
+          checkbox.checked = true;
+        }
+        
+        // 父子联动 + 实时保存
+        checkbox.addEventListener('change', async () => {
+          if (hasChildren) {
+            const childCheckboxes = itemDiv.nextElementSibling?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+            childCheckboxes?.forEach(cb => {
+              cb.checked = checkbox.checked;
+            });
+          }
+          
+          // 实时保存勾选状态
+          const currentSelected = getSelectedFolders();
+          await saveSettings({ selectedFolderIds: currentSelected });
+          
+          updateIndexButtonLabel();
+        });
+        
         itemDiv.appendChild(checkbox);
 
         // 标签
@@ -145,7 +171,6 @@ async function loadFolders() {
 
         container.appendChild(itemDiv);
 
-        // 递归渲染子文件夹
         if (hasChildren) {
           const childContainer = document.createElement('div');
           childContainer.className = 'folder-children expanded';
@@ -156,19 +181,7 @@ async function loadFolders() {
     }
 
     renderFolderTree(response.folders, folderList);
-
-    // 统计总文件夹数
-    let totalFolders = 0;
-    function countFolders(folders: any[]): number {
-      let count = folders.length;
-      folders.forEach(f => {
-        if (f.children) count += countFolders(f.children);
-      });
-      return count;
-    }
-    totalFolders = countFolders(response.folders);
-
-    console.log(`[options] Loaded ${totalFolders} folders in tree structure`);
+    updateIndexButtonLabel(); // 初始加载后更新按钮文案
   } catch (error) {
     console.error('Failed to load folders:', error);
     folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
@@ -212,6 +225,65 @@ async function loadStats() {
   // 更新缓存统计
   const cache = getCacheStats();
   cacheStats.textContent = `${cache.size}/${cache.maxSize}`;
+
+  // 如果没有失败项，隐藏该区块
+  if (stats.failed === 0) {
+    failedSection.classList.add('hidden');
+  } else {
+    failedSection.classList.remove('hidden');
+  }
+}
+
+// 加载失败书签列表
+async function loadFailedBookmarks() {
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'GET_FAILED_BOOKMARKS' }) as {
+      success: boolean;
+      failed: Array<{ id: string, url: string, title: string, error?: string }>;
+    };
+
+    if (!response.success || response.failed.length === 0) {
+      failedSection.classList.add('hidden');
+      return;
+    }
+
+    failedSection.classList.remove('hidden');
+    failedList.innerHTML = '';
+
+    response.failed.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'failed-item';
+      div.innerHTML = `
+        <div class="failed-info">
+          <span class="failed-title">${item.title || '无标题'}</span>
+          <a href="${item.url}" target="_blank" class="failed-url" title="点击访问">${item.url}</a>
+          <div class="failed-error">错误: ${item.error || '未知错误'}</div>
+        </div>
+        <button class="btn-del" data-id="${item.id}">🗑️ 删除书签</button>
+      `;
+      
+      const delBtn = div.querySelector('.btn-del') as HTMLButtonElement;
+      delBtn.onclick = async () => {
+        if (confirm('确定要从浏览器中永久删除这个书签吗？')) {
+          delBtn.disabled = true;
+          delBtn.textContent = '删除中...';
+          const res = await browser.runtime.sendMessage({ type: 'DELETE_BOOKMARK', id: item.id });
+          if (res.success) {
+            div.remove();
+            loadStats(); // 刷新统计
+          } else {
+            alert('删除失败: ' + (res.error || '未知错误'));
+            delBtn.disabled = false;
+            delBtn.textContent = '🗑️ 删除书签';
+          }
+        }
+      };
+
+      failedList.appendChild(div);
+    });
+  } catch (error) {
+    console.error('Failed to load failed bookmarks:', error);
+  }
 }
 
 // 显示状态消息
@@ -236,7 +308,6 @@ function updateWeightVisibility() {
   vectorWeightGroup.style.opacity = isHybrid ? "1" : "0.5";
   vectorWeightInput.disabled = !isHybrid;
 }
-
 // 保存 API 设置
 saveBtn.addEventListener("click", async () => {
   const apiKey = apiKeyInput.value.trim();
@@ -251,14 +322,15 @@ saveBtn.addEventListener("click", async () => {
 
   try {
     await saveSettings({ openaiApiKey: apiKey });
-    showStatus(apiStatus, "✓ API Key 已保存", "success");
+    showStatus(apiStatus, "✓ 设置已保存", "success");
   } catch (error) {
     showStatus(apiStatus, `保存失败: ${error}`, "error");
   } finally {
     saveBtn.disabled = false;
-    saveBtn.textContent = "保存设置";
+    saveBtn.textContent = "💾 保存 API 设置";
   }
 });
+
 
 // 测试 API 连接
 testBtn.addEventListener("click", async () => {
@@ -308,6 +380,18 @@ vectorWeightInput.addEventListener("input", () => {
 // 搜索模式切换
 searchModeSelect.addEventListener("change", updateWeightVisibility);
 
+// 更新索引按钮标签
+function updateIndexButtonLabel() {
+  const selected = getSelectedFolders();
+  if (selected.length > 0) {
+    startIndexBtn.textContent = `🚀 索引选中的 ${selected.length} 个文件夹`;
+    startIndexBtn.style.background = 'var(--info)';
+  } else {
+    startIndexBtn.textContent = '🚀 开始全量/增量索引';
+    startIndexBtn.style.background = 'var(--primary-color)';
+  }
+}
+
 // 开始索引
 startIndexBtn.addEventListener("click", async () => {
   const settings = await getSettings();
@@ -317,21 +401,31 @@ startIndexBtn.addEventListener("click", async () => {
     return;
   }
 
+  const selectedFolders = getSelectedFolders();
+  
   startIndexBtn.disabled = true;
   pauseBtn.disabled = false;
   resumeBtn.disabled = true;
   progressContainer.classList.remove("hidden");
-  showStatus(indexStatus, "正在索引...", "info");
+  
+  const isSelective = selectedFolders.length > 0;
+  showStatus(indexStatus, isSelective ? "正在执行定向索引..." : "正在执行全量增量索引...", "info");
 
   try {
-    const selectedFolders = getSelectedFolders();
-
-    if (selectedFolders.length > 0) {
+    if (isSelective) {
       // 索引选中的文件夹
-      await browser.runtime.sendMessage({
+      const result = await browser.runtime.sendMessage({
         type: 'INDEX_FOLDERS',
         folderIds: selectedFolders
       });
+      
+      // 如果没有新书签需要入队，直接结束
+      if (result && result.success && result.queued === 0) {
+        showStatus(indexStatus, `✓ 所选文件夹 (${result.total}个书签) 已全部同步`, "success");
+        startIndexBtn.disabled = false;
+        pauseBtn.disabled = true;
+        progressContainer.classList.add("hidden");
+      }
     } else {
       // 索引全部书签
       await browser.runtime.sendMessage({ type: "START_INDEXING" });

@@ -139,7 +139,7 @@ export default defineBackground(() => {
   });
 
   // 监听来自 Options 页面的消息
-  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     switch (message.type) {
       case 'START_INDEXING':
         indexAllBookmarks();
@@ -153,28 +153,58 @@ export default defineBackground(() => {
         resumeIndexing();
         sendResponse({ success: true });
         break;
+      case 'RETRY_FAILED':
+        retryFailed();
+        sendResponse({ success: true });
+        break;
       case 'GET_INDEXING_STATUS':
         const status = getIndexingStatus();
         sendResponse(status);
         break;
+      case 'GET_FAILED_BOOKMARKS':
+        try {
+          const { getFailedBookmarks } = await import('../src/db');
+          const failed = await getFailedBookmarks();
+          sendResponse({ success: true, failed });
+        } catch (e) {
+          sendResponse({ success: false, error: String(e) });
+        }
+        break;
+      case 'DELETE_BOOKMARK':
+        try {
+          const { deleteBookmark } = await import('../src/db');
+          // 1. 从浏览器删除
+          await browser.bookmarks.remove(message.id);
+          // 2. 从本地数据库删除
+          await deleteBookmark(message.id);
+          sendResponse({ success: true });
+        } catch (error: any) {
+          // 如果书签在浏览器中已不存在，依然尝试从本地库清理
+          const { deleteBookmark } = await import('../src/db');
+          await deleteBookmark(message.id);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
       case 'GET_BOOKMARK_FOLDERS':
-        getBookmarkFolders().then(folders => {
+        try {
+          const folders = await getBookmarkFolders();
           sendResponse({ success: true, folders });
-        }).catch(error => {
+        } catch (error: any) {
           sendResponse({ success: false, error: error.message });
-        });
-        return true; // 异步响应
+        }
+        break;
       case 'INDEX_FOLDERS':
-        indexFolders(message.folderIds).then(result => {
+        try {
+          const result = await indexFolders(message.folderIds);
           sendResponse({ success: true, ...result });
-        }).catch(error => {
+        } catch (error: any) {
           sendResponse({ success: false, error: error.message });
-        });
-        return true; // 异步响应
+        }
+        break;
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
     }
-    return true;
+    return true; // 保持通道开启以进行异步响应
   });
 });
 
