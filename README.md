@@ -1,4 +1,4 @@
-# wxt-bookmark-ai
+# Flow Search
 
 Browser extension for fast omnibox bookmark search with AI-powered semantic search. Type `bi <keyword>` in Chrome's address bar to search your bookmarks.
 

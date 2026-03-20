@@ -12,7 +12,7 @@ class BookmarkDB extends Dexie {
   bookmarks!: Table<BookmarkRecord, string>;
 
   constructor() {
-    super('BookmarkAI');
+    super('FlowSearch');
     this.version(1).stores({
       bookmarks: 'id, url, status, indexedAt'
     });

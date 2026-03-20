@@ -15,7 +15,7 @@ export default defineBackground(() => {
   // 加载频率缓存
   loadFreqCache().then((cache) => {
     console.log(
-      "[bi] Frequency cache loaded:",
+      "[FlowSearch] Frequency cache loaded:",
       Object.keys(cache).length,
       "entries",
     );
@@ -27,7 +27,7 @@ export default defineBackground(() => {
   // 首次启动时检查是否需要索引
   hasApiKey().then((hasKey) => {
     if (hasKey) {
-      console.log("[bi] API key found, starting initial index...");
+      console.log("[FlowSearch] API key found, starting initial index...");
       indexAllBookmarks();
     }
   });
@@ -36,7 +36,7 @@ export default defineBackground(() => {
   browser.omnibox.onInputStarted.addListener(() => {
     browser.omnibox.setDefaultSuggestion({
       description:
-        "🔍 Search bookmarks: <match>bi</match> <dim>keyword...</dim>",
+        "🔍 Flow Search: <match>bi</match> <dim>keyword...</dim>",
     });
   });
 
@@ -63,7 +63,7 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
       
       traverse(subtree);
     } catch (e) {
-      console.warn(`[bi] Failed to fetch subtree for folder ${id}:`, e);
+      console.warn(`[FlowSearch] Failed to fetch subtree for folder ${id}:`, e);
     }
   }
   
@@ -170,7 +170,7 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
         description: formatSuggestion(record, query, mode !== 'keyword'),
       })));
     } catch (error) {
-      console.error("[bi] Search error:", error);
+      console.error("[FlowSearch] Search error:", error);
       suggest(rerankBookmarks(query, valid));
     }
   });
@@ -184,7 +184,7 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
 
     // 记录访问频率
     incrementFreq(url);
-    console.log("[bi] Opened:", url);
+    console.log("[FlowSearch] Opened:", url);
   });
 
   // 监听来自 Options 页面的消息

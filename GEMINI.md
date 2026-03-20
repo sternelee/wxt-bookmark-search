@@ -1,8 +1,8 @@
-# GEMINI.md - wxt-bookmark-ai
+# GEMINI.md - Flow Search
 
 ## Project Overview
 
-**wxt-bookmark-ai** is a sophisticated browser extension that enhances bookmark searching with AI-powered semantic search capabilities. It allows users to search their bookmarks directly from the browser's address bar (omnibox) using the keyword `bi`.
+**Flow Search** is a sophisticated browser extension that enhances bookmark searching with AI-powered semantic search capabilities. It allows users to search their bookmarks directly from the browser's address bar (omnibox) using the keyword `bi`.
 
 ### Core Features
 - **AI Semantic Search**: Uses SiliconFlow BGE-M3 embeddings (1024 dimensions) to understand the meaning behind search queries.

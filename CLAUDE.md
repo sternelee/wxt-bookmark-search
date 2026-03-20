@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**wxt-bookmark-ai** is a Chrome/Chromium browser extension (Manifest V3) that provides fast omnibox bookmark search. Typing `bi <keyword>` in Chrome's address bar searches bookmarks ranked by a frequency-weighted algorithm that learns from your browsing habits.
+**Flow Search** is a Chrome/Chromium browser extension (Manifest V3) that provides fast omnibox bookmark search. Typing `bi <keyword>` in Chrome's address bar searches bookmarks ranked by a frequency-weighted algorithm that learns from your browsing habits.
 
 Stack: WXT framework, Solid.js (via @wxt-dev/module-solid), TypeScript, Vite.
 

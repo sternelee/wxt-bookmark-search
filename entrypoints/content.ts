@@ -36,12 +36,12 @@ export default defineContentScript({
             siteName: article.siteName
           };
         } catch (error) {
-          console.error("[BookmarkAI] Extraction error:", error);
+          console.error("[FlowSearch] Extraction error:", error);
           return { success: false, error: String(error) };
         }
       }
     });
     
-    console.log("[BookmarkAI] Content script ready for extraction");
+    console.log("[FlowSearch] Content script ready for extraction");
   },
 });

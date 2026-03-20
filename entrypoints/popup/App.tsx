@@ -67,7 +67,7 @@ function App() {
       <div class="header">
         <div class="logo">
           <span class="ai-icon">✨</span>
-          <h1>书签 AI</h1>
+          <h1>Flow Search</h1>
         </div>
         <span class={`status-dot ${isConfigured() ? 'ready' : 'not-configured'}`} title={isConfigured() ? '已配置' : '未配置'}></span>
       </div>
