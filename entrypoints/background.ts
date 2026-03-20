@@ -40,89 +40,138 @@ export default defineBackground(() => {
     });
   });
 
+/**
+ * 递归获取文件夹及其子文件夹下所有的书签 URL
+ */
+async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
+  const urls = new Set<string>();
+  
+  for (const id of folderIds) {
+    try {
+      const subtree = await browser.bookmarks.getSubTree(id);
+      
+      const traverse = (nodes: any[]) => {
+        for (const node of nodes) {
+          if (node.url) {
+            urls.add(node.url);
+          }
+          if (node.children) {
+            traverse(node.children);
+          }
+        }
+      };
+      
+      traverse(subtree);
+    } catch (e) {
+      console.warn(`[bi] Failed to fetch subtree for folder ${id}:`, e);
+    }
+  }
+  
+  return urls;
+}
+
   // 核心搜索逻辑
   browser.omnibox.onInputChanged.addListener(async (text, suggest) => {
-    const query = text.trim();
+    const rawInput = text.trim();
+    
+    // 1. 命令引导与文件夹补全逻辑 (保持不变...)
+    if (rawInput === "/") {
+      suggest([{ content: "/folder:", description: "📁 <match>/folder:</match><dim>名称 关键词</dim> — 限定在特定文件夹中搜索" }]);
+      return;
+    }
+    if (rawInput.startsWith("/folder:") && !rawInput.includes(" ")) {
+      const folderPart = rawInput.substring(8);
+      const allFolders = await browser.bookmarks.search({});
+      const folders = allFolders.filter(f => !f.url && (folderPart === "" || f.title.toLowerCase().includes(folderPart.toLowerCase())));
+      const folderSuggestions = folders.slice(0, 8).map(f => ({
+        content: `/folder:${f.title} `,
+        description: `📁 搜索文件夹: <match>${escapeXml(f.title)}</match>`
+      }));
+      if (folderSuggestions.length > 0) { suggest(folderSuggestions); return; }
+    }
 
-    // 空查询：显示最常访问的书签
+    let query = rawInput;
+    let explicitFolderNames: string[] = [];
+
+    // 解析搜索语法: /folder:xxx keyword
+    const folderMatch = query.match(/^\/folder:(\S+)\s+(.*)$/i);
+    if (folderMatch) {
+      explicitFolderNames = [folderMatch[1].toLowerCase()];
+      query = folderMatch[2].trim();
+    }
+
     if (!query) {
+      // 空查询逻辑...
       const recent = getRecentBookmarks(8);
-      if (recent.length === 0) {
-        suggest([
-          {
-            content: "about:blank",
-            description:
-              "<dim>No bookmark history yet — visit a bookmark to build frequency data.</dim>",
-          },
-        ]);
-        return;
-      }
-      suggest(
-        recent.map(({ url }) => ({
-          content: url,
-          description: highlightBookmark(url, "", url),
-        })),
-      );
+      suggest(recent.map(({ url }) => ({ content: url, description: highlightBookmark(url, "", url) })));
       return;
     }
 
-    // 1. 获取 Chrome 原生搜索结果 (关键词搜索)
-    const chromeResults = await browser.bookmarks.search(query);
-    const valid = chromeResults.filter((b) => b.url !== null);
-
-    // 2. 检查是否配置了 API Key
+    // --- 核心改进：确定搜索作用域 ---
     const settings = await getSettings();
+    let allowedUrls: Set<string> | null = null;
+
+    if (explicitFolderNames.length > 0) {
+      // 如果使用了 /folder: 语法，优先级最高，精准定位文件夹
+      const folders = await browser.bookmarks.search({ title: explicitFolderNames[0] });
+      const folderIds = folders.filter(f => !f.url).map(f => f.id);
+      if (folderIds.length > 0) {
+        allowedUrls = await getAllUrlsInFolders(folderIds);
+      }
+    } else if (settings.selectedFolderIds && settings.selectedFolderIds.length > 0) {
+      // 如果没有语法，但设置中指定了目录，则使用设置的作用域
+      allowedUrls = await getAllUrlsInFolders(settings.selectedFolderIds);
+    }
+
+    // 1. 获取关键词搜索结果，并应用过滤
+    let chromeResults = await browser.bookmarks.search(query);
+    let valid = chromeResults.filter((b) => b.url !== null);
+    if (allowedUrls) {
+      valid = valid.filter(b => allowedUrls!.has(b.url!));
+    }
+
+    // 2. 检查 API Key
     if (!settings.openaiApiKey) {
-      // 无 API Key: 降级为纯关键词搜索
-      const suggestions = rerankBookmarks(query, valid);
-      suggest(suggestions);
+      suggest(rerankBookmarks(query, valid));
       return;
     }
 
-    // 3. 获取已索引的书签
-    const indexedBookmarks = await getIndexedBookmarks();
+    // 3. 获取已索引书签，并应用过滤
+    const allIndexed = await getIndexedBookmarks();
+    let filteredIndexed = allIndexed;
+    if (allowedUrls) {
+      filteredIndexed = allIndexed.filter(idx => allowedUrls!.has(idx.url));
+    }
 
-    // 如果没有已索引的书签，降级为关键词搜索
-    if (indexedBookmarks.length === 0) {
-      const suggestions = rerankBookmarks(query, valid);
-      suggest(suggestions);
-      return;
+    if (filteredIndexed.length === 0 && valid.length === 0) {
+      suggest([]); return;
     }
 
     try {
       // 4. 生成查询向量
       const queryVector = await getQueryEmbedding(query, settings.openaiApiKey);
 
-      // 5. 根据搜索模式执行搜索
+      // 5. 执行混合搜索
       let results;
       const mode = settings.searchMode || 'hybrid';
 
       if (mode === 'vector') {
-        // 纯向量搜索
-        results = await vectorSearch(indexedBookmarks, queryVector, {
-          limit: settings.searchMode ? 9 : undefined,
-        });
+        results = await vectorSearch(filteredIndexed, queryVector, { limit: 9 });
       } else {
-        // 混合搜索 (默认) 或关键词搜索
-        results = await hybridSearch(valid, indexedBookmarks, queryVector, {
+        results = await hybridSearch(valid, filteredIndexed, queryVector, {
           mode,
           vectorWeight: settings.vectorWeight || 0.4,
           limit: 9,
         });
       }
 
-      // 6. 转换为 Omnibox 建议
-      const suggestions = results.map((record) => ({
+      suggest(results.map((record) => ({
         content: record.url,
         description: formatSuggestion(record, query, mode !== 'keyword'),
-      }));
-
-      suggest(suggestions);
+      })));
     } catch (error) {
       console.error("[bi] Search error:", error);
-      // 出错时降级为关键词搜索
-      const suggestions = rerankBookmarks(query, valid);
-      suggest(suggestions);
+      suggest(rerankBookmarks(query, valid));
     }
   });
 

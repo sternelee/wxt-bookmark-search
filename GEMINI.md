@@ -6,10 +6,11 @@
 
 ### Core Features
 - **AI Semantic Search**: Uses SiliconFlow BGE-M3 embeddings (1024 dimensions) to understand the meaning behind search queries.
-- **Hybrid Search Algorithm**: Combines traditional keyword matching with vector similarity using the Reciprocal Rank Fusion (RRF) algorithm for optimal results.
+- **Hybrid Search Algorithm**: Combines traditional keyword matching with vector similarity using the Reciprocal Rank Fusion (RRF) algorithm.
+- **Smart Directory Filtering**: Supports recursive folder-based search scope. Both keyword and AI search respect the selected directory (via settings or syntax).
+- **Advanced Search Syntax**: Powerful Omnibox commands like `/folder:NAME` with real-time smart completion for commands and folder names.
 - **Local-First Privacy**: All vector data and indices are stored locally in the browser's IndexedDB (via Dexie.js).
-- **Intelligent Indexing**: Automatically extracts content from bookmarked pages using Jina AI Reader (Markdown extraction) and generates embeddings in the background.
-- **Omnibox Integration**: Provides real-time search suggestions with highlighting and frequency-weighted ranking.
+- **Intelligent Indexing**: Triple-layered extraction (Active Tab -> Local Readability -> Jina Reader) for high speed and session support.
 
 ### Tech Stack
 - **Framework**: [WXT](https://wxt.dev/) (Web Extension Toolbox)
@@ -58,7 +59,26 @@
 
 ---
 
-## Development Conventions
+## Future Roadmap
+
+### 1. Search Experience
+- **Side Panel Integration**: Develop a full-featured management UI using Chrome Side Panel API.
+- **Semantic Clustering**: Identify and group duplicate or highly similar bookmarks using vector similarity.
+- **Contextual Suggestions**: Recommend related bookmarks based on the content of the current active tab.
+
+### 2. Intelligence & Content
+- **On-demand AI Summary**: Implement background/lazy LLM summarization to avoid slowing down initial indexing.
+- **Local LLM Support**: Integrate Chrome's `window.ai` (Gemini Nano) or `Transformers.js` for 100% local, zero-cost semantic search.
+- **Multi-modal Indexing**: Support image and video bookmark indexing using vision models.
+
+### 3. Management & Automation
+- **Automatic Health Check**: Periodically scan for dead links (404s) and mark them for cleanup.
+- **AI Categorization**: Suggest moving bookmarks into logical folders based on their semantic content.
+- **Cross-device Sync**: Explore encrypted sync solutions (e.g., WebDAV, Supabase) for large vector data.
+
+### 4. Interactive Optimizations (Currently Implementing)
+- **Advanced Search Syntax**: Support `/tag:`, `/folder:`, and `/date:` filters in the omnibox.
+- **Global Shortcuts**: Add hotkeys for instant indexing and common management tasks.
 
 ### Coding Style
 - **Modularization**: Keep core logic in `src/` and UI/Entrypoint specific code in `entrypoints/`.
