@@ -403,6 +403,23 @@
         <div id="apiStatus" class="status-box hidden"></div>
       </section>
 
+      <!-- 1.1 GitHub 集成 -->
+      <section class="card">
+        <h2>🐙 GitHub Stars 语义化索引</h2>
+        <div class="form-group">
+          <label for="githubToken">GitHub Personal Access Token (PAT)</label>
+          <input type="password" id="githubToken" placeholder="ghp_..." />
+          <p class="hint">需要 <code>public_repo</code> 权限。配置后可将你的加星仓库纳入 AI 搜索范围。</p>
+        </div>
+        
+        <div class="button-group">
+          <button id="saveGithubBtn">💾 保存 GitHub 设置</button>
+          <button id="syncGithubBtn" class="btn-secondary">🔄 立即同步 Stars</button>
+        </div>
+        <div id="githubStatus" class="status-box hidden"></div>
+        <p id="githubLastSync" class="hint" style="margin-top: 12px;"></p>
+      </section>
+
       <!-- 2. 搜索设置 -->
       <section class="card">
         <h2>🔍 检索策略</h2>

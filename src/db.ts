@@ -110,6 +110,8 @@ const defaultSettings: Settings = {
   searchMode: 'hybrid',
   vectorWeight: 0.4,
   selectedFolderIds: [],
+  githubToken: undefined,
+  githubSyncEnabled: false,
 };
 
 /** 获取设置 */

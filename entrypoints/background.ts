@@ -9,7 +9,7 @@ import { highlightBookmark } from "../src/highlight";
 import { getSettings, getIndexedBookmarks, hasApiKey } from "../src/db";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
-import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus, getBookmarkFolders, indexFolders } from "../src/indexer";
+import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus, getBookmarkFolders, indexFolders, syncGithubStars } from "../src/indexer";
 
 export default defineBackground(() => {
   // 加载频率缓存
@@ -188,72 +188,62 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
   });
 
   // 监听来自 Options 页面的消息
-  browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-    switch (message.type) {
-      case 'START_INDEXING':
-        indexAllBookmarks();
-        sendResponse({ success: true });
-        break;
-      case 'PAUSE_INDEXING':
-        pauseIndexing();
-        sendResponse({ success: true });
-        break;
-      case 'RESUME_INDEXING':
-        resumeIndexing();
-        sendResponse({ success: true });
-        break;
-      case 'RETRY_FAILED':
-        retryFailed();
-        sendResponse({ success: true });
-        break;
-      case 'GET_INDEXING_STATUS':
-        const status = getIndexingStatus();
-        sendResponse(status);
-        break;
-      case 'GET_FAILED_BOOKMARKS':
-        try {
-          const { getFailedBookmarks } = await import('../src/db');
-          const failed = await getFailedBookmarks();
-          sendResponse({ success: true, failed });
-        } catch (e) {
-          sendResponse({ success: false, error: String(e) });
-        }
-        break;
-      case 'DELETE_BOOKMARK':
-        try {
-          const { deleteBookmark } = await import('../src/db');
-          // 1. 从浏览器删除
-          await browser.bookmarks.remove(message.id);
-          // 2. 从本地数据库删除
-          await deleteBookmark(message.id);
-          sendResponse({ success: true });
-        } catch (error: any) {
-          // 如果书签在浏览器中已不存在，依然尝试从本地库清理
-          const { deleteBookmark } = await import('../src/db');
-          await deleteBookmark(message.id);
-          sendResponse({ success: false, error: error.message });
-        }
-        break;
-      case 'GET_BOOKMARK_FOLDERS':
-        try {
-          const folders = await getBookmarkFolders();
-          sendResponse({ success: true, folders });
-        } catch (error: any) {
-          sendResponse({ success: false, error: error.message });
-        }
-        break;
-      case 'INDEX_FOLDERS':
-        try {
-          const result = await indexFolders(message.folderIds);
-          sendResponse({ success: true, ...result });
-        } catch (error: any) {
-          sendResponse({ success: false, error: error.message });
-        }
-        break;
-      default:
-        sendResponse({ success: false, error: 'Unknown message type' });
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // 处理同步消息
+    if (message.type === 'GET_INDEXING_STATUS') {
+      sendResponse(getIndexingStatus());
+      return false;
     }
-    return true; // 保持通道开启以进行异步响应
+
+    // 处理异步消息
+    const handleAsync = async () => {
+      try {
+        switch (message.type) {
+          case 'START_INDEXING':
+            indexAllBookmarks();
+            return { success: true };
+          case 'PAUSE_INDEXING':
+            pauseIndexing();
+            return { success: true };
+          case 'RESUME_INDEXING':
+            resumeIndexing();
+            return { success: true };
+          case 'RETRY_FAILED':
+            retryFailed();
+            return { success: true };
+          case 'GET_FAILED_BOOKMARKS':
+            const { getFailedBookmarks } = await import('../src/db');
+            const failed = await getFailedBookmarks();
+            return { success: true, failed };
+          case 'DELETE_BOOKMARK':
+            const { deleteBookmark } = await import('../src/db');
+            try {
+              await browser.bookmarks.remove(message.id);
+            } catch (e) {
+              console.debug("[FlowSearch] Bookmark already gone from browser");
+            }
+            await deleteBookmark(message.id);
+            return { success: true };
+          case 'GET_BOOKMARK_FOLDERS':
+            const folders = await getBookmarkFolders();
+            return { success: true, folders };
+          case 'INDEX_FOLDERS':
+            const folderResult = await indexFolders(message.folderIds);
+            return { success: true, ...folderResult };
+          case 'SYNC_GITHUB_STARS':
+            const ghResult = await syncGithubStars();
+            return { success: true, ...ghResult };
+          default:
+            return { success: false, error: 'Unknown message type' };
+        }
+      } catch (error: any) {
+        console.error(`[FlowSearch] Message error (${message.type}):`, error);
+        return { success: false, error: error.message };
+      }
+    };
+
+    handleAsync().then(sendResponse);
+    return true; // 关键：保持通道开启
   });
 });
 

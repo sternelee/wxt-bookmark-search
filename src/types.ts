@@ -37,5 +37,8 @@ export interface Settings {
   openaiApiKey?: string;
   searchMode: SearchMode;
   vectorWeight: number;
-  selectedFolderIds?: string[]; // 新增：持久化存储选中的文件夹 ID
+  selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID
+  githubToken?: string;         // 新增：GitHub PAT
+  githubSyncEnabled?: boolean;  // 新增：是否启用 GitHub 同步
+  lastGithubSync?: number;      // 新增：上次同步时间
 }

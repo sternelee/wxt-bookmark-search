@@ -8,6 +8,11 @@ import { testApiKey, getCacheStats, clearEmbeddingCache } from "../../src/embedd
 
 // DOM 元素
 const apiKeyInput = document.getElementById("apiKey") as HTMLInputElement;
+const githubTokenInput = document.getElementById("githubToken") as HTMLInputElement;
+const githubStatus = document.getElementById("githubStatus") as HTMLElement;
+const githubLastSync = document.getElementById("githubLastSync") as HTMLElement;
+const saveGithubBtn = document.getElementById("saveGithubBtn") as HTMLButtonElement;
+const syncGithubBtn = document.getElementById("syncGithubBtn") as HTMLButtonElement;
 const searchModeSelect = document.getElementById(
   "searchMode",
 ) as HTMLSelectElement;
@@ -59,6 +64,10 @@ async function init() {
 
   // 填充表单
   apiKeyInput.value = settings.openaiApiKey || "";
+  githubTokenInput.value = settings.githubToken || "";
+  if (settings.lastGithubSync) {
+    githubLastSync.textContent = `上次同步: ${new Date(settings.lastGithubSync).toLocaleString()}`;
+  }
   searchModeSelect.value = settings.searchMode || "hybrid";
   vectorWeightInput.value = String((settings.vectorWeight || 0.4) * 100);
   vectorWeightValue.textContent = `${vectorWeightInput.value}%`;
@@ -331,6 +340,46 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
+
+// 保存 GitHub 设置
+saveGithubBtn.addEventListener("click", async () => {
+  const token = githubTokenInput.value.trim();
+  try {
+    await saveSettings({ githubToken: token });
+    showStatus(githubStatus, "✓ GitHub 设置已保存", "success");
+  } catch (error) {
+    showStatus(githubStatus, `保存失败: ${error}`, "error");
+  }
+});
+
+// 同步 GitHub Stars
+syncGithubBtn.addEventListener("click", async () => {
+  const settings = await getSettings();
+  if (!settings.githubToken) {
+    showStatus(githubStatus, "请先填写 GitHub Token", "error");
+    return;
+  }
+
+  syncGithubBtn.disabled = true;
+  syncGithubBtn.textContent = "正在获取 Stars...";
+  showStatus(githubStatus, "正在从 GitHub 获取仓库列表...", "info");
+
+  try {
+    const result = await browser.runtime.sendMessage({ type: 'SYNC_GITHUB_STARS' });
+    if (result.success) {
+      showStatus(githubStatus, `✓ 同步成功！已将 ${result.total} 个仓库加入索引队列`, "success");
+      githubLastSync.textContent = `上次同步: ${new Date().toLocaleString()}`;
+      loadStats();
+    } else {
+      showStatus(githubStatus, `同步失败: ${result.error}`, "error");
+    }
+  } catch (error) {
+    showStatus(githubStatus, `通信错误: ${error}`, "error");
+  } finally {
+    syncGithubBtn.disabled = false;
+    syncGithubBtn.textContent = "🔄 立即同步 Stars";
+  }
+});
 
 // 测试 API 连接
 testBtn.addEventListener("click", async () => {
