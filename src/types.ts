@@ -20,6 +20,7 @@ export interface BookmarkRecord {
   status: 'pending' | 'indexed' | 'failed';
   indexedAt?: number;      // 索引时间戳
   error?: string;          // 失败原因
+  needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
 }
 
 /** 搜索模式 */

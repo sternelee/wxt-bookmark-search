@@ -166,6 +166,40 @@ export async function getEmbedding(
   };
 }
 
+/** 批量生成向量 — 使用 SiliconFlow 原生批量 input 接口 (单次请求多个向量) */
+export async function batchEmbedTexts(
+  texts: string[],
+  apiKey: string,
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const truncated = texts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
+
+  const response = await fetch(API_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      input: truncated,
+      encoding_format: "float",
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json() as EmbeddingError;
+    throw new Error(error.error?.message || `API error: ${response.status}`);
+  }
+
+  const data = await response.json() as EmbeddingResponse;
+  // API 返回的 data 数组按 index 排序
+  return data.data
+    .sort((a, b) => a.index - b.index)
+    .map((d) => d.embedding);
+}
+
 /** 批量生成向量 (带并发控制) */
 export async function batchEmbed(
   texts: string[],
