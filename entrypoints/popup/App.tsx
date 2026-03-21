@@ -32,7 +32,6 @@ function App() {
           url: r.url,
           title: item?.title || r.url,
           summary: item?.summary,
-          tags: item?.tags
         };
       });
       setRecent(recentItems);

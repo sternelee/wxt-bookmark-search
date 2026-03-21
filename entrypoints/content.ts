@@ -25,7 +25,7 @@ export default defineContentScript({
             codeBlockStyle: 'fenced'
           });
           
-          const markdown = `# ${article.title}\n\n${turndown.turndown(article.content)}`;
+          const markdown = `# ${article.title ?? ""}\n\n${turndown.turndown(article.content ?? "")}`;
 
           return {
             success: true,

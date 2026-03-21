@@ -9,7 +9,7 @@ import { highlightBookmark } from "../src/highlight";
 import { getSettings, getIndexedBookmarks, hasApiKey } from "../src/db";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
-import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, getIndexingStatus, getBookmarkFolders, indexFolders, syncGithubStars } from "../src/indexer";
+import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, retryFailed, getIndexingStatus, getBookmarkFolders, indexFolders, syncGithubStars } from "../src/indexer";
 
 export default defineBackground(() => {
   // 加载频率缓存

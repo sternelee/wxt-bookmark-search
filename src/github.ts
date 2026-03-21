@@ -75,7 +75,3 @@ export async function fetchRepoReadme(token: string, owner: string, repo: number
     return null;
   }
 }
-
-    throw error;
-  }
-}
