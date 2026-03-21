@@ -15,7 +15,7 @@ import {
   db,
   saveSettings,
 } from "./db";
-import { getEmbedding, testApiKey } from "./embedding";
+import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
 
 /** 索引任务状态 */
 interface IndexJob {
@@ -126,8 +126,57 @@ import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
 import { fetchAllStarredRepos, fetchRepoReadme } from "./github";
 
+/** enrichment 任务 — 后台慢慢丰富化 GitHub README */
+interface EnrichmentJob {
+  bookmarkId: string;
+  url: string;
+  owner: string;
+  repo: string;
+  token: string;
+}
+
+const enrichmentQueue: EnrichmentJob[] = [];
+let isEnriching = false;
+
+/** 后台串行处理 enrichment 队列（低优先级） */
+async function processEnrichmentQueue(): Promise<void> {
+  if (isEnriching || enrichmentQueue.length === 0) return;
+  isEnriching = true;
+
+  const settings = await getSettings();
+  if (!settings.openaiApiKey) {
+    isEnriching = false;
+    return;
+  }
+
+  while (enrichmentQueue.length > 0) {
+    const job = enrichmentQueue.shift()!;
+    try {
+      const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
+      if (readme && readme.length > 10) {
+        const textToEmbed = `${job.owner}/${job.repo}\n${readme.slice(0, 2000)}`;
+        const { embedding } = await getEmbedding(textToEmbed, settings.openaiApiKey!);
+        await updateBookmark(job.bookmarkId, {
+          summary: readme.slice(0, 500),
+          embedding,
+          needsEnrichment: false,
+          indexedAt: Date.now(),
+        });
+        console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
+      }
+    } catch (err) {
+      console.warn(`[indexer] Enrichment failed for ${job.owner}/${job.repo}:`, err);
+    }
+    // 低优先级：慢速处理，避免抢占主队列
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  isEnriching = false;
+}
+
 /**
  * 同步 GitHub Stars 到索引队列
+ * 快速路径：用 description+language 立即 embed，后台异步丰富 README
  */
 export async function syncGithubStars(): Promise<{
   total: number;
@@ -137,51 +186,79 @@ export async function syncGithubStars(): Promise<{
   if (!settings.githubToken) {
     throw new Error("GitHub Token not configured");
   }
+  if (!settings.openaiApiKey) {
+    throw new Error("API Key not configured");
+  }
 
-  console.log("[FlowSearch] Starting streaming sync for GitHub Stars...");
+  console.log("[FlowSearch] Starting fast-path sync for GitHub Stars...");
   let totalCount = 0;
   let totalQueued = 0;
 
-  // 使用流式分页回调
   await fetchAllStarredRepos(settings.githubToken, async (pageRepos) => {
-    // 关键：强制重置状态为 pending 并覆盖现有记录
-    const records: BookmarkRecord[] = pageRepos.map((repo) => ({
+    totalCount += pageRepos.length;
+
+    // 快速路径：用 description + language 立即批量 embed
+    const texts = pageRepos.map(
+      (r) => `${r.full_name}\n${r.description || ""} (Main language: ${r.language || "Unknown"})`
+    );
+
+    let embeddings: number[][] = [];
+    try {
+      embeddings = await batchEmbedTexts(texts, settings.openaiApiKey!);
+    } catch (err) {
+      console.warn("[FlowSearch] Batch embed failed, falling back to title-only:", err);
+      // 批量失败时 embeddings 保持空数组，写入 pending 状态等主队列处理
+    }
+
+    const records: BookmarkRecord[] = pageRepos.map((repo, i) => ({
       id: `gh-${repo.id}`,
       url: repo.html_url,
       title: repo.full_name,
       summary: `${repo.description || ""} (Main language: ${repo.language || "Unknown"})`,
-      status: 'pending',
-    }));
+      embedding: embeddings[i],
+      status: embeddings[i] ? "indexed" : "pending",
+      indexedAt: embeddings[i] ? Date.now() : undefined,
+      needsEnrichment: !!embeddings[i],
+    } as BookmarkRecord));
 
     await upsertBookmarks(records);
-    
-    // 将新任务加入内存队列
-    const newJobs = records.map(r => ({
-      bookmarkId: r.id,
-      url: r.url,
-      title: r.title,
-      retryCount: 0
-    }));
-    queue.push(...newJobs);
-    
     totalQueued += records.length;
-    totalCount += pageRepos.length;
 
-    // 立即触发处理流程
-    if (records.length > 0) {
-      console.log(`[FlowSearch] Streaming sync: Forced ${records.length} repos to pending, starting indexer...`);
+    // 把成功快速索引的 repos 加入 enrichment 队列（后台慢慢补 README）
+    for (const repo of pageRepos) {
+      const match = repo.html_url.match(/github\.com\/([^/]+)\/([^/]+)/);
+      if (match) {
+        enrichmentQueue.push({
+          bookmarkId: `gh-${repo.id}`,
+          url: repo.html_url,
+          owner: match[1],
+          repo: match[2],
+          token: settings.githubToken!,
+        });
+      }
+    }
+
+    // 未能 embed 的 fallback 到主队列
+    const failedJobs = records
+      .filter((r) => r.status === "pending")
+      .map((r) => ({ bookmarkId: r.id, url: r.url, title: r.title, retryCount: 0 }));
+    if (failedJobs.length > 0) {
+      queue.push(...failedJobs);
       processQueue();
     }
+
+    console.log(
+      `[FlowSearch] Fast-path: ${records.filter((r) => r.status === "indexed").length}/${records.length} embedded instantly`
+    );
   });
 
   // 更新同步时间
   await saveSettings({ lastGithubSync: Date.now() });
 
-  return {
-    total: totalCount,
-    skipped: totalCount - totalQueued,
-    queued: totalQueued,
-  } as any;
+  // 后台启动 enrichment（不 await）
+  processEnrichmentQueue().catch(() => {});
+
+  return { total: totalCount, queued: totalQueued };
 }
 
 /**
@@ -190,7 +267,7 @@ export async function syncGithubStars(): Promise<{
 async function fetchPageContent(
   url: string,
   settings: Settings,
-): Promise<{ markdown: string; title?: string; summary?: string }> {
+): Promise<{ markdown: string; title?: string; summary?: string } | null> {
   let localBestEffort: {
     markdown: string;
     title?: string;
@@ -255,7 +332,7 @@ async function fetchPageContent(
     try {
       console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
       const response = await fetch(url, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(5000),
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -287,19 +364,19 @@ async function fetchPageContent(
 
           localBestEffort = {
             markdown,
-            title: article.title,
+            title: article.title ?? undefined,
             summary: article.excerpt || metaDescription || "",
           };
 
-          // 如果内容足够丰富 (>150字符)，直接返回，不再走 Jina
-          if (article.textContent.length > 150) {
+          const textLen = article.textContent?.length ?? 0;
+          if (textLen > 150) {
             console.log(
-              `[indexer] Strategy 2: High quality local extraction (${article.textContent.length} chars)`,
+              `[indexer] Strategy 2: High quality local extraction (${textLen} chars)`,
             );
             return localBestEffort;
           }
           console.log(
-            `[indexer] Strategy 2: Local extraction successful but short (${article.textContent.length} chars), will try Jina as backup`,
+            `[indexer] Strategy 2: Local extraction successful but short (${textLen} chars), will try Jina as backup`,
           );
         }
       }
@@ -313,7 +390,7 @@ async function fetchPageContent(
       const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
       const jinaResponse = await fetch(readerUrl, {
         headers: { Accept: "text/markdown" },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (jinaResponse.ok) {
@@ -332,9 +409,10 @@ async function fetchPageContent(
       return localBestEffort;
     }
 
-    throw new Error("All extraction strategies exhausted");
+    return null;
   } catch (error) {
-    throw error;
+    console.warn(`[indexer] fetchPageContent failed for ${url}:`, error);
+    return null;
   }
 }
 
@@ -351,16 +429,12 @@ async function indexBookmark(
 
   try {
     // 1. 根据优先级策略获取网页内容
-    const {
-      markdown,
-      title: extractedTitle,
-      summary: extractedSummary,
-    } = await fetchPageContent(job.url, settings);
+    const pageContent = await fetchPageContent(job.url, settings);
 
-    // 2. 生成向量输入
-    const title = extractedTitle || job.title;
-    const summary = extractedSummary || "";
-    const textToEmbed = `${title}\n${summary}`;
+    const title = pageContent?.title || job.title;
+    const summary = pageContent?.summary || "";
+    const textToEmbed = pageContent ? `${title}\n${summary}` : job.title;
+
     const { embedding } = await getEmbedding(
       textToEmbed,
       settings.openaiApiKey,
@@ -443,6 +517,8 @@ function isRateLimitError(error: string): boolean {
 /**
  * 处理索引队列
  */
+const CONCURRENCY = 3;
+
 async function processQueue(): Promise<void> {
   if (isProcessing || queue.length === 0) return;
 
@@ -464,86 +540,77 @@ async function processQueue(): Promise<void> {
     return;
   }
 
-  console.log(`[indexer] Processing ${totalToProcess} items in queue`);
+  console.log(`[indexer] Processing ${totalToProcess} items with ${CONCURRENCY} workers`);
   notifyProgress({ total: totalToProcess, processed: 0, status: "processing" });
 
-  while (queue.length > 0) {
-    // 检查暂停标志
-    if (isPaused) {
-      console.log("[indexer] Indexing paused");
-      isProcessing = false;
+  async function worker(): Promise<void> {
+    while (true) {
+      if (isPaused) {
+        notifyProgress({
+          total: totalToProcess,
+          processed: processedCount,
+          status: "paused",
+        });
+        return;
+      }
+
+      const job = queue.shift();
+      if (!job) break;
+
       notifyProgress({
         total: totalToProcess,
         processed: processedCount,
-        status: "paused",
+        current: job.url,
+        status: "processing",
       });
-      return;
-    }
 
-    const job = queue.shift()!;
+      const result = await indexBookmark(job, settings);
+      processedCount++;
 
-    // 通知当前处理的 URL
-    notifyProgress({
-      total: totalToProcess,
-      processed: processedCount,
-      current: job.url,
-      status: "processing",
-    });
+      if (!result.success) {
+        const errorMessage = result.error || "";
+        console.warn(`[indexer] Failed to index ${job.url}:`, errorMessage);
 
-    const result = await indexBookmark(job, settings);
-    processedCount++;
+        if (isRateLimitError(errorMessage)) {
+          onRateLimit();
+          queue.unshift({ ...job, retryCount: job.retryCount + 1 });
+          const delay = calculateDelay();
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
 
-    if (!result.success) {
-      const errorMessage = result.error || "";
-      console.warn(`[indexer] Failed to index ${job.url}:`, errorMessage);
-
-      // 检测限流错误
-      if (isRateLimitError(errorMessage)) {
-        onRateLimit();
-        // 限流时重新入队，延迟后重试
-        queue.unshift({ ...job, retryCount: job.retryCount + 1 });
-
-        // 等待更长时间
-        const delay = calculateDelay();
-        console.log(`[indexer] Waiting ${delay}ms before retry...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        continue;
-      }
-
-      // 其他错误的重试逻辑
-      if (job.retryCount < MAX_RETRIES) {
-        queue.push({ ...job, retryCount: job.retryCount + 1 });
-        totalToProcess++;
+        if (job.retryCount < MAX_RETRIES) {
+          queue.push({ ...job, retryCount: job.retryCount + 1 });
+          totalToProcess++;
+        } else {
+          await updateBookmark(job.bookmarkId, {
+            status: "failed",
+            error: result.error,
+          });
+        }
       } else {
-        // 标记失败
-        await updateBookmark(job.bookmarkId, {
-          status: "failed",
-          error: result.error,
-        });
+        console.log(`[indexer] Indexed: ${job.url}`);
+        onSuccess();
       }
-    } else {
-      console.log(`[indexer] Indexed: ${job.url}`);
-      onSuccess();
-    }
 
-    // 更新进度
-    notifyProgress({
-      total: totalToProcess,
-      processed: processedCount,
-      status: "processing",
-    });
+      notifyProgress({
+        total: totalToProcess,
+        processed: processedCount,
+        status: "processing",
+      });
 
-    // 动态延迟
-    if (queue.length > 0) {
       const delay = calculateDelay();
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
-  isProcessing = false;
-  console.log("[indexer] Queue processing complete");
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
-  // 广播索引完成事件
+  isProcessing = false;
+
+  if (isPaused) return;
+
+  console.log("[indexer] Queue processing complete");
   notifyProgress({
     total: totalToProcess,
     processed: processedCount,
