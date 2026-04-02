@@ -144,18 +144,32 @@ export function rerankBookmarks(
 
   // Levenshtein fuzzy pass — for query.length >= 3, scan all scored
   // items that haven't been matched by earlier rules and add/edit their score.
+  // Uses sliding window to find fuzzy match anywhere in title.
   if (query.length >= 3) {
+    const ql = query.toLowerCase();
+    const qLen = ql.length;
+    const MAX_TITLE_LEN = 200; // Guard against O(n*m) on very long titles
+
     for (const entry of scored) {
       if (entry.baseScore < SCORE_LEVENSHTEIN) continue;
       const tl = entry.bookmark.title.toLowerCase();
-      const ql = query.toLowerCase();
-      if (tl.length < ql.length) continue;
-      // Check fuzzy match: find if any substring of title within edit distance 1
-      // of query. Simple approach: check Levenshtein of the query against
-      // the shortest window in title that could contain it.
-      const dist = levenshtein(ql, tl.slice(0, ql.length + 1));
-      if (dist <= 1) {
-        entry.baseScore = SCORE_LEVENSHTEIN;
+      if (tl.length < qLen) continue;
+
+      // Limit title length to avoid pathological cases
+      const searchTitle = tl.length > MAX_TITLE_LEN ? tl.slice(0, MAX_TITLE_LEN) : tl;
+
+      // Slide windows of size qLen to qLen+2 across the title
+      let matched = false;
+      for (let windowSize = qLen; windowSize <= qLen + 2 && !matched; windowSize++) {
+        for (let start = 0; start + windowSize <= searchTitle.length; start++) {
+          const window = searchTitle.slice(start, start + windowSize);
+          const dist = levenshtein(ql, window);
+          if (dist <= 1) {
+            entry.baseScore = SCORE_LEVENSHTEIN;
+            matched = true;
+            break;
+          }
+        }
       }
     }
   }

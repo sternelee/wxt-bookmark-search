@@ -15,9 +15,10 @@ export interface GithubRepo {
 
 /** 获取所有加星仓库 - 支持流式分页回调 */
 export async function fetchAllStarredRepos(
-  token: string, 
+  token: string,
   onPage?: (repos: GithubRepo[]) => Promise<void>,
-  onProgress?: (totalCount: number) => void
+  onProgress?: (totalCount: number) => void,
+  shouldStopPagination?: (repos: GithubRepo[]) => Promise<boolean>
 ): Promise<GithubRepo[]> {
   const octokit = new Octokit({ auth: token });
   const allRepos: GithubRepo[] = [];
@@ -45,6 +46,15 @@ export async function fetchAllStarredRepos(
       }
 
       if (onProgress) onProgress(allRepos.length);
+
+      // 检查是否应该停止分页
+      if (shouldStopPagination) {
+        const shouldStop = await shouldStopPagination(mappedRepos);
+        if (shouldStop) {
+          console.log("[FlowSearch] Stopping pagination early (all indexed)");
+          break;
+        }
+      }
 
       if (allRepos.length >= 5000) break;
     }

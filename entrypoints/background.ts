@@ -6,10 +6,14 @@ import {
 } from "../src/freq";
 import { rerankBookmarks } from "../src/search";
 import { highlightBookmark } from "../src/highlight";
-import { getSettings, getIndexedBookmarks, hasApiKey } from "../src/db";
+import { getSettings, ensureCachedIndexedBookmarks, hasApiKey } from "../src/db";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import { initIndexer, enqueueBookmark, indexAllBookmarks, pauseIndexing, resumeIndexing, retryFailed, getIndexingStatus, getBookmarkFolders, indexFolders, syncGithubStars } from "../src/indexer";
+
+// 搜索防抖状态
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchAbortController: AbortController | null = null;
 
 export default defineBackground(() => {
   // 加载频率缓存
@@ -22,7 +26,18 @@ export default defineBackground(() => {
   });
 
   // 初始化索引器
-  initIndexer();
+  initIndexer().then(() => {
+    console.log("[FlowSearch] Indexer initialized");
+  });
+
+  // 预热已索引书签缓存
+  ensureCachedIndexedBookmarks().then((cached) => {
+    console.log(
+      "[FlowSearch] Indexed bookmark cache loaded:",
+      cached.length,
+      "entries",
+    );
+  });
 
   // 首次启动时检查是否需要索引
   hasApiKey().then((hasKey) => {
@@ -137,7 +152,7 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
     }
 
     // 3. 获取已索引书签，并应用过滤
-    const allIndexed = await getIndexedBookmarks();
+    const allIndexed = await ensureCachedIndexedBookmarks();
     let filteredIndexed = allIndexed;
     if (allowedUrls) {
       filteredIndexed = allIndexed.filter(idx => allowedUrls!.has(idx.url));
@@ -147,32 +162,46 @@ async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
       suggest([]); return;
     }
 
-    try {
-      // 4. 生成查询向量
-      const queryVector = await getQueryEmbedding(query, settings.openaiApiKey);
+    // === 防抖搜索：快速路径保持立即响应，向量搜索包裹 debounce ===
+    if (searchTimer) clearTimeout(searchTimer);
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+    const signal = searchAbortController.signal;
 
-      // 5. 执行混合搜索
-      let results;
-      const mode = settings.searchMode || 'hybrid';
+    searchTimer = setTimeout(async () => {
+      try {
+        // 4. 生成查询向量
+        const apiKey = settings.openaiApiKey!;
+        const queryVector = await getQueryEmbedding(query, apiKey, signal);
 
-      if (mode === 'vector') {
-        results = await vectorSearch(filteredIndexed, queryVector, { limit: 9 });
-      } else {
-        results = await hybridSearch(valid, filteredIndexed, queryVector, {
-          mode,
-          vectorWeight: settings.vectorWeight || 0.4,
-          limit: 9,
-        });
+        // 如果已中止，直接返回
+        if (signal.aborted) return;
+
+        // 5. 执行混合搜索
+        let results;
+        const mode = settings.searchMode || 'hybrid';
+
+        if (mode === 'vector') {
+          results = await vectorSearch(filteredIndexed, queryVector, { limit: 9 });
+        } else {
+          results = await hybridSearch(valid, filteredIndexed, queryVector, {
+            mode,
+            vectorWeight: settings.vectorWeight || 0.4,
+            limit: 9,
+          });
+        }
+
+        suggest(results.map((record) => ({
+          content: record.url,
+          description: formatSuggestion(record, query, mode !== 'keyword'),
+        })));
+      } catch (error: any) {
+        // 忽略 AbortError，静默返回
+        if (error.name === 'AbortError' || error.message?.includes('aborted')) return;
+        console.error("[FlowSearch] Search error:", error);
+        suggest(rerankBookmarks(query, valid));
       }
-
-      suggest(results.map((record) => ({
-        content: record.url,
-        description: formatSuggestion(record, query, mode !== 'keyword'),
-      })));
-    } catch (error) {
-      console.error("[FlowSearch] Search error:", error);
-      suggest(rerankBookmarks(query, valid));
-    }
+    }, 150);
   });
 
   // 打开选中的书签

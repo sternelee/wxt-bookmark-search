@@ -194,63 +194,73 @@ export async function syncGithubStars(): Promise<{
   let totalCount = 0;
   let totalQueued = 0;
 
-  await fetchAllStarredRepos(settings.githubToken, async (pageRepos) => {
-    totalCount += pageRepos.length;
+  await fetchAllStarredRepos(
+    settings.githubToken,
+    async (pageRepos) => {
+      totalCount += pageRepos.length;
 
-    // 快速路径：用 description + language 立即批量 embed
-    const texts = pageRepos.map(
-      (r) => `${r.full_name}\n${r.description || ""} (Main language: ${r.language || "Unknown"})`
-    );
+      // 快速路径：用 description + language 立即批量 embed
+      const texts = pageRepos.map(
+        (r) => `${r.full_name}\n${r.description || ""} (Main language: ${r.language || "Unknown"})`
+      );
 
-    let embeddings: number[][] = [];
-    try {
-      embeddings = await batchEmbedTexts(texts, settings.openaiApiKey!);
-    } catch (err) {
-      console.warn("[FlowSearch] Batch embed failed, falling back to title-only:", err);
-      // 批量失败时 embeddings 保持空数组，写入 pending 状态等主队列处理
-    }
-
-    const records: BookmarkRecord[] = pageRepos.map((repo, i) => ({
-      id: `gh-${repo.id}`,
-      url: repo.html_url,
-      title: repo.full_name,
-      summary: `${repo.description || ""} (Main language: ${repo.language || "Unknown"})`,
-      embedding: embeddings[i],
-      status: embeddings[i] ? "indexed" : "pending",
-      indexedAt: embeddings[i] ? Date.now() : undefined,
-      needsEnrichment: !!embeddings[i],
-    } as BookmarkRecord));
-
-    await upsertBookmarks(records);
-    totalQueued += records.length;
-
-    // 把成功快速索引的 repos 加入 enrichment 队列（后台慢慢补 README）
-    for (const repo of pageRepos) {
-      const match = repo.html_url.match(/github\.com\/([^/]+)\/([^/]+)/);
-      if (match) {
-        enrichmentQueue.push({
-          bookmarkId: `gh-${repo.id}`,
-          url: repo.html_url,
-          owner: match[1],
-          repo: match[2],
-          token: settings.githubToken!,
-        });
+      let embeddings: number[][] = [];
+      try {
+        embeddings = await batchEmbedTexts(texts, settings.openaiApiKey!);
+      } catch (err) {
+        console.warn("[FlowSearch] Batch embed failed, falling back to title-only:", err);
+        // 批量失败时 embeddings 保持空数组，写入 pending 状态等主队列处理
       }
-    }
 
-    // 未能 embed 的 fallback 到主队列
-    const failedJobs = records
-      .filter((r) => r.status === "pending")
-      .map((r) => ({ bookmarkId: r.id, url: r.url, title: r.title, retryCount: 0 }));
-    if (failedJobs.length > 0) {
-      queue.push(...failedJobs);
-      processQueue();
-    }
+      const records: BookmarkRecord[] = pageRepos.map((repo, i) => ({
+        id: `gh-${repo.id}`,
+        url: repo.html_url,
+        title: repo.full_name,
+        summary: `${repo.description || ""} (Main language: ${repo.language || "Unknown"})`,
+        embedding: embeddings[i],
+        status: embeddings[i] ? "indexed" : "pending",
+        indexedAt: embeddings[i] ? Date.now() : undefined,
+        needsEnrichment: !!embeddings[i],
+      } as BookmarkRecord));
 
-    console.log(
-      `[FlowSearch] Fast-path: ${records.filter((r) => r.status === "indexed").length}/${records.length} embedded instantly`
-    );
-  });
+      await upsertBookmarks(records);
+      totalQueued += records.length;
+
+      // 把成功快速索引的 repos 加入 enrichment 队列（后台慢慢补 README）
+      for (const repo of pageRepos) {
+        const match = repo.html_url.match(/github\.com\/([^/]+)\/([^/]+)/);
+        if (match) {
+          enrichmentQueue.push({
+            bookmarkId: `gh-${repo.id}`,
+            url: repo.html_url,
+            owner: match[1],
+            repo: match[2],
+            token: settings.githubToken!,
+          });
+        }
+      }
+
+      // 未能 embed 的 fallback 到主队列
+      const failedJobs = records
+        .filter((r) => r.status === "pending")
+        .map((r) => ({ bookmarkId: r.id, url: r.url, title: r.title, retryCount: 0 }));
+      if (failedJobs.length > 0) {
+        queue.push(...failedJobs);
+        processQueue();
+      }
+
+      console.log(
+        `[FlowSearch] Fast-path: ${records.filter((r) => r.status === "indexed").length}/${records.length} embedded instantly`
+      );
+    },
+    undefined,
+    async (pageRepos) => {
+      // 增量同步：如果当前页所有 URL 都已索引，则停止
+      const urls = pageRepos.map((r) => r.html_url);
+      const indexedUrls = await getIndexedUrls(urls);
+      return urls.every((u) => indexedUrls.has(u));
+    }
+  );
 
   // 更新同步时间
   await saveSettings({ lastGithubSync: Date.now() });
@@ -952,7 +962,7 @@ export async function retryFailed(): Promise<number> {
 /**
  * 初始化：监听书签变更
  */
-export function initIndexer(): void {
+export async function initIndexer(): Promise<void> {
   // 新增书签
   browser.bookmarks.onCreated.addListener((id, bookmark) => {
     if (bookmark.url) {
@@ -981,6 +991,39 @@ export function initIndexer(): void {
     const { deleteBookmark } = await import("./db");
     await deleteBookmark(id);
   });
+
+  // === 恢复 enrichment 队列 ===
+  const settings = await getSettings();
+  if (settings.githubToken && settings.openaiApiKey) {
+    try {
+      const needsEnrich = await db.bookmarks
+        .filter(r => r.needsEnrichment === true)
+        .toArray();
+
+      for (const record of needsEnrich) {
+        // 检查是否已存在
+        if (enrichmentQueue.some(j => j.bookmarkId === record.id)) continue;
+
+        const match = record.url.match(/github\.com\/([^/]+)\/([^/]+)/);
+        if (match) {
+          enrichmentQueue.push({
+            bookmarkId: record.id,
+            url: record.url,
+            owner: match[1],
+            repo: match[2],
+            token: settings.githubToken!,
+          });
+        }
+      }
+
+      if (enrichmentQueue.length > 0) {
+        console.log(`[indexer] Restored ${enrichmentQueue.length} enrichment jobs`);
+        processEnrichmentQueue().catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[indexer] Failed to restore enrichment queue:", err);
+    }
+  }
 
   console.log("[indexer] Initialized");
 }

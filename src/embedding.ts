@@ -125,7 +125,8 @@ export interface EmbeddingError {
 /** 调用 SiliconFlow Embedding API (带缓存) */
 export async function getEmbedding(
   text: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
   const cached = embeddingCache.get(text);
@@ -146,6 +147,7 @@ export async function getEmbedding(
       input: truncatedText,
       encoding_format: 'float',
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -234,9 +236,10 @@ export async function batchEmbed(
 /** 生成查询向量 (优先使用缓存) */
 export async function getQueryEmbedding(
   query: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<number[]> {
-  const { embedding } = await getEmbedding(query, apiKey);
+  const { embedding } = await getEmbedding(query, apiKey, signal);
   return embedding;
 }
 

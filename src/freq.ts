@@ -4,9 +4,11 @@
  */
 
 const STORAGE_KEY = "bookmark_freq";
+const PERSIST_DEBOUNCE_MS = 500;
 
 /** In-memory cache, populated at startup. */
 let cache: Record<string, number> = {};
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Load frequency cache from persistent storage.
@@ -27,12 +29,16 @@ export async function persistFreqCache(): Promise<void> {
 
 /**
  * Increment the frequency counter for a URL.
- * Updates memory immediately and schedules async persistence.
+ * Updates memory immediately and schedules debounced persistence.
  */
 export function incrementFreq(url: string): void {
   cache[url] = (cache[url] ?? 0) + 1;
-  // Fire-and-forget persistence — best-effort, non-blocking
-  persistFreqCache().catch(() => {});
+  // Debounced persistence — coalesce rapid increments
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistFreqCache().catch(() => {});
+    persistTimer = null;
+  }, PERSIST_DEBOUNCE_MS);
 }
 
 /**

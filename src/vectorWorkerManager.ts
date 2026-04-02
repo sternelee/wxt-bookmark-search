@@ -53,18 +53,46 @@ function hybridSearch(payload) {
     vectorScores.set(record.url, similarity);
   }
 
+  // Min-Max 归一化
+  let vecMin = Infinity, vecMax = -Infinity;
+  for (const v of vectorScores.values()) {
+    if (v < vecMin) vecMin = v;
+    if (v > vecMax) vecMax = v;
+  }
+  const vecRange = vecMax - vecMin;
+
+  let kwMin = Infinity, kwMax = -Infinity;
+  for (const v of keywordScores.values()) {
+    const raw = v * (RRF_K + 1);
+    if (raw < kwMin) kwMin = raw;
+    if (raw > kwMax) kwMax = raw;
+  }
+  const kwRange = kwMax - kwMin;
+
   const merged = new Map();
   for (const [url, vectorScore] of vectorScores) {
-    const keywordScore = keywordScores.get(url) || 0;
-    const normalizedKeywordScore = keywordScore * (RRF_K + 1);
-    const finalScore = keywordWeight * normalizedKeywordScore + vectorWeight * vectorScore;
+    // 向量得分归一化
+    const normalizedVector = vecRange > 0
+      ? (vectorScore - vecMin) / vecRange
+      : 0.5;
+
+    // 关键词得分归一化
+    const rawKwScore = (keywordScores.get(url) || 0) * (RRF_K + 1);
+    const normalizedKeyword = kwRange > 0
+      ? (rawKwScore - kwMin) / kwRange
+      : 0.5;
+
+    const finalScore = keywordWeight * normalizedKeyword + vectorWeight * normalizedVector;
     merged.set(url, finalScore);
   }
 
   for (const [url, keywordScore] of keywordScores) {
     if (merged.has(url)) continue;
-    const normalizedKeywordScore = keywordScore * (RRF_K + 1);
-    merged.set(url, keywordWeight * normalizedKeywordScore);
+    const rawKwScore = keywordScore * (RRF_K + 1);
+    const normalizedKeyword = kwRange > 0
+      ? (rawKwScore - kwMin) / kwRange
+      : 0.5;
+    merged.set(url, keywordWeight * normalizedKeyword);
   }
 
   return [...merged.entries()]

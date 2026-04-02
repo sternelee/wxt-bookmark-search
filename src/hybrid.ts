@@ -107,6 +107,24 @@ function hybridSearchMainThread(
   const keywordScores = scoreKeywordResults(keywordResults);
   const vectorScores = scoreVectorResults(allRecords, queryVector);
 
+  // === Min-Max 归一化 ===
+  // 向量相似度归一化
+  let vecMin = Infinity, vecMax = -Infinity;
+  for (const [, vr] of vectorScores) {
+    if (vr.similarity < vecMin) vecMin = vr.similarity;
+    if (vr.similarity > vecMax) vecMax = vr.similarity;
+  }
+  const vecRange = vecMax - vecMin;
+
+  // 关键词得分归一化
+  let kwMin = Infinity, kwMax = -Infinity;
+  for (const [, kr] of keywordScores) {
+    const raw = kr.score * (RRF_K + 1);
+    if (raw < kwMin) kwMin = raw;
+    if (raw > kwMax) kwMax = raw;
+  }
+  const kwRange = kwMax - kwMin;
+
   // 构建合并结果
   const merged = new Map<string, MergedResult>();
 
@@ -114,14 +132,19 @@ function hybridSearchMainThread(
   for (const [url, vectorResult] of vectorScores) {
     const keywordEntry = keywordScores.get(url);
 
-    // 向量得分归一化 (相似度本身就是 0-1)
-    const vectorScore = vectorResult.similarity;
+    // 向量得分归一化
+    const rawVectorScore = vectorResult.similarity;
+    const vectorScore = vecRange > 0
+      ? (rawVectorScore - vecMin) / vecRange
+      : 0.5;
 
     // 关键词得分归一化
     let keywordScore = 0;
     if (keywordEntry) {
-      // RRF 得分已经在 0-1 范围内
-      keywordScore = keywordEntry.score * (RRF_K + 1); // 归一化到约 0-1
+      const rawKwScore = keywordEntry.score * (RRF_K + 1);
+      keywordScore = kwRange > 0
+        ? (rawKwScore - kwMin) / kwRange
+        : 0.5;
     }
 
     // 加权融合
@@ -147,7 +170,10 @@ function hybridSearchMainThread(
       status: 'pending',
     };
 
-    const keywordScore = keywordEntry.score * (RRF_K + 1);
+    const rawKwScore = keywordEntry.score * (RRF_K + 1);
+    const keywordScore = kwRange > 0
+      ? (rawKwScore - kwMin) / kwRange
+      : 0.5;
     const finalScore = keywordWeight * keywordScore;
 
     merged.set(url, {
