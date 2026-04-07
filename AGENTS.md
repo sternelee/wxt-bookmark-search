@@ -7,7 +7,7 @@ Guidance for AI coding agents operating in this repository.
 **Flow Search** is a Manifest V3 Chrome extension for AI-powered bookmark search.
 Trigger: type `bi <keyword>` in Chrome's omnibox.
 
-Stack: **WXT** · **TypeScript** · **Solid.js** (popup/options UI) · **Dexie.js** (IndexedDB) · **SiliconFlow BGE-M3** (embeddings)
+Stack: **WXT** · **TypeScript** · **Solid.js** (popup/options UI) · **Dexie.js** (IndexedDB) · **EdgeVec** (HNSW vector index) · **SiliconFlow BGE-M3** (embeddings)
 
 ---
 
@@ -54,12 +54,20 @@ pnpm compile
 | `types.ts` | All shared TypeScript interfaces (`BookmarkRecord`, `Settings`, `SearchMode`, etc.) |
 | `db.ts` | Dexie.js IndexedDB wrapper + `browser.storage.local` settings |
 | `embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache |
-| `hybrid.ts` | RRF hybrid search (keyword + vector fusion) |
+| `hybrid.ts` | RRF hybrid search (keyword + vector fusion) using EdgeVec HNSW |
 | `search.ts` | Keyword-only search + Levenshtein fuzzy reranking |
 | `freq.ts` | Visit frequency cache (persisted to `browser.storage.local`) |
 | `highlight.ts` | XML escaping for omnibox `<match>/<dim>/<url>` tags |
 | `indexer.ts` | Background indexing queue with rate-limiting & exponential backoff |
-| `vector.ts` | Cosine similarity utilities |
+| `vectorIndex.ts` | EdgeVec HNSW wrapper with URL-to-ID mapping, BQ search, persistence |
+| `vector.ts` | Cosine similarity utilities (fallback/debugging) |
+| `github.ts` | GitHub Stars fetching with early-exit pagination |
+| `twitter.ts` | Twitter/X GraphQL API client for bookmarks sync |
+| `twitter-cookies.ts` | Auto-extraction of Twitter cookies from browser |
+| `llm.ts` | SiliconFlow Chat API for summaries/tags |
+| `vectorWorkerManager.ts` | Legacy Worker code (deprecated, unused) |
+| `lib/utils.ts` | `cn()` utility for Tailwind class merging |
+| `components/ui/` | Reusable UI components (Button, Card, Badge, Progress, Input, Select, etc.) |
 
 ---
 
@@ -82,6 +90,7 @@ pnpm compile
 - `background.ts` omits `.js` extension; `search.ts` uses `.js` (both are acceptable — match the file you're editing)
 - Use `import type` for type-only imports: `import type { BookmarkRecord } from './types'`
 - Named imports preferred; no default imports from internal modules except Solid.js components
+- Path aliases available: `@/*` → `./src/*`, `~/*` → `./*` (use `@/` for src imports in entrypoints)
 
 ```ts
 // Correct

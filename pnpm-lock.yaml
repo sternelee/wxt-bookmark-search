@@ -17,6 +17,9 @@ importers:
       dexie:
         specifier: ^4.3.0
         version: 4.3.0
+      edgevec:
+        specifier: ^0.9.0
+        version: 0.9.0
       linkedom:
         specifier: ^0.18.12
         version: 0.18.12
@@ -1042,6 +1045,9 @@ packages:
 
   ecdsa-sig-formatter@1.0.11:
     resolution: {integrity: sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ==}
+
+  edgevec@0.9.0:
+    resolution: {integrity: sha512-Pwc4QcLUpvdWwG3hOoWhA99Co3adALQxSc8wrYEYNJoax5uy1Mx9dvT8kH2HPWToBXmV6YxaGYPUVM+uGF7v7w==}
 
   electron-to-chromium@1.5.321:
     resolution: {integrity: sha512-L2C7Q279W2D/J4PLZLk7sebOILDSWos7bMsMNN06rK482umHUrh/3lM8G7IlHFOYip2oAg5nha1rCMxr/rs6ZQ==}
@@ -3244,6 +3250,8 @@ snapshots:
   ecdsa-sig-formatter@1.0.11:
     dependencies:
       safe-buffer: 5.2.1
+
+  edgevec@0.9.0: {}
 
   electron-to-chromium@1.5.321: {}
 

@@ -18,6 +18,7 @@ export interface BookmarkRecord {
   summary: string;         // AI 提取的摘要
   tags?: string[];         // LLM 生成的标签
   embedding?: number[];    // 向量 (1024 维)
+  vectorId?: number;       // EdgeVec 向量 ID
   status: 'pending' | 'indexed' | 'failed';
   indexedAt?: number;      // 索引时间戳
   error?: string;          // 失败原因

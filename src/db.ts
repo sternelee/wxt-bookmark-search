@@ -62,8 +62,8 @@ class BookmarkDB extends Dexie {
 
   constructor() {
     super('FlowSearch');
-    this.version(1).stores({
-      bookmarks: 'id, url, status, indexedAt'
+    this.version(2).stores({
+      bookmarks: 'id, url, status, indexedAt, vectorId'
     });
   }
 }
@@ -118,6 +118,16 @@ export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> 
   for (const record of records) {
     syncCacheRecord(record);
   }
+  // 同步到 EdgeVec 向量索引
+  try {
+    const { bulkUpsertVectors } = await import('./vectorIndex');
+    const withEmbeddings = records.filter(r => r.embedding && r.status === 'indexed');
+    if (withEmbeddings.length > 0) {
+      await bulkUpsertVectors(withEmbeddings.map(r => ({ url: r.url, embedding: r.embedding! })));
+    }
+  } catch (err) {
+    console.warn('[db] Failed to sync with EdgeVec:', err);
+  }
 }
 
 /** 更新单条记录 */
@@ -144,12 +154,35 @@ export async function updateBookmark(id: string, updates: Partial<BookmarkRecord
       _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
     }
   }
+
+  // 同步到 EdgeVec 向量索引
+  if (updates.embedding && updates.status === 'indexed') {
+    try {
+      const record = await db.bookmarks.get(id);
+      if (record?.url) {
+        const { upsertVector } = await import('./vectorIndex');
+        await upsertVector(record.url, updates.embedding);
+      }
+    } catch (err) {
+      console.warn('[db] Failed to update EdgeVec:', err);
+    }
+  }
 }
 
 /** 删除书签记录 */
 export async function deleteBookmark(id: string): Promise<void> {
+  const record = await db.bookmarks.get(id);
   await db.bookmarks.delete(id);
   removeCacheRecord(id);
+  // 从 EdgeVec 删除向量
+  if (record?.url) {
+    try {
+      const { deleteVector } = await import('./vectorIndex');
+      await deleteVector(record.url);
+    } catch (err) {
+      console.warn('[db] Failed to delete from EdgeVec:', err);
+    }
+  }
 }
 
 /** 获取索引统计 */
@@ -172,6 +205,13 @@ export async function getIndexStats(): Promise<{
 export async function clearAll(): Promise<void> {
   await db.bookmarks.clear();
   invalidateIndexedCache();
+  // 清空 EdgeVec 向量索引
+  try {
+    const { clearAll: clearVectorIndex } = await import('./vectorIndex');
+    await clearVectorIndex();
+  } catch (err) {
+    console.warn('[db] Failed to clear EdgeVec:', err);
+  }
 }
 
 /** 获取所有失败的书签 */
