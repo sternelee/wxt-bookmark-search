@@ -66,7 +66,7 @@ export default defineBackground(() => {
   // Omnibox 交互
   browser.omnibox.onInputStarted.addListener(() => {
     browser.omnibox.setDefaultSuggestion({
-      description: "🔍 Flow Search: <match>bi</match> <dim>keyword...</dim>",
+      description: "🔍 Flow Search: <match>bi</match> <dim>/github /twitter /folder:</dim>",
     });
   });
 
@@ -109,9 +109,19 @@ export default defineBackground(() => {
   browser.omnibox.onInputChanged.addListener(async (text, suggest) => {
     const rawInput = text.trim();
 
-    // 1. 命令引导与文件夹补全逻辑 (保持不变...)
+    // 1. 命令引导与文件夹补全逻辑
     if (rawInput === "/") {
       suggest([
+        {
+          content: "/github ",
+          description:
+            "🔮 <match>/github</match><dim>关键词</dim> — 搜索 GitHub Stars",
+        },
+        {
+          content: "/twitter ",
+          description:
+            "🐦 <match>/twitter</match><dim>关键词</dim> — 搜索 Twitter 书签",
+        },
         {
           content: "/folder:",
           description:
@@ -120,6 +130,8 @@ export default defineBackground(() => {
       ]);
       return;
     }
+
+    // /folder: 自动补全
     if (rawInput.startsWith("/folder:") && !rawInput.includes(" ")) {
       const folderPart = rawInput.substring(8);
       const allFolders = await browser.bookmarks.search({});
@@ -141,16 +153,33 @@ export default defineBackground(() => {
 
     let query = rawInput;
     let explicitFolderNames: string[] = [];
+    let sourceFilter: 'github' | 'twitter' | null = null;
 
-    // 解析搜索语法: /folder:xxx keyword
-    const folderMatch = query.match(/^\/folder:(\S+)\s+(.*)$/i);
-    if (folderMatch) {
-      explicitFolderNames = [folderMatch[1].toLowerCase()];
-      query = folderMatch[2].trim();
+    // 解析 /github 语法
+    const githubMatch = query.match(/^\/github\s+(.*)$/i);
+    if (githubMatch) {
+      sourceFilter = 'github';
+      query = githubMatch[1].trim();
+    }
+
+    // 解析 /twitter 语法
+    const twitterMatch = query.match(/^\/twitter\s+(.*)$/i);
+    if (twitterMatch) {
+      sourceFilter = 'twitter';
+      query = twitterMatch[1].trim();
+    }
+
+    // 解析 /folder:xxx keyword (兼容)
+    if (!sourceFilter) {
+      const folderMatch = query.match(/^\/folder:(\S+)\s+(.*)$/i);
+      if (folderMatch) {
+        explicitFolderNames = [folderMatch[1].toLowerCase()];
+        query = folderMatch[2].trim();
+      }
     }
 
     if (!query) {
-      // 空查询逻辑...
+      // 空查询逻辑 - 显示最近访问或指定来源的最新书签
       const recent = getRecentBookmarks(8);
       suggest(
         recent.map(({ url }) => ({
@@ -161,11 +190,25 @@ export default defineBackground(() => {
       return;
     }
 
-    // --- 核心改进：确定搜索作用域 ---
+    // --- 确定搜索作用域 ---
     const settings = await getSettings();
     let allowedUrls: Set<string> | null = null;
 
-    if (explicitFolderNames.length > 0) {
+    if (sourceFilter === 'github') {
+      // GitHub: 从 DB 获取所有 gh- 开头的书签
+      const { db } = await import("../src/db");
+      const ghBookmarks = await db.bookmarks
+        .filter(r => r.id.startsWith('gh-'))
+        .toArray();
+      allowedUrls = new Set(ghBookmarks.map(r => r.url));
+    } else if (sourceFilter === 'twitter') {
+      // Twitter: 从 DB 获取所有 tw- 开头的书签
+      const { db } = await import("../src/db");
+      const twBookmarks = await db.bookmarks
+        .filter(r => r.id.startsWith('tw-'))
+        .toArray();
+      allowedUrls = new Set(twBookmarks.map(r => r.url));
+    } else if (explicitFolderNames.length > 0) {
       // 如果使用了 /folder: 语法，优先级最高，精准定位文件夹
       const folders = await browser.bookmarks.search({
         title: explicitFolderNames[0],
