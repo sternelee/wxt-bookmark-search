@@ -30,7 +30,8 @@
   width: 280px;
   padding: 20px;
   background: var(--bg-color);
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   color: var(--text-main);
 }
 
@@ -70,7 +71,7 @@ h1 {
 }
 
 .status-dot::after {
-  content: '';
+  content: "";
   position: absolute;
   top: -2px;
   left: -2px;
@@ -81,8 +82,14 @@ h1 {
   opacity: 0.3;
 }
 
-.status-dot.ready { background-color: var(--success); color: var(--success); }
-.status-dot.not-configured { background-color: var(--warning); color: var(--warning); }
+.status-dot.ready {
+  background-color: var(--success);
+  color: var(--success);
+}
+.status-dot.not-configured {
+  background-color: var(--warning);
+  color: var(--warning);
+}
 
 /* Search Hint */
 .search-hint {
@@ -103,7 +110,7 @@ kbd {
   border-bottom: 2px solid var(--border-color);
   border-radius: 4px;
   padding: 2px 8px;
-  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-main);
@@ -141,7 +148,7 @@ kbd {
 .stat-card:hover {
   background: #fff;
   border-color: #e9ecef;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .stat-value {
@@ -273,7 +280,11 @@ kbd {
 
 .hud-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  background: linear-gradient(
+    90deg,
+    var(--primary-color),
+    var(--secondary-color)
+  );
   transition: width 0.3s ease;
 }
 

@@ -7,8 +7,14 @@ function App() {
   const [isConfigured, setIsConfigured] = createSignal(false);
   const [indexed, setIndexed] = createSignal(0);
   const [total, setTotal] = createSignal(0);
-  const [recent, setRecent] = createSignal<Array<{ url: string; title: string; summary?: string; tags?: string[] }>>([]);
-  const [indexingProgress, setIndexingProgress] = createSignal<{ processed: number; total: number; status: string } | null>(null);
+  const [recent, setRecent] = createSignal<
+    Array<{ url: string; title: string; summary?: string; tags?: string[] }>
+  >([]);
+  const [indexingProgress, setIndexingProgress] = createSignal<{
+    processed: number;
+    total: number;
+    status: string;
+  } | null>(null);
 
   const fetchStats = async () => {
     const stats = await getIndexStats();
@@ -26,8 +32,8 @@ function App() {
     const recentUrls = getRecentBookmarks(3);
     if (recentUrls.length > 0) {
       const indexedItems = await getIndexedBookmarks();
-      const recentItems = recentUrls.map(r => {
-        const item = indexedItems.find(i => i.url === r.url);
+      const recentItems = recentUrls.map((r) => {
+        const item = indexedItems.find((i) => i.url === r.url);
         return {
           url: r.url,
           title: item?.title || r.url,
@@ -38,17 +44,22 @@ function App() {
     }
 
     // 检查当前是否有索引任务在跑
-    browser.runtime.sendMessage({ type: 'GET_INDEXING_STATUS' }).then(status => {
-      if (status && status.isProcessing) {
-        setIndexingProgress(status.progress);
-      }
-    });
+    browser.runtime
+      .sendMessage({ type: "GET_INDEXING_STATUS" })
+      .then((status) => {
+        if (status && status.isProcessing) {
+          setIndexingProgress(status.progress);
+        }
+      });
 
     // 监听进度广播
     const handleMessage = (message: any) => {
-      if (message.type === 'INDEXING_PROGRESS') {
+      if (message.type === "INDEXING_PROGRESS") {
         setIndexingProgress(message.progress);
-        if (message.progress.status === 'complete' || message.progress.status === 'error') {
+        if (
+          message.progress.status === "complete" ||
+          message.progress.status === "error"
+        ) {
           setTimeout(() => setIndexingProgress(null), 2000);
           fetchStats();
         }
@@ -68,7 +79,10 @@ function App() {
           <span class="ai-icon">✨</span>
           <h1>Flow Search</h1>
         </div>
-        <span class={`status-dot ${isConfigured() ? 'ready' : 'not-configured'}`} title={isConfigured() ? '已配置' : '未配置'}></span>
+        <span
+          class={`status-dot ${isConfigured() ? "ready" : "not-configured"}`}
+          title={isConfigured() ? "已配置" : "未配置"}
+        ></span>
       </div>
 
       <div class="search-hint">
@@ -95,10 +109,22 @@ function App() {
         <div class="indexing-hud">
           <div class="hud-header">
             <span>⚡ 正在同步索引...</span>
-            <span>{Math.round((indexingProgress()!.processed / (indexingProgress()!.total || 1)) * 100)}%</span>
+            <span>
+              {Math.round(
+                (indexingProgress()!.processed /
+                  (indexingProgress()!.total || 1)) *
+                  100,
+              )}
+              %
+            </span>
           </div>
           <div class="hud-bar">
-            <div class="hud-fill" style={{ width: `${(indexingProgress()!.processed / (indexingProgress()!.total || 1)) * 100}%` }}></div>
+            <div
+              class="hud-fill"
+              style={{
+                width: `${(indexingProgress()!.processed / (indexingProgress()!.total || 1)) * 100}%`,
+              }}
+            ></div>
           </div>
         </div>
       )}
@@ -113,7 +139,7 @@ function App() {
                   <div class="item-info">
                     <span class="item-title">{item.title}</span>
                     <div class="item-meta">
-                      {item.tags?.slice(0, 2).map(tag => (
+                      {item.tags?.slice(0, 2).map((tag) => (
                         <span class="tag">#{tag}</span>
                       ))}
                     </div>
@@ -126,12 +152,10 @@ function App() {
       )}
 
       <button class="primary-btn" onClick={openSettings}>
-        {isConfigured() ? '管理索引与设置' : '去配置 API Key'}
+        {isConfigured() ? "管理索引与设置" : "去配置 API Key"}
       </button>
-      
-      <div class="footer">
-        Powered by SiliconFlow & Jina AI
-      </div>
+
+      <div class="footer">Powered by SiliconFlow & Jina AI</div>
     </div>
   );
 }

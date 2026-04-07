@@ -1027,3 +1027,102 @@ export async function initIndexer(): Promise<void> {
 
   console.log("[indexer] Initialized");
 }
+
+/**
+ * 同步 Twitter/X 书签
+ */
+export async function syncTwitterBookmarks(): Promise<{
+  total: number;
+  queued: number;
+  error?: string;
+}> {
+  const settings = await getSettings();
+  if (!settings.openaiApiKey) {
+    throw new Error("API Key 未配置");
+  }
+
+  // 动态导入 Twitter 相关模块
+  const { extractTwitterCookies } = await import("./twitter-cookies");
+  const { fetchTwitterBookmarks, convertToBookmarkRecord } = await import("./twitter");
+
+  // 1. 尝试自动提取 cookies
+  let cookies = await extractTwitterCookies();
+
+  // 2. 如果失败，使用手动输入的 cookies
+  if (!cookies && settings.twitterCookies) {
+    cookies = {
+      ct0: settings.twitterCookies.ct0,
+      authToken: settings.twitterCookies.authToken,
+    };
+  }
+
+  if (!cookies) {
+    throw new Error(
+      "无法获取 Twitter cookies。请确保已在浏览器中登录 Twitter，或在设置中手动输入 cookies。"
+    );
+  }
+
+  // 3. 同步书签
+  let totalCount = 0;
+  let cursor: string | undefined;
+  const maxPages = 100;
+
+  try {
+    for (let page = 0; page < maxPages; page++) {
+      const { bookmarks, cursor: nextCursor, hasMore } = await fetchTwitterBookmarks({
+        csrfToken: cookies.ct0,
+        authToken: cookies.authToken,
+        cursor,
+      });
+
+      if (bookmarks.length === 0) break;
+
+      // 增量同步：检查是否已索引
+      for (const bookmark of bookmarks) {
+        const existing = await db.bookmarks.get(`tw-${bookmark.tweetId}`);
+        if (existing?.status === "indexed") {
+          console.log("[FlowSearch] 已到达已索引的书签，停止同步");
+          await saveSettings({ lastTwitterSync: Date.now() });
+          return { total: totalCount, queued: totalCount };
+        }
+      }
+
+      // 快速路径：批量嵌入
+      const texts = bookmarks.map((b) => {
+        let text = `@${b.authorHandle || "unknown"}: ${b.text}`;
+        if (b.quotedTweetText) {
+          text += `\n\n引用: ${b.quotedTweetText}`;
+        }
+        return text;
+      });
+
+      const embeddings = await batchEmbedTexts(texts, settings.openaiApiKey);
+
+      const records: BookmarkRecord[] = bookmarks.map((bookmark, i) =>
+        convertToBookmarkRecord(bookmark, embeddings[i])
+      );
+
+      await upsertBookmarks(records);
+      totalCount += bookmarks.length;
+
+      if (!hasMore) break;
+
+      // 速率限制：600ms 延迟
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      cursor = nextCursor;
+    }
+  } catch (error: any) {
+    console.error("[FlowSearch] Twitter 同步失败:", error);
+    if (error.message?.includes("401") || error.message?.includes("403")) {
+      return {
+        total: 0,
+        queued: 0,
+        error: "Cookie 已过期。请在浏览器中重新登录 Twitter，或手动输入新的 cookies。",
+      };
+    }
+    throw error;
+  }
+
+  await saveSettings({ lastTwitterSync: Date.now() });
+  return { total: totalCount, queued: totalCount };
+}

@@ -21,6 +21,25 @@ export interface BookmarkRecord {
   indexedAt?: number;      // 索引时间戳
   error?: string;          // 失败原因
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
+
+  // Twitter/X 特定字段
+  tweetId?: string;
+  authorHandle?: string;
+  authorName?: string;
+  authorProfileImageUrl?: string;
+  postedAt?: string;
+  bookmarkedAt?: string;
+  engagement?: {
+    likeCount?: number;
+    repostCount?: number;
+    replyCount?: number;
+    bookmarkCount?: number;
+    viewCount?: number;
+    quoteCount?: number;
+  };
+  media?: string[];
+  quotedTweetId?: string;
+  quotedTweetText?: string;
 }
 
 /** 搜索模式 */
@@ -39,7 +58,13 @@ export interface Settings {
   searchMode: SearchMode;
   vectorWeight: number;
   selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID
-  githubToken?: string;         // 新增：GitHub PAT
-  githubSyncEnabled?: boolean;  // 新增：是否启用 GitHub 同步
-  lastGithubSync?: number;      // 新增：上次同步时间
+  githubToken?: string;         // GitHub PAT
+  githubSyncEnabled?: boolean;  // 是否启用 GitHub 同步
+  lastGithubSync?: number;      // 上次同步时间
+  twitterSyncEnabled?: boolean; // 是否启用 Twitter 同步
+  lastTwitterSync?: number;     // 上次 Twitter 同步时间
+  twitterCookies?: {            // Twitter cookies (手动输入)
+    ct0: string;
+    authToken: string;
+  };
 }

@@ -188,6 +188,7 @@ const defaultSettings: Settings = {
   selectedFolderIds: [],
   githubToken: undefined,
   githubSyncEnabled: false,
+  twitterSyncEnabled: false,
 };
 
 /** 获取设置 */

@@ -13,6 +13,13 @@ const githubStatus = document.getElementById("githubStatus") as HTMLElement;
 const githubLastSync = document.getElementById("githubLastSync") as HTMLElement;
 const saveGithubBtn = document.getElementById("saveGithubBtn") as HTMLButtonElement;
 const syncGithubBtn = document.getElementById("syncGithubBtn") as HTMLButtonElement;
+const twitterSyncEnabled = document.getElementById("twitterSyncEnabled") as HTMLInputElement;
+const twitterCt0Input = document.getElementById("twitterCt0") as HTMLInputElement;
+const twitterAuthInput = document.getElementById("twitterAuthToken") as HTMLInputElement;
+const twitterStatus = document.getElementById("twitterStatus") as HTMLElement;
+const twitterLastSync = document.getElementById("twitterLastSync") as HTMLElement;
+const saveTwitterBtn = document.getElementById("saveTwitterBtn") as HTMLButtonElement;
+const syncTwitterBtn = document.getElementById("syncTwitterBtn") as HTMLButtonElement;
 const searchModeSelect = document.getElementById(
   "searchMode",
 ) as HTMLSelectElement;
@@ -67,6 +74,12 @@ async function init() {
   githubTokenInput.value = settings.githubToken || "";
   if (settings.lastGithubSync) {
     githubLastSync.textContent = `上次同步: ${new Date(settings.lastGithubSync).toLocaleString()}`;
+  }
+  twitterSyncEnabled.checked = settings.twitterSyncEnabled || false;
+  twitterCt0Input.value = settings.twitterCookies?.ct0 || "";
+  twitterAuthInput.value = settings.twitterCookies?.authToken || "";
+  if (settings.lastTwitterSync) {
+    twitterLastSync.textContent = `上次同步: ${new Date(settings.lastTwitterSync).toLocaleString()}`;
   }
   searchModeSelect.value = settings.searchMode || "hybrid";
   vectorWeightInput.value = String((settings.vectorWeight || 0.4) * 100);
@@ -378,6 +391,57 @@ syncGithubBtn.addEventListener("click", async () => {
   } finally {
     syncGithubBtn.disabled = false;
     syncGithubBtn.textContent = "🔄 立即同步 Stars";
+  }
+});
+
+// 保存 Twitter 设置
+saveTwitterBtn.addEventListener("click", async () => {
+  const ct0 = twitterCt0Input.value.trim();
+  const authToken = twitterAuthInput.value.trim();
+
+  const settings: any = {
+    twitterSyncEnabled: twitterSyncEnabled.checked,
+  };
+
+  if (ct0 && authToken) {
+    settings.twitterCookies = { ct0, authToken };
+  }
+
+  try {
+    await saveSettings(settings);
+    showStatus(twitterStatus, "✓ Twitter 设置已保存", "success");
+  } catch (error) {
+    showStatus(twitterStatus, `保存失败: ${error}`, "error");
+  }
+});
+
+// 同步 Twitter 书签
+syncTwitterBtn.addEventListener("click", async () => {
+  const settings = await getSettings();
+  if (!settings.openaiApiKey) {
+    showStatus(twitterStatus, "请先配置 API Key", "error");
+    return;
+  }
+
+  syncTwitterBtn.disabled = true;
+  syncTwitterBtn.textContent = "正在同步...";
+  showStatus(twitterStatus, "正在从 Twitter 获取书签...", "info");
+
+  try {
+    const result = await browser.runtime.sendMessage({ type: 'SYNC_TWITTER_BOOKMARKS' });
+
+    if (result.success) {
+      showStatus(twitterStatus, `✓ 同步成功！已将 ${result.total} 个书签加入索引`, "success");
+      twitterLastSync.textContent = `上次同步: ${new Date().toLocaleString()}`;
+      loadStats();
+    } else {
+      showStatus(twitterStatus, `同步失败: ${result.error}`, "error");
+    }
+  } catch (error) {
+    showStatus(twitterStatus, `通信错误: ${error}`, "error");
+  } finally {
+    syncTwitterBtn.disabled = false;
+    syncTwitterBtn.textContent = "🔄 立即同步书签";
   }
 });
 

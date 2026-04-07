@@ -420,6 +420,40 @@
         <p id="githubLastSync" class="hint" style="margin-top: 12px;"></p>
       </section>
 
+      <!-- 1.2 Twitter/X 集成 -->
+      <section class="card">
+        <h2>🐦 Twitter/X 书签语义化索引</h2>
+        <p class="hint" style="margin-bottom: 12px;">
+          需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie 进行同步，无需开发者账号。
+        </p>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="twitterSyncEnabled" />
+            启用 Twitter 书签同步
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="twitterCt0">CSRF Token (ct0) - 可选</label>
+          <input type="text" id="twitterCt0" placeholder="自动提取失败时手动输入" />
+          <p class="hint">自动提取失败时，可从浏览器开发者工具中复制</p>
+        </div>
+
+        <div class="form-group">
+          <label for="twitterAuthToken">Auth Token - 可选</label>
+          <input type="password" id="twitterAuthToken" placeholder="自动提取失败时手动输入" />
+        </div>
+
+        <div class="button-group">
+          <button id="saveTwitterBtn">💾 保存 Twitter 设置</button>
+          <button id="syncTwitterBtn" class="btn-secondary">🔄 立即同步书签</button>
+        </div>
+
+        <div id="twitterStatus" class="status-box hidden"></div>
+        <p id="twitterLastSync" class="hint" style="margin-top: 12px;"></p>
+      </section>
+
       <!-- 2. 搜索设置 -->
       <section class="card">
         <h2>🔍 检索策略</h2>
