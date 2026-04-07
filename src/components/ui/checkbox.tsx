@@ -8,10 +8,15 @@ export interface CheckboxProps extends JSX.InputHTMLAttributes<HTMLInputElement>
 }
 
 export function Checkbox(props: CheckboxProps) {
-  const [local, others] = splitProps(props, ["class", "label", "hint", "checked"]);
+  const [local, others] = splitProps(props, [
+    "class",
+    "label",
+    "hint",
+    "checked",
+  ]);
 
   return (
-    <div class="mb-4">
+    <div>
       <label class="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
@@ -19,7 +24,7 @@ export function Checkbox(props: CheckboxProps) {
             "w-4 h-4 rounded border-border text-primary",
             "focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            local.class
+            local.class,
           )}
           {...others}
         />

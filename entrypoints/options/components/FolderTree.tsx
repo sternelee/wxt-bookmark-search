@@ -13,6 +13,66 @@ interface FolderTreeProps {
   onChange: (ids: string[]) => void;
 }
 
+function FolderItem(props: {
+  folder: Folder;
+  selectedIds: string[];
+  expandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
+  onCheck: (id: string, checked: boolean, hasChildren: boolean, children?: Folder[]) => void;
+}) {
+  const hasChildren = () => props.folder.children && props.folder.children.length > 0;
+  const isExpanded = () => props.expandedIds.has(props.folder.id);
+  const isChecked = () => props.selectedIds.includes(props.folder.id);
+
+  return (
+    <div>
+      <div class="flex items-center py-1.5 px-2.5 rounded-lg hover:bg-accent transition-colors">
+        {/* 展开/折叠按钮 */}
+        <button
+          class="w-5 h-5 border-none bg-transparent p-0 text-xs cursor-pointer flex items-center justify-center text-muted-foreground transition-transform"
+          classList={{ "rotate-[-90deg]": !isExpanded() }}
+          onClick={() => props.onToggleExpand(props.folder.id)}
+          style={{ visibility: hasChildren() ? "visible" : "hidden" }}
+        >
+          ▼
+        </button>
+
+        {/* 复选框 */}
+        <Checkbox
+          checked={isChecked()}
+          onChange={(e) => {
+            // @ts-ignore
+            props.onCheck(props.folder.id, e.currentTarget.checked, hasChildren(), props.folder.children);
+          }}
+          class="mr-2"
+        />
+
+        {/* 标签 */}
+        <label class="flex-1 text-sm cursor-pointer">
+          {props.folder.title}
+        </label>
+      </div>
+
+      {/* 子文件夹 */}
+      <Show when={hasChildren() && isExpanded()}>
+        <div class="ml-5 border-l border-dashed border-border pl-1">
+          <For each={props.folder.children}>
+            {(child) => (
+              <FolderItem
+                folder={child}
+                selectedIds={props.selectedIds}
+                expandedIds={props.expandedIds}
+                onToggleExpand={props.onToggleExpand}
+                onCheck={props.onCheck}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 export default function FolderTree(props: FolderTreeProps) {
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [expandedIds, setExpandedIds] = createSignal<Set<string>>(new Set());
@@ -90,56 +150,18 @@ export default function FolderTree(props: FolderTreeProps) {
     await save(settings);
   }
 
-  const renderFolder = (folder: Folder) => {
-    const hasChildren = folder.children && folder.children.length > 0;
-    const isExpanded = expandedIds().has(folder.id);
-    const isChecked = props.selectedIds.includes(folder.id);
-
-    return (
-      <div>
-        <div class="flex items-center py-1.5 px-2.5 rounded-lg hover:bg-accent transition-colors">
-          {/* 展开/折叠按钮 */}
-          <button
-            class="w-5 h-5 border-none bg-transparent p-0 text-xs cursor-pointer flex items-center justify-center text-muted-foreground transition-transform"
-            classList={{ "rotate-[-90deg]": !isExpanded }}
-            onClick={() => toggleExpand(folder.id)}
-            style={{ visibility: hasChildren ? "visible" : "hidden" }}
-          >
-            ▼
-          </button>
-
-          {/* 复选框 */}
-          <Checkbox
-            checked={isChecked}
-            onChange={(e) => {
-              // @ts-ignore
-              handleCheck(folder.id, e.currentTarget.checked, hasChildren, folder.children);
-            }}
-            class="mr-2"
-          />
-
-          {/* 标签 */}
-          <label class="flex-1 text-sm cursor-pointer">
-            {folder.title}
-          </label>
-        </div>
-
-        {/* 子文件夹 */}
-        <Show when={hasChildren && isExpanded}>
-          <div class="ml-5 border-l border-dashed border-border pl-1">
-            <For each={folder.children}>
-              {(child) => renderFolder(child)}
-            </For>
-          </div>
-        </Show>
-      </div>
-    );
-  };
-
   return (
     <div class="max-h-80 overflow-y-auto border border-border rounded-lg p-3 bg-background">
       <For each={folders()}>
-        {(folder) => renderFolder(folder)}
+        {(folder) => (
+          <FolderItem
+            folder={folder}
+            selectedIds={props.selectedIds}
+            expandedIds={expandedIds()}
+            onToggleExpand={toggleExpand}
+            onCheck={handleCheck}
+          />
+        )}
       </For>
     </div>
   );
