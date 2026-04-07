@@ -5,8 +5,8 @@
 
 import type { Settings } from './types';
 
-const API_ENDPOINT = 'https://api.siliconflow.cn/v1/embeddings';
-const MODEL = 'BAAI/bge-m3';
+export const API_ENDPOINT = 'https://api.siliconflow.cn/v1/embeddings';
+export const DEFAULT_MODEL = 'BAAI/bge-m3';
 const MAX_INPUT_LENGTH = 8000; // 字符数限制
 
 /** 缓存配置 */
@@ -126,7 +126,8 @@ export interface EmbeddingError {
 export async function getEmbedding(
   text: string,
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  model: string = DEFAULT_MODEL
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
   const cached = embeddingCache.get(text);
@@ -143,7 +144,7 @@ export async function getEmbedding(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       input: truncatedText,
       encoding_format: 'float',
     }),
@@ -168,14 +169,38 @@ export async function getEmbedding(
   };
 }
 
-/** 批量生成向量 — 使用 SiliconFlow 原生批量 input 接口 (单次请求多个向量) */
+/** 批量生成向量 — 使用 SiliconFlow 原生批量 input 接口 (单次请求多个向量) + 缓存优化 */
 export async function batchEmbedTexts(
   texts: string[],
   apiKey: string,
+  model: string = DEFAULT_MODEL
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const truncated = texts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
+  const results: number[][] = new Array(texts.length);
+  const uncachedIndices: number[] = [];
+  const uncachedTexts: string[] = [];
+
+  // 1. 检查缓存
+  texts.forEach((text, i) => {
+    const cached = embeddingCache.get(text);
+    if (cached) {
+      results[i] = cached;
+    } else {
+      uncachedIndices.push(i);
+      uncachedTexts.push(text);
+    }
+  });
+
+  // 2. 如果全部命中缓存，直接返回
+  if (uncachedTexts.length === 0) {
+    return results;
+  }
+
+  console.log(`[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length}`);
+
+  // 3. 只嵌入未缓存的文本
+  const truncated = uncachedTexts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
 
   const response = await fetch(API_ENDPOINT, {
     method: "POST",
@@ -184,7 +209,7 @@ export async function batchEmbedTexts(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       input: truncated,
       encoding_format: "float",
     }),
@@ -197,18 +222,27 @@ export async function batchEmbedTexts(
 
   const data = await response.json() as EmbeddingResponse;
   // API 返回的 data 数组按 index 排序
-  return data.data
+  const embeddings = data.data
     .sort((a, b) => a.index - b.index)
     .map((d) => d.embedding);
+
+  // 4. 写入缓存并填充结果
+  embeddings.forEach((embedding, i) => {
+    const globalIdx = uncachedIndices[i];
+    results[globalIdx] = embedding;
+    embeddingCache.set(uncachedTexts[i], embedding);
+  });
+
+  return results;
 }
 
 /** 批量生成向量 (带并发控制) */
 export async function batchEmbed(
   texts: string[],
   apiKey: string,
-  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void }
+  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void; model?: string }
 ): Promise<Array<{ embedding?: number[]; error?: string }>> {
-  const { concurrency = 5, onProgress } = options || {};
+  const { concurrency = 5, onProgress, model = DEFAULT_MODEL } = options || {};
   const results: Array<{ embedding?: number[]; error?: string }> = new Array(texts.length);
   let done = 0;
 
@@ -218,7 +252,7 @@ export async function batchEmbed(
     const batchPromises = batch.map(async (text, batchIndex) => {
       const globalIndex = i + batchIndex;
       try {
-        const { embedding } = await getEmbedding(text, apiKey);
+        const { embedding } = await getEmbedding(text, apiKey, undefined, model);
         results[globalIndex] = { embedding };
       } catch (err) {
         results[globalIndex] = { error: String(err) };
@@ -237,16 +271,17 @@ export async function batchEmbed(
 export async function getQueryEmbedding(
   query: string,
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  model: string = DEFAULT_MODEL
 ): Promise<number[]> {
-  const { embedding } = await getEmbedding(query, apiKey, signal);
+  const { embedding } = await getEmbedding(query, apiKey, signal, model);
   return embedding;
 }
 
 /** 测试 API Key 有效性 */
-export async function testApiKey(apiKey: string): Promise<boolean> {
+export async function testApiKey(apiKey: string, model: string = DEFAULT_MODEL): Promise<boolean> {
   try {
-    await getEmbedding('test', apiKey);
+    await getEmbedding('test', apiKey, undefined, model);
     return true;
   } catch {
     return false;

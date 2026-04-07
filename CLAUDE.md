@@ -39,9 +39,9 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 | File | Responsibility |
 |------|---------------|
-| `types.ts` | All shared interfaces (`BookmarkRecord`, `Settings`, `SearchMode`, etc.) |
+| `types.ts` | All shared interfaces (`BookmarkRecord` with Twitter-specific fields, `Settings`, `SearchMode`, etc.) |
 | `db.ts` | Dexie.js IndexedDB wrapper + `browser.storage.local` settings + in-memory cache for indexed bookmarks |
-| `embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache + AbortSignal support |
+| `embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache + AbortSignal support + native batch embedding API |
 | `hybrid.ts` | RRF hybrid search with min-max normalization |
 | `search.ts` | Keyword-only search + Levenshtein fuzzy (sliding window) reranking |
 | `vector.ts` | Cosine similarity utilities |
@@ -50,6 +50,8 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `freq.ts` | Visit frequency cache with debounced writes |
 | `highlight.ts` | XML escaping for omnibox `<match>/<dim>/<url>` tags |
 | `github.ts` | GitHub Stars fetching via Octokit with streaming pagination + early-exit |
+| `twitter.ts` | Twitter/X GraphQL API client for bookmarks sync with retry logic |
+| `twitter-cookies.ts` | Auto-extraction of Twitter cookies via `browser.cookies` API |
 | `llm.ts` | SiliconFlow Chat API (DeepSeek-V3) for summaries/tags |
 
 ### Entry points
@@ -67,9 +69,11 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 **Hybrid/vector search:** query → `getQueryEmbedding` (cached or API) → `hybridSearch` (RRF fusion with normalized scores) or `vectorSearch` (pure semantic) → results
 
-**Indexing pipeline:** bookmark URL → Jina AI Reader (extract markdown) → `llm.ts` (generate summary/tags via DeepSeek-V3) → `embedding.ts` (BGE-M3 vector) → Dexie IndexedDB → update in-memory cache
+**Indexing pipeline:** bookmark URL → Jina AI Reader (extract markdown) → `llm.ts` (generate summary/tags via DeepSeek-V3) → `embedding.ts` (BGE-M3 vector with native batch API) → Dexie IndexedDB → update in-memory cache
 
 **GitHub Stars sync:** fetch with early-exit when all URLs already indexed → background enrichment queue resumes on SW restart
+
+**Twitter/X sync:** auto-extract cookies via `browser.cookies` (fallback to manual input) → GraphQL API with retry/rate-limit handling → convert to BookmarkRecord with Twitter-specific metadata → enqueue for indexing
 
 **Message passing:** popup/options ↔ background via `browser.runtime.sendMessage` / `onMessage.addListener` with string-literal action types in a `switch` statement.
 
@@ -93,6 +97,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 ## Browser Extension Constraints
 
 - **MV3 service worker** — no persistent background page. Avoid large in-memory state; use `browser.storage.local` or IndexedDB
+- **In-memory cache optimization** — `ensureCachedIndexedBookmarks()` loads all indexed bookmarks into memory on SW startup for fast omnibox search (no IndexedDB queries in hot path). Cache stays warm during session, rebuilt on SW restart
 - **Omnibox descriptions must be XML-escaped** — always use `escapeXml()` from `highlight.ts`; only `<match>`, `<dim>`, `<url>` tags are valid
 - `browser.*` APIs are globally available in entry points via WXT auto-injection — no explicit import needed
 - Message passing: return `true` from `onMessage` listener to keep channel open for async responses
@@ -102,3 +107,4 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 - **SiliconFlow API Key** — required for embeddings (BGE-M3) and LLM summaries (DeepSeek-V3). Configured in extension options
 - **Jina AI Reader** (`https://r.jina.ai/*`) — free, no key needed, used for content extraction
 - **GitHub PAT** — optional, for syncing starred repos
+- **Twitter/X cookies** — optional, auto-extracted via `browser.cookies` API (requires `cookies` permission + `https://x.com/*` host_permissions), with manual fallback for auth tokens

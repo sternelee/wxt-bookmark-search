@@ -16,11 +16,13 @@ export interface BookmarkRecord {
   url: string;
   title: string;
   summary: string;         // AI 提取的摘要
-  embedding?: number[];    // 向量 (512 维)
+  tags?: string[];         // LLM 生成的标签
+  embedding?: number[];    // 向量 (1024 维)
   status: 'pending' | 'indexed' | 'failed';
   indexedAt?: number;      // 索引时间戳
   error?: string;          // 失败原因
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
+  llmEnhanced?: boolean;   // 是否经过 LLM 增强
 
   // Twitter/X 特定字段
   tweetId?: string;
@@ -67,4 +69,9 @@ export interface Settings {
     ct0: string;
     authToken: string;
   };
+  enableLLMEnrichment?: boolean; // 是否启用 LLM 内容增强
+
+  // 模型配置
+  embeddingModel?: string;       // Embedding 模型名称
+  llmModel?: string;             // LLM 模型名称
 }

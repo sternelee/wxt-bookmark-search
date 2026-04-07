@@ -3,8 +3,8 @@
  * 用于生成网页摘要和标签
  */
 
-const API_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
-const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V3'; // 默认使用 DeepSeek 速度快且准确
+export const API_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
+export const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V3'; // 默认使用 DeepSeek 速度快且准确
 
 export interface AIResult {
   summary: string;

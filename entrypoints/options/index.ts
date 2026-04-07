@@ -4,22 +4,51 @@ import {
   getIndexStats,
   clearAll,
 } from "../../src/db";
-import { testApiKey, getCacheStats, clearEmbeddingCache } from "../../src/embedding";
+import {
+  testApiKey,
+  getCacheStats,
+  clearEmbeddingCache,
+} from "../../src/embedding";
 
 // DOM 元素
 const apiKeyInput = document.getElementById("apiKey") as HTMLInputElement;
-const githubTokenInput = document.getElementById("githubToken") as HTMLInputElement;
+const embeddingModelInput = document.getElementById(
+  "embeddingModel",
+) as HTMLInputElement;
+const llmModelInput = document.getElementById("llmModel") as HTMLInputElement;
+const enableLLMEnrichmentCheckbox = document.getElementById(
+  "enableLLMEnrichment",
+) as HTMLInputElement;
+const githubTokenInput = document.getElementById(
+  "githubToken",
+) as HTMLInputElement;
 const githubStatus = document.getElementById("githubStatus") as HTMLElement;
 const githubLastSync = document.getElementById("githubLastSync") as HTMLElement;
-const saveGithubBtn = document.getElementById("saveGithubBtn") as HTMLButtonElement;
-const syncGithubBtn = document.getElementById("syncGithubBtn") as HTMLButtonElement;
-const twitterSyncEnabled = document.getElementById("twitterSyncEnabled") as HTMLInputElement;
-const twitterCt0Input = document.getElementById("twitterCt0") as HTMLInputElement;
-const twitterAuthInput = document.getElementById("twitterAuthToken") as HTMLInputElement;
+const saveGithubBtn = document.getElementById(
+  "saveGithubBtn",
+) as HTMLButtonElement;
+const syncGithubBtn = document.getElementById(
+  "syncGithubBtn",
+) as HTMLButtonElement;
+const twitterSyncEnabled = document.getElementById(
+  "twitterSyncEnabled",
+) as HTMLInputElement;
+const twitterCt0Input = document.getElementById(
+  "twitterCt0",
+) as HTMLInputElement;
+const twitterAuthInput = document.getElementById(
+  "twitterAuthToken",
+) as HTMLInputElement;
 const twitterStatus = document.getElementById("twitterStatus") as HTMLElement;
-const twitterLastSync = document.getElementById("twitterLastSync") as HTMLElement;
-const saveTwitterBtn = document.getElementById("saveTwitterBtn") as HTMLButtonElement;
-const syncTwitterBtn = document.getElementById("syncTwitterBtn") as HTMLButtonElement;
+const twitterLastSync = document.getElementById(
+  "twitterLastSync",
+) as HTMLElement;
+const saveTwitterBtn = document.getElementById(
+  "saveTwitterBtn",
+) as HTMLButtonElement;
+const syncTwitterBtn = document.getElementById(
+  "syncTwitterBtn",
+) as HTMLButtonElement;
 const searchModeSelect = document.getElementById(
   "searchMode",
 ) as HTMLSelectElement;
@@ -44,7 +73,9 @@ const startIndexBtn = document.getElementById(
 const pauseBtn = document.getElementById("pauseBtn") as HTMLButtonElement;
 const resumeBtn = document.getElementById("resumeBtn") as HTMLButtonElement;
 const retryBtn = document.getElementById("retryBtn") as HTMLButtonElement;
-const clearCacheBtn = document.getElementById("clearCacheBtn") as HTMLButtonElement;
+const clearCacheBtn = document.getElementById(
+  "clearCacheBtn",
+) as HTMLButtonElement;
 const folderList = document.getElementById("folderList") as HTMLElement;
 
 const apiStatus = document.getElementById("apiStatus") as HTMLElement;
@@ -71,6 +102,9 @@ async function init() {
 
   // 填充表单
   apiKeyInput.value = settings.openaiApiKey || "";
+  embeddingModelInput.value = settings.embeddingModel || "";
+  llmModelInput.value = settings.llmModel || "";
+  enableLLMEnrichmentCheckbox.checked = settings.enableLLMEnrichment ?? true;
   githubTokenInput.value = settings.githubToken || "";
   if (settings.lastGithubSync) {
     githubLastSync.textContent = `上次同步: ${new Date(settings.lastGithubSync).toLocaleString()}`;
@@ -103,99 +137,121 @@ async function loadFolders() {
   try {
     const settings = await getSettings();
     const savedIds = settings.selectedFolderIds || [];
-    
-    console.log('[options] Loading bookmark folders...');
-    const response = await browser.runtime.sendMessage({ type: 'GET_BOOKMARK_FOLDERS' }) as {
+
+    console.log("[options] Loading bookmark folders...");
+    const response = (await browser.runtime.sendMessage({
+      type: "GET_BOOKMARK_FOLDERS",
+    })) as {
       success: boolean;
-      folders?: Array<{ id: string; title: string; path: string; children?: any[] }>;
+      folders?: Array<{
+        id: string;
+        title: string;
+        path: string;
+        children?: any[];
+      }>;
       error?: string;
     };
 
     if (!response.success || !response.folders) {
-      folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
+      folderList.innerHTML =
+        '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
       return;
     }
 
-    folderList.innerHTML = '';
+    folderList.innerHTML = "";
 
     // 递归渲染文件夹树
-    function renderFolderTree(folders: Array<{ id: string; title: string; path: string; children?: any[] }>, container: HTMLElement) {
-      folders.forEach(folder => {
+    function renderFolderTree(
+      folders: Array<{
+        id: string;
+        title: string;
+        path: string;
+        children?: any[];
+      }>,
+      container: HTMLElement,
+    ) {
+      folders.forEach((folder) => {
         const hasChildren = folder.children && folder.children.length > 0;
 
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'folder-item';
+        const itemDiv = document.createElement("div");
+        itemDiv.className = "folder-item";
 
         // 展开/折叠按钮
         if (hasChildren) {
-          const toggleBtn = document.createElement('button');
-          toggleBtn.className = 'folder-toggle';
-          toggleBtn.textContent = '▼';
+          const toggleBtn = document.createElement("button");
+          toggleBtn.className = "folder-toggle";
+          toggleBtn.textContent = "▼";
           toggleBtn.onclick = (e) => {
             e.preventDefault();
             const childContainer = itemDiv.nextElementSibling as HTMLElement;
-            if (childContainer && childContainer.classList.contains('folder-children')) {
-              const isExpanded = childContainer.classList.contains('expanded');
+            if (
+              childContainer &&
+              childContainer.classList.contains("folder-children")
+            ) {
+              const isExpanded = childContainer.classList.contains("expanded");
               if (isExpanded) {
-                childContainer.classList.remove('expanded');
-                toggleBtn.classList.add('collapsed');
+                childContainer.classList.remove("expanded");
+                toggleBtn.classList.add("collapsed");
               } else {
-                childContainer.classList.add('expanded');
-                toggleBtn.classList.remove('collapsed');
+                childContainer.classList.add("expanded");
+                toggleBtn.classList.remove("collapsed");
               }
             }
           };
           itemDiv.appendChild(toggleBtn);
         } else {
-          const spacer = document.createElement('span');
-          spacer.style.width = '24px';
-          spacer.style.display = 'inline-block';
+          const spacer = document.createElement("span");
+          spacer.style.width = "24px";
+          spacer.style.display = "inline-block";
           itemDiv.appendChild(spacer);
         }
 
         // 复选框
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
         checkbox.id = `folder-${folder.id}`;
         checkbox.value = folder.id;
-        checkbox.style.marginRight = '8px';
-        
+        checkbox.style.marginRight = "8px";
+
         // 恢复勾选状态
         if (savedIds.includes(folder.id)) {
           checkbox.checked = true;
         }
-        
+
         // 父子联动 + 实时保存
-        checkbox.addEventListener('change', async () => {
+        checkbox.addEventListener("change", async () => {
           if (hasChildren) {
-            const childCheckboxes = itemDiv.nextElementSibling?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-            childCheckboxes?.forEach(cb => {
+            const childCheckboxes =
+              itemDiv.nextElementSibling?.querySelectorAll<HTMLInputElement>(
+                'input[type="checkbox"]',
+              );
+            childCheckboxes?.forEach((cb) => {
               cb.checked = checkbox.checked;
             });
           }
-          
+
           // 实时保存勾选状态
           const currentSelected = getSelectedFolders();
           await saveSettings({ selectedFolderIds: currentSelected });
-          
+
           updateIndexButtonLabel();
         });
-        
+
         itemDiv.appendChild(checkbox);
 
         // 标签
-        const label = document.createElement('label');
+        const label = document.createElement("label");
         label.htmlFor = `folder-${folder.id}`;
         label.textContent = folder.title;
-        label.style.flex = '1';
-        label.style.cursor = 'pointer';
+        label.style.flex = "1";
+        label.style.cursor = "pointer";
         itemDiv.appendChild(label);
 
         container.appendChild(itemDiv);
 
         if (hasChildren) {
-          const childContainer = document.createElement('div');
-          childContainer.className = 'folder-children expanded';
+          const childContainer = document.createElement("div");
+          childContainer.className = "folder-children expanded";
           container.appendChild(childContainer);
           renderFolderTree(folder.children!, childContainer);
         }
@@ -205,15 +261,18 @@ async function loadFolders() {
     renderFolderTree(response.folders, folderList);
     updateIndexButtonLabel(); // 初始加载后更新按钮文案
   } catch (error) {
-    console.error('Failed to load folders:', error);
-    folderList.innerHTML = '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
+    console.error("Failed to load folders:", error);
+    folderList.innerHTML =
+      '<div style="padding: 8px; color: #999;">加载文件夹失败</div>';
   }
 }
 
 // 获取选中的文件夹 ID
 function getSelectedFolders(): string[] {
-  const checkboxes = folderList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
-  return Array.from(checkboxes).map(cb => cb.value);
+  const checkboxes = folderList.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"]:checked',
+  );
+  return Array.from(checkboxes).map((cb) => cb.value);
 }
 
 // 获取实际书签总数
@@ -250,53 +309,58 @@ async function loadStats() {
 
   // 如果没有失败项，隐藏该区块
   if (stats.failed === 0) {
-    failedSection.classList.add('hidden');
+    failedSection.classList.add("hidden");
   } else {
-    failedSection.classList.remove('hidden');
+    failedSection.classList.remove("hidden");
   }
 }
 
 // 加载失败书签列表
 async function loadFailedBookmarks() {
   try {
-    const response = await browser.runtime.sendMessage({ type: 'GET_FAILED_BOOKMARKS' }) as {
+    const response = (await browser.runtime.sendMessage({
+      type: "GET_FAILED_BOOKMARKS",
+    })) as {
       success: boolean;
-      failed: Array<{ id: string, url: string, title: string, error?: string }>;
+      failed: Array<{ id: string; url: string; title: string; error?: string }>;
     };
 
     if (!response.success || response.failed.length === 0) {
-      failedSection.classList.add('hidden');
+      failedSection.classList.add("hidden");
       return;
     }
 
-    failedSection.classList.remove('hidden');
-    failedList.innerHTML = '';
+    failedSection.classList.remove("hidden");
+    failedList.innerHTML = "";
 
-    response.failed.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'failed-item';
+    response.failed.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "failed-item";
       div.innerHTML = `
         <div class="failed-info">
-          <span class="failed-title">${item.title || '无标题'}</span>
+          <span class="failed-title">${item.title || "无标题"}</span>
           <a href="${item.url}" target="_blank" class="failed-url" title="点击访问">${item.url}</a>
-          <div class="failed-error">错误: ${item.error || '未知错误'}</div>
+          <div class="failed-error">错误: ${item.error || "未知错误"}</div>
         </div>
         <button class="btn-del" data-id="${item.id}">🗑️ 删除书签</button>
       `;
-      
-      const delBtn = div.querySelector('.btn-del') as HTMLButtonElement;
+
+      const delBtn = div.querySelector(".btn-del") as HTMLButtonElement;
       delBtn.onclick = async () => {
-        if (confirm('确定要从浏览器中永久删除这个书签吗？')) {
+        if (confirm("确定要从浏览器中永久删除这个书签吗？")) {
           delBtn.disabled = true;
-          delBtn.textContent = '删除中...';
-          const res = await browser.runtime.sendMessage({ type: 'DELETE_BOOKMARK', id: item.id });
+          delBtn.textContent = "删除中...";
+          const res = await browser.runtime.sendMessage({
+            type: "DELETE_BOOKMARK",
+            id: item.id,
+          });
           if (res.success) {
             div.remove();
             loadStats(); // 刷新统计
           } else {
-            alert('删除失败: ' + (res.error || '未知错误'));
+            alert("删除失败: " + (res.error || "未知错误"));
             delBtn.disabled = false;
-            delBtn.textContent = '🗑️ 删除书签';
+            delBtn.textContent = "🗑️ 删除书签";
           }
         }
       };
@@ -304,7 +368,7 @@ async function loadFailedBookmarks() {
       failedList.appendChild(div);
     });
   } catch (error) {
-    console.error('Failed to load failed bookmarks:', error);
+    console.error("Failed to load failed bookmarks:", error);
   }
 }
 
@@ -333,6 +397,9 @@ function updateWeightVisibility() {
 // 保存 API 设置
 saveBtn.addEventListener("click", async () => {
   const apiKey = apiKeyInput.value.trim();
+  const embeddingModel = embeddingModelInput.value.trim();
+  const llmModel = llmModelInput.value.trim();
+  const enableLLMEnrichment = enableLLMEnrichmentCheckbox.checked;
 
   if (!apiKey) {
     showStatus(apiStatus, "请输入 API Key", "error");
@@ -343,7 +410,12 @@ saveBtn.addEventListener("click", async () => {
   saveBtn.textContent = "保存中...";
 
   try {
-    await saveSettings({ openaiApiKey: apiKey });
+    await saveSettings({
+      openaiApiKey: apiKey,
+      embeddingModel: embeddingModel || undefined,
+      llmModel: llmModel || undefined,
+      enableLLMEnrichment,
+    });
     showStatus(apiStatus, "✓ 设置已保存", "success");
   } catch (error) {
     showStatus(apiStatus, `保存失败: ${error}`, "error");
@@ -352,7 +424,6 @@ saveBtn.addEventListener("click", async () => {
     saveBtn.textContent = "💾 保存 API 设置";
   }
 });
-
 
 // 保存 GitHub 设置
 saveGithubBtn.addEventListener("click", async () => {
@@ -378,9 +449,15 @@ syncGithubBtn.addEventListener("click", async () => {
   showStatus(githubStatus, "正在从 GitHub 获取仓库列表...", "info");
 
   try {
-    const result = await browser.runtime.sendMessage({ type: 'SYNC_GITHUB_STARS' });
+    const result = await browser.runtime.sendMessage({
+      type: "SYNC_GITHUB_STARS",
+    });
     if (result.success) {
-      showStatus(githubStatus, `✓ 同步成功！已将 ${result.total} 个仓库加入索引队列`, "success");
+      showStatus(
+        githubStatus,
+        `✓ 同步成功！已将 ${result.total} 个仓库加入索引队列`,
+        "success",
+      );
       githubLastSync.textContent = `上次同步: ${new Date().toLocaleString()}`;
       loadStats();
     } else {
@@ -428,10 +505,16 @@ syncTwitterBtn.addEventListener("click", async () => {
   showStatus(twitterStatus, "正在从 Twitter 获取书签...", "info");
 
   try {
-    const result = await browser.runtime.sendMessage({ type: 'SYNC_TWITTER_BOOKMARKS' });
+    const result = await browser.runtime.sendMessage({
+      type: "SYNC_TWITTER_BOOKMARKS",
+    });
 
     if (result.success) {
-      showStatus(twitterStatus, `✓ 同步成功！已将 ${result.total} 个书签加入索引`, "success");
+      showStatus(
+        twitterStatus,
+        `✓ 同步成功！已将 ${result.total} 个书签加入索引`,
+        "success",
+      );
       twitterLastSync.textContent = `上次同步: ${new Date().toLocaleString()}`;
       loadStats();
     } else {
@@ -498,10 +581,10 @@ function updateIndexButtonLabel() {
   const selected = getSelectedFolders();
   if (selected.length > 0) {
     startIndexBtn.textContent = `🚀 索引选中的 ${selected.length} 个文件夹`;
-    startIndexBtn.style.background = 'var(--info)';
+    startIndexBtn.style.background = "var(--info)";
   } else {
-    startIndexBtn.textContent = '🚀 开始全量/增量索引';
-    startIndexBtn.style.background = 'var(--primary-color)';
+    startIndexBtn.textContent = "🚀 开始全量/增量索引";
+    startIndexBtn.style.background = "var(--primary-color)";
   }
 }
 
@@ -515,26 +598,34 @@ startIndexBtn.addEventListener("click", async () => {
   }
 
   const selectedFolders = getSelectedFolders();
-  
+
   startIndexBtn.disabled = true;
   pauseBtn.disabled = false;
   resumeBtn.disabled = true;
   progressContainer.classList.remove("hidden");
-  
+
   const isSelective = selectedFolders.length > 0;
-  showStatus(indexStatus, isSelective ? "正在执行定向索引..." : "正在执行全量增量索引...", "info");
+  showStatus(
+    indexStatus,
+    isSelective ? "正在执行定向索引..." : "正在执行全量增量索引...",
+    "info",
+  );
 
   try {
     if (isSelective) {
       // 索引选中的文件夹
       const result = await browser.runtime.sendMessage({
-        type: 'INDEX_FOLDERS',
-        folderIds: selectedFolders
+        type: "INDEX_FOLDERS",
+        folderIds: selectedFolders,
       });
-      
+
       // 如果没有新书签需要入队，直接结束
       if (result && result.success && result.queued === 0) {
-        showStatus(indexStatus, `✓ 所选文件夹 (${result.total}个书签) 已全部同步`, "success");
+        showStatus(
+          indexStatus,
+          `✓ 所选文件夹 (${result.total}个书签) 已全部同步`,
+          "success",
+        );
         startIndexBtn.disabled = false;
         pauseBtn.disabled = true;
         progressContainer.classList.add("hidden");
@@ -603,32 +694,59 @@ clearCacheBtn.addEventListener("click", () => {
 // 监听索引进度
 browser.runtime.onMessage.addListener((message) => {
   if (message.type === "INDEXING_PROGRESS") {
-    const progress = message.progress as { total: number; processed: number; current?: string; status: string; error?: string };
+    const progress = message.progress as {
+      total: number;
+      processed: number;
+      current?: string;
+      status: string;
+      error?: string;
+    };
 
     // 更新进度条
-    const percent = progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+    const percent =
+      progress.total > 0
+        ? Math.round((progress.processed / progress.total) * 100)
+        : 0;
     progressBar.value = percent;
     progressText.textContent = `${percent}% (${progress.processed}/${progress.total})`;
 
     // 更新状态文本
     if (progress.status === "processing") {
-      const currentUrl = progress.current ? ` (${progress.current.slice(0, 50)}...)` : "";
-      showStatus(indexStatus, `索引中 ${progress.processed}/${progress.total}${currentUrl}`, "info");
+      const currentUrl = progress.current
+        ? ` (${progress.current.slice(0, 50)}...)`
+        : "";
+      showStatus(
+        indexStatus,
+        `索引中 ${progress.processed}/${progress.total}${currentUrl}`,
+        "info",
+      );
       pauseBtn.disabled = false;
       resumeBtn.disabled = true;
     } else if (progress.status === "paused") {
-      showStatus(indexStatus, `索引已暂停 (${progress.processed}/${progress.total})`, "info");
+      showStatus(
+        indexStatus,
+        `索引已暂停 (${progress.processed}/${progress.total})`,
+        "info",
+      );
       pauseBtn.disabled = true;
       resumeBtn.disabled = false;
     } else if (progress.status === "complete") {
-      showStatus(indexStatus, `✓ 索引完成，共处理 ${progress.processed} 个书签`, "success");
+      showStatus(
+        indexStatus,
+        `✓ 索引完成，共处理 ${progress.processed} 个书签`,
+        "success",
+      );
       startIndexBtn.disabled = false;
       pauseBtn.disabled = true;
       resumeBtn.disabled = true;
       progressContainer.classList.add("hidden");
       loadStats(); // 刷新统计
     } else if (progress.status === "error") {
-      showStatus(indexStatus, `索引出错: ${progress.error || '未知错误'}`, "error");
+      showStatus(
+        indexStatus,
+        `索引出错: ${progress.error || "未知错误"}`,
+        "error",
+      );
       startIndexBtn.disabled = false;
       pauseBtn.disabled = true;
       resumeBtn.disabled = true;

@@ -217,7 +217,12 @@ export default defineBackground(() => {
       try {
         // 4. 生成查询向量
         const apiKey = settings.openaiApiKey!;
-        const queryVector = await getQueryEmbedding(query, apiKey, signal);
+        const queryVector = await getQueryEmbedding(
+          query,
+          apiKey,
+          signal,
+          settings.embeddingModel
+        );
 
         // 如果已中止，直接返回
         if (signal.aborted) return;

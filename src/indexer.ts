@@ -16,6 +16,7 @@ import {
   saveSettings,
 } from "./db";
 import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
+import { generateDeepContent } from "./llm";
 
 /** 索引任务状态 */
 interface IndexJob {
@@ -135,8 +136,34 @@ interface EnrichmentJob {
   token: string;
 }
 
+const ENRICHMENT_QUEUE_KEY = "enrichment_queue";
 const enrichmentQueue: EnrichmentJob[] = [];
 let isEnriching = false;
+
+/** 持久化 enrichment 队列到 storage */
+async function persistEnrichmentQueue(): Promise<void> {
+  try {
+    await browser.storage.local.set({
+      [ENRICHMENT_QUEUE_KEY]: enrichmentQueue,
+    });
+  } catch (err) {
+    console.warn("[indexer] Failed to persist enrichment queue:", err);
+  }
+}
+
+/** 从 storage 恢复 enrichment 队列 */
+async function restoreEnrichmentQueue(): Promise<void> {
+  try {
+    const data = await browser.storage.local.get(ENRICHMENT_QUEUE_KEY);
+    if (data[ENRICHMENT_QUEUE_KEY] && Array.isArray(data[ENRICHMENT_QUEUE_KEY])) {
+      enrichmentQueue.length = 0; // 清空当前队列
+      enrichmentQueue.push(...data[ENRICHMENT_QUEUE_KEY]);
+      console.log(`[indexer] Restored ${enrichmentQueue.length} enrichment jobs from storage`);
+    }
+  } catch (err) {
+    console.warn("[indexer] Failed to restore enrichment queue:", err);
+  }
+}
 
 /** 后台串行处理 enrichment 队列（低优先级） */
 async function processEnrichmentQueue(): Promise<void> {
@@ -151,11 +178,18 @@ async function processEnrichmentQueue(): Promise<void> {
 
   while (enrichmentQueue.length > 0) {
     const job = enrichmentQueue.shift()!;
+    await persistEnrichmentQueue(); // 持久化队列状态
+
     try {
       const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
       if (readme && readme.length > 10) {
         const textToEmbed = `${job.owner}/${job.repo}\n${readme.slice(0, 2000)}`;
-        const { embedding } = await getEmbedding(textToEmbed, settings.openaiApiKey!);
+        const { embedding } = await getEmbedding(
+          textToEmbed,
+          settings.openaiApiKey!,
+          undefined,
+          settings.embeddingModel
+        );
         await updateBookmark(job.bookmarkId, {
           summary: readme.slice(0, 500),
           embedding,
@@ -206,7 +240,11 @@ export async function syncGithubStars(): Promise<{
 
       let embeddings: number[][] = [];
       try {
-        embeddings = await batchEmbedTexts(texts, settings.openaiApiKey!);
+        embeddings = await batchEmbedTexts(
+          texts,
+          settings.openaiApiKey!,
+          settings.embeddingModel
+        );
       } catch (err) {
         console.warn("[FlowSearch] Batch embed failed, falling back to title-only:", err);
         // 批量失败时 embeddings 保持空数组，写入 pending 状态等主队列处理
@@ -239,6 +277,7 @@ export async function syncGithubStars(): Promise<{
           });
         }
       }
+      await persistEnrichmentQueue(); // 持久化队列
 
       // 未能 embed 的 fallback 到主队列
       const failedJobs = records
@@ -448,6 +487,8 @@ async function indexBookmark(
     const { embedding } = await getEmbedding(
       textToEmbed,
       settings.openaiApiKey,
+      undefined,
+      settings.embeddingModel
     );
 
     // 3. 更新数据库
@@ -525,9 +566,9 @@ function isRateLimitError(error: string): boolean {
 }
 
 /**
- * 处理索引队列
+ * 处理索引队列 — 批量优化版本
  */
-const CONCURRENCY = 3;
+const BATCH_SIZE = 10; // 每批处理 10 个书签
 
 async function processQueue(): Promise<void> {
   if (isProcessing || queue.length === 0) return;
@@ -550,71 +591,179 @@ async function processQueue(): Promise<void> {
     return;
   }
 
-  console.log(`[indexer] Processing ${totalToProcess} items with ${CONCURRENCY} workers`);
+  console.log(`[indexer] Processing ${totalToProcess} items with batch size ${BATCH_SIZE}`);
   notifyProgress({ total: totalToProcess, processed: 0, status: "processing" });
 
-  async function worker(): Promise<void> {
-    while (true) {
-      if (isPaused) {
-        notifyProgress({
-          total: totalToProcess,
-          processed: processedCount,
-          status: "paused",
-        });
-        return;
-      }
-
-      const job = queue.shift();
-      if (!job) break;
-
+  while (queue.length > 0) {
+    if (isPaused) {
       notifyProgress({
         total: totalToProcess,
         processed: processedCount,
-        current: job.url,
-        status: "processing",
+        status: "paused",
       });
+      return;
+    }
 
-      const result = await indexBookmark(job, settings);
-      processedCount++;
+    // 1. 取出一批任务
+    const batch = queue.splice(0, BATCH_SIZE);
 
-      if (!result.success) {
-        const errorMessage = result.error || "";
-        console.warn(`[indexer] Failed to index ${job.url}:`, errorMessage);
+    notifyProgress({
+      total: totalToProcess,
+      processed: processedCount,
+      current: batch[0]?.url,
+      status: "processing",
+    });
 
-        if (isRateLimitError(errorMessage)) {
-          onRateLimit();
-          queue.unshift({ ...job, retryCount: job.retryCount + 1 });
-          const delay = calculateDelay();
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
+    // 2. 并发提取内容（IO 密集型）
+    const contents = await Promise.all(
+      batch.map(async (job) => {
+        try {
+          const content = await fetchPageContent(job.url, settings);
+          let text: string;
+          let summary = content?.summary || "";
+          let tags: string[] = [];
+
+          // LLM 增强（如果启用且有足够内容）
+          if (settings.enableLLMEnrichment && content?.markdown && content.markdown.length > 100) {
+            try {
+              const llmResult = await generateDeepContent(
+                content.markdown.slice(0, 4000),
+                settings.openaiApiKey!,
+                settings.llmModel
+              );
+              summary = llmResult.summary;
+              tags = llmResult.tags;
+              // 向量化文本：标题 + 摘要 + 标签
+              text = `${content.title || job.title}\n${summary}\n${tags.join(" ")}`;
+            } catch (llmError) {
+              console.warn(`[indexer] LLM enhancement failed for ${job.url}:`, llmError);
+              // 降级：使用原始摘要
+              text = content
+                ? `${content.title || job.title}\n${summary}`
+                : job.title;
+            }
+          } else {
+            text = content
+              ? `${content.title || job.title}\n${summary}`
+              : job.title;
+          }
+
+          return {
+            job,
+            content,
+            text,
+            summary,
+            tags,
+            llmEnhanced: tags.length > 0,
+          };
+        } catch (error) {
+          console.warn(`[indexer] Failed to fetch content for ${job.url}:`, error);
+          return {
+            job,
+            content: null,
+            text: job.title,
+            summary: "",
+            tags: [],
+            llmEnhanced: false,
+          };
+        }
+      })
+    );
+
+    // 3. 批量嵌入（单次 API 调用）
+    const texts = contents.map((c) => c.text);
+    let embeddings: number[][];
+
+    try {
+      embeddings = await batchEmbedTexts(
+        texts,
+        settings.openaiApiKey,
+        settings.embeddingModel
+      );
+      onSuccess(); // 成功则加速
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn("[indexer] Batch embed failed:", errorMessage);
+
+      if (isRateLimitError(errorMessage)) {
+        onRateLimit();
+        // 失败的任务重新入队
+        for (const { job } of contents) {
+          if (job.retryCount < MAX_RETRIES) {
+            queue.unshift({ ...job, retryCount: job.retryCount + 1 });
+          } else {
+            await updateBookmark(job.bookmarkId, {
+              status: "failed",
+              error: errorMessage,
+            });
+          }
         }
 
+        const delay = calculateDelay();
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // 非限流错误，标记失败
+      for (const { job } of contents) {
         if (job.retryCount < MAX_RETRIES) {
           queue.push({ ...job, retryCount: job.retryCount + 1 });
           totalToProcess++;
         } else {
           await updateBookmark(job.bookmarkId, {
             status: "failed",
-            error: result.error,
+            error: errorMessage,
           });
         }
-      } else {
-        console.log(`[indexer] Indexed: ${job.url}`);
-        onSuccess();
       }
+
+      processedCount += batch.length;
+      continue;
+    }
+
+    // 4. 批量写入 DB
+    const records: BookmarkRecord[] = contents.map(({ job, content, summary, tags, llmEnhanced }, i) => ({
+      id: job.bookmarkId,
+      url: job.url,
+      title: content?.title || job.title,
+      summary,
+      tags,
+      embedding: embeddings[i],
+      status: "indexed" as const,
+      indexedAt: Date.now(),
+      llmEnhanced,
+    }));
+
+    try {
+      await upsertBookmarks(records);
+      console.log(`[indexer] Batch indexed: ${batch.length} items`);
+      processedCount += batch.length;
 
       notifyProgress({
         total: totalToProcess,
         processed: processedCount,
         status: "processing",
       });
-
-      const delay = calculateDelay();
-      await new Promise((resolve) => setTimeout(resolve, delay));
+    } catch (error) {
+      console.error("[indexer] Failed to upsert batch:", error);
+      // 写入失败，重新入队
+      for (const { job } of contents) {
+        if (job.retryCount < MAX_RETRIES) {
+          queue.push({ ...job, retryCount: job.retryCount + 1 });
+          totalToProcess++;
+        } else {
+          await updateBookmark(job.bookmarkId, {
+            status: "failed",
+            error: "Database write failed",
+          });
+        }
+      }
     }
-  }
 
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    // 限流延迟
+    const delay = calculateDelay();
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
 
   isProcessing = false;
 
@@ -995,11 +1144,16 @@ export async function initIndexer(): Promise<void> {
   // === 恢复 enrichment 队列 ===
   const settings = await getSettings();
   if (settings.githubToken && settings.openaiApiKey) {
+    // 1. 先从 storage 恢复队列
+    await restoreEnrichmentQueue();
+
+    // 2. 从 DB 中恢复需要 enrichment 的记录（避免重复）
     try {
       const needsEnrich = await db.bookmarks
         .filter(r => r.needsEnrichment === true)
         .toArray();
 
+      let addedCount = 0;
       for (const record of needsEnrich) {
         // 检查是否已存在
         if (enrichmentQueue.some(j => j.bookmarkId === record.id)) continue;
@@ -1013,15 +1167,21 @@ export async function initIndexer(): Promise<void> {
             repo: match[2],
             token: settings.githubToken!,
           });
+          addedCount++;
         }
       }
 
+      if (addedCount > 0) {
+        await persistEnrichmentQueue();
+        console.log(`[indexer] Added ${addedCount} enrichment jobs from DB`);
+      }
+
       if (enrichmentQueue.length > 0) {
-        console.log(`[indexer] Restored ${enrichmentQueue.length} enrichment jobs`);
+        console.log(`[indexer] Total ${enrichmentQueue.length} enrichment jobs ready`);
         processEnrichmentQueue().catch(() => {});
       }
     } catch (err) {
-      console.warn("[indexer] Failed to restore enrichment queue:", err);
+      console.warn("[indexer] Failed to restore enrichment queue from DB:", err);
     }
   }
 
@@ -1096,14 +1256,53 @@ export async function syncTwitterBookmarks(): Promise<{
         return text;
       });
 
-      const embeddings = await batchEmbedTexts(texts, settings.openaiApiKey);
+      // 尝试批量嵌入，失败时降级到单个嵌入
+      let embeddings: (number[] | undefined)[] = new Array(texts.length);
+      let batchFailed = false;
 
-      const records: BookmarkRecord[] = bookmarks.map((bookmark, i) =>
-        convertToBookmarkRecord(bookmark, embeddings[i])
-      );
+      try {
+        embeddings = await batchEmbedTexts(
+          texts,
+          settings.openaiApiKey,
+          settings.embeddingModel
+        );
+      } catch (batchError) {
+        console.warn("[FlowSearch] Twitter batch embed failed, fallback to individual:", batchError);
+        batchFailed = true;
+
+        // 降级策略：逐个嵌入（有缓存保护）
+        for (let i = 0; i < texts.length; i++) {
+          try {
+            const { embedding } = await getEmbedding(
+              texts[i],
+              settings.openaiApiKey!,
+              undefined,
+              settings.embeddingModel
+            );
+            embeddings[i] = embedding;
+          } catch (err) {
+            console.warn(`[FlowSearch] Failed to embed tweet ${bookmarks[i].tweetId}:`, err);
+            embeddings[i] = undefined;
+          }
+        }
+      }
+
+      const records: BookmarkRecord[] = bookmarks.map((bookmark, i) => {
+        const record = convertToBookmarkRecord(bookmark, embeddings[i]);
+        // 如果嵌入失败，标记为 pending 以便后续重试
+        if (!embeddings[i]) {
+          record.status = "pending";
+        }
+        return record;
+      });
 
       await upsertBookmarks(records);
       totalCount += bookmarks.length;
+
+      const successCount = records.filter((r) => r.status === "indexed").length;
+      console.log(
+        `[FlowSearch] Twitter page ${page + 1}: ${successCount}/${bookmarks.length} indexed ${batchFailed ? "(fallback mode)" : ""}`
+      );
 
       if (!hasMore) break;
 
