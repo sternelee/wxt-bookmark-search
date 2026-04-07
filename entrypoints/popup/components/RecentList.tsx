@@ -1,0 +1,52 @@
+import { For, Show } from "solid-js";
+import { Card, CardContent } from "../../../src/components/ui/card";
+import { Badge } from "../../../src/components/ui/badge";
+
+interface RecentListProps {
+  items: Array<{
+    url: string;
+    title: string;
+    summary?: string;
+    tags?: string[];
+  }>;
+}
+
+export default function RecentList(props: RecentListProps) {
+  return (
+    <div class="mb-5">
+      <h2 class="text-xs uppercase tracking-wide text-muted-foreground mb-2.5 font-medium">
+        最近访问
+      </h2>
+      <div class="flex flex-col gap-2">
+        <For each={props.items}>
+          {(item) => (
+            <a
+              href={item.url}
+              target="_blank"
+              class="block"
+            >
+              <Card class="hover:bg-accent hover:border-primary transition-all hover:-translate-y-0.5">
+                <CardContent class="p-2.5">
+                  <div class="text-[13px] font-semibold truncate mb-1">
+                    {item.title}
+                  </div>
+                  <Show when={item.tags && item.tags.length > 0}>
+                    <div class="flex gap-1.5">
+                      <For each={item.tags?.slice(0, 2)}>
+                        {(tag) => (
+                          <Badge variant="secondary" class="text-[10px]">
+                            #{tag}
+                          </Badge>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </CardContent>
+              </Card>
+            </a>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}

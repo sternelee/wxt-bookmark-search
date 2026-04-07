@@ -1,7 +1,13 @@
-import { createSignal, onMount, For } from "solid-js";
+import { createSignal, onMount, For, Show } from "solid-js";
 import { getIndexStats, hasApiKey, getIndexedBookmarks } from "../../src/db";
 import { getRecentBookmarks } from "../../src/freq";
-import "./App.css";
+import { Button } from "../../src/components/ui/button";
+import { Separator } from "../../src/components/ui/separator";
+import Header from "./components/Header";
+import SearchHint from "./components/SearchHint";
+import StatsGrid from "./components/StatsGrid";
+import RecentList from "./components/RecentList";
+import IndexingHUD from "./components/IndexingHUD";
 
 function App() {
   const [isConfigured, setIsConfigured] = createSignal(false);
@@ -38,6 +44,7 @@ function App() {
           url: r.url,
           title: item?.title || r.url,
           summary: item?.summary,
+          tags: item?.tags,
         };
       });
       setRecent(recentItems);
@@ -73,89 +80,34 @@ function App() {
   };
 
   return (
-    <div class="popup-container">
-      <div class="header">
-        <div class="logo">
-          <span class="ai-icon">✨</span>
-          <h1>Flow Search</h1>
-        </div>
-        <span
-          class={`status-dot ${isConfigured() ? "ready" : "not-configured"}`}
-          title={isConfigured() ? "已配置" : "未配置"}
-        ></span>
-      </div>
+    <div class="w-[280px] p-5 bg-background text-foreground">
+      <Header isConfigured={isConfigured()} />
 
-      <div class="search-hint">
-        <div class="kb-shortcut">
-          <kbd>bi</kbd> + <kbd>Space</kbd>
-        </div>
-        <p>直接在地址栏搜索书签</p>
-      </div>
+      <SearchHint />
 
-      <div class="divider"></div>
+      <Separator class="my-4" />
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">{indexed()}</div>
-          <div class="stat-label">AI 已索引</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{total()}</div>
-          <div class="stat-label">全部书签</div>
-        </div>
-      </div>
+      <StatsGrid indexed={indexed()} total={total()} />
 
-      {indexingProgress() && (
-        <div class="indexing-hud">
-          <div class="hud-header">
-            <span>⚡ 正在同步索引...</span>
-            <span>
-              {Math.round(
-                (indexingProgress()!.processed /
-                  (indexingProgress()!.total || 1)) *
-                  100,
-              )}
-              %
-            </span>
-          </div>
-          <div class="hud-bar">
-            <div
-              class="hud-fill"
-              style={{
-                width: `${(indexingProgress()!.processed / (indexingProgress()!.total || 1)) * 100}%`,
-              }}
-            ></div>
-          </div>
-        </div>
-      )}
+      <Show when={indexingProgress()}>
+        <IndexingHUD progress={indexingProgress()!} />
+      </Show>
 
-      {recent().length > 0 && (
-        <div class="recent-section">
-          <h2>最近访问</h2>
-          <div class="recent-list">
-            <For each={recent()}>
-              {(item) => (
-                <a href={item.url} target="_blank" class="recent-item">
-                  <div class="item-info">
-                    <span class="item-title">{item.title}</span>
-                    <div class="item-meta">
-                      {item.tags?.slice(0, 2).map((tag) => (
-                        <span class="tag">#{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                </a>
-              )}
-            </For>
-          </div>
-        </div>
-      )}
+      <Show when={recent().length > 0}>
+        <RecentList items={recent()} />
+      </Show>
 
-      <button class="primary-btn" onClick={openSettings}>
+      <Button
+        class="w-full"
+        onClick={openSettings}
+        size="lg"
+      >
         {isConfigured() ? "管理索引与设置" : "去配置 API Key"}
-      </button>
+      </Button>
 
-      <div class="footer">Powered by SiliconFlow & Jina AI</div>
+      <div class="mt-4 text-center text-xs text-muted-foreground">
+        Powered by SiliconFlow & Jina AI
+      </div>
     </div>
   );
 }
