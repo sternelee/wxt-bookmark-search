@@ -223,6 +223,7 @@ export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
 
 const defaultSettings: Settings = {
   openaiApiKey: undefined,
+  baseURL: 'https://api.siliconflow.cn',
   searchMode: 'hybrid',
   vectorWeight: 0.4,
   selectedFolderIds: [],

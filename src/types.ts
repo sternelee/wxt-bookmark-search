@@ -58,6 +58,7 @@ export interface SearchOptions {
 /** 设置存储结构 */
 export interface Settings {
   openaiApiKey?: string;
+  baseURL?: string;             // API 基础地址 (默认: https://api.siliconflow.cn)
   searchMode: SearchMode;
   vectorWeight: number;
   selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID

@@ -3,7 +3,7 @@
  * 用于生成网页摘要和标签
  */
 
-export const API_ENDPOINT = 'https://api.siliconflow.cn/v1/chat/completions';
+export const DEFAULT_BASE_URL = 'https://api.siliconflow.cn';
 export const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V3'; // 默认使用 DeepSeek 速度快且准确
 
 export interface AIResult {
@@ -15,7 +15,8 @@ export interface AIResult {
 export async function generateDeepContent(
   text: string,
   apiKey: string,
-  model: string = DEFAULT_MODEL
+  model: string = DEFAULT_MODEL,
+  baseURL: string = DEFAULT_BASE_URL
 ): Promise<AIResult> {
   // 构建提示词
   const systemPrompt = `You are a helpful bookmark assistant. Analyze the provided web content and return a JSON object containing:
@@ -29,9 +30,10 @@ The output MUST be a valid JSON object. Example:
 }`;
 
   const userPrompt = `Content to analyze:\n\n${text.slice(0, 4000)}`; // 截取前 4k 字符避免超长
+  const endpoint = `${baseURL}/v1/chat/completions`;
 
   try {
-    const response = await fetch(API_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,

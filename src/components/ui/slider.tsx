@@ -18,7 +18,7 @@ export function Slider(props: SliderProps) {
           {local.label}
         </label>
       )}
-      <div class="flex items-center gap-4 bg-muted p-4 rounded-lg">
+      <div class="flex items-center gap-4 p-4">
         <input
           type="range"
           class={cn(

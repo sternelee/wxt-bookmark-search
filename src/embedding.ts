@@ -5,7 +5,7 @@
 
 import type { Settings } from './types';
 
-export const API_ENDPOINT = 'https://api.siliconflow.cn/v1/embeddings';
+export const DEFAULT_BASE_URL = 'https://api.siliconflow.cn';
 export const DEFAULT_MODEL = 'BAAI/bge-m3';
 const MAX_INPUT_LENGTH = 8000; // 字符数限制
 
@@ -127,7 +127,8 @@ export async function getEmbedding(
   text: string,
   apiKey: string,
   signal?: AbortSignal,
-  model: string = DEFAULT_MODEL
+  model: string = DEFAULT_MODEL,
+  baseURL: string = DEFAULT_BASE_URL
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
   const cached = embeddingCache.get(text);
@@ -136,8 +137,9 @@ export async function getEmbedding(
   }
 
   const truncatedText = text.slice(0, MAX_INPUT_LENGTH);
+  const endpoint = `${baseURL}/v1/embeddings`;
 
-  const response = await fetch(API_ENDPOINT, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -173,7 +175,8 @@ export async function getEmbedding(
 export async function batchEmbedTexts(
   texts: string[],
   apiKey: string,
-  model: string = DEFAULT_MODEL
+  model: string = DEFAULT_MODEL,
+  baseURL: string = DEFAULT_BASE_URL
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
@@ -201,8 +204,9 @@ export async function batchEmbedTexts(
 
   // 3. 只嵌入未缓存的文本
   const truncated = uncachedTexts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
+  const endpoint = `${baseURL}/v1/embeddings`;
 
-  const response = await fetch(API_ENDPOINT, {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -240,9 +244,9 @@ export async function batchEmbedTexts(
 export async function batchEmbed(
   texts: string[],
   apiKey: string,
-  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void; model?: string }
+  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void; model?: string; baseURL?: string }
 ): Promise<Array<{ embedding?: number[]; error?: string }>> {
-  const { concurrency = 5, onProgress, model = DEFAULT_MODEL } = options || {};
+  const { concurrency = 5, onProgress, model = DEFAULT_MODEL, baseURL = DEFAULT_BASE_URL } = options || {};
   const results: Array<{ embedding?: number[]; error?: string }> = new Array(texts.length);
   let done = 0;
 
@@ -252,7 +256,7 @@ export async function batchEmbed(
     const batchPromises = batch.map(async (text, batchIndex) => {
       const globalIndex = i + batchIndex;
       try {
-        const { embedding } = await getEmbedding(text, apiKey, undefined, model);
+        const { embedding } = await getEmbedding(text, apiKey, undefined, model, baseURL);
         results[globalIndex] = { embedding };
       } catch (err) {
         results[globalIndex] = { error: String(err) };
@@ -272,16 +276,17 @@ export async function getQueryEmbedding(
   query: string,
   apiKey: string,
   signal?: AbortSignal,
-  model: string = DEFAULT_MODEL
+  model: string = DEFAULT_MODEL,
+  baseURL: string = DEFAULT_BASE_URL
 ): Promise<number[]> {
-  const { embedding } = await getEmbedding(query, apiKey, signal, model);
+  const { embedding } = await getEmbedding(query, apiKey, signal, model, baseURL);
   return embedding;
 }
 
 /** 测试 API Key 有效性 */
-export async function testApiKey(apiKey: string, model: string = DEFAULT_MODEL): Promise<boolean> {
+export async function testApiKey(apiKey: string, model: string = DEFAULT_MODEL, baseURL: string = DEFAULT_BASE_URL): Promise<boolean> {
   try {
-    await getEmbedding('test', apiKey, undefined, model);
+    await getEmbedding('test', apiKey, undefined, model, baseURL);
     return true;
   } catch {
     return false;

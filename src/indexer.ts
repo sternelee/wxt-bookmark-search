@@ -188,7 +188,8 @@ async function processEnrichmentQueue(): Promise<void> {
           textToEmbed,
           settings.openaiApiKey!,
           undefined,
-          settings.embeddingModel
+          settings.embeddingModel,
+          settings.baseURL
         );
         await updateBookmark(job.bookmarkId, {
           summary: readme.slice(0, 500),
@@ -243,7 +244,8 @@ export async function syncGithubStars(): Promise<{
         embeddings = await batchEmbedTexts(
           texts,
           settings.openaiApiKey!,
-          settings.embeddingModel
+          settings.embeddingModel,
+          settings.baseURL
         );
       } catch (err) {
         console.warn("[FlowSearch] Batch embed failed, falling back to title-only:", err);
@@ -488,7 +490,8 @@ async function indexBookmark(
       textToEmbed,
       settings.openaiApiKey,
       undefined,
-      settings.embeddingModel
+      settings.embeddingModel,
+      settings.baseURL
     );
 
     // 3. 更新数据库
@@ -629,7 +632,8 @@ async function processQueue(): Promise<void> {
               const llmResult = await generateDeepContent(
                 content.markdown.slice(0, 4000),
                 settings.openaiApiKey!,
-                settings.llmModel
+                settings.llmModel,
+                settings.baseURL
               );
               summary = llmResult.summary;
               tags = llmResult.tags;
@@ -678,7 +682,8 @@ async function processQueue(): Promise<void> {
       embeddings = await batchEmbedTexts(
         texts,
         settings.openaiApiKey,
-        settings.embeddingModel
+        settings.embeddingModel,
+        settings.baseURL
       );
       onSuccess(); // 成功则加速
     } catch (error) {
@@ -1264,7 +1269,8 @@ export async function syncTwitterBookmarks(): Promise<{
         embeddings = await batchEmbedTexts(
           texts,
           settings.openaiApiKey,
-          settings.embeddingModel
+          settings.embeddingModel,
+          settings.baseURL
         );
       } catch (batchError) {
         console.warn("[FlowSearch] Twitter batch embed failed, fallback to individual:", batchError);
@@ -1277,7 +1283,8 @@ export async function syncTwitterBookmarks(): Promise<{
               texts[i],
               settings.openaiApiKey!,
               undefined,
-              settings.embeddingModel
+              settings.embeddingModel,
+              settings.baseURL
             );
             embeddings[i] = embedding;
           } catch (err) {
