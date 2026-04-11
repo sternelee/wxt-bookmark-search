@@ -32,16 +32,14 @@ class EmbeddingCache {
     this.ttlMs = ttlMs;
   }
 
-  /** 生成缓存 key */
-  private hash(text: string): string {
-    // 简单 hash：使用文本的 trimmed lowercase 版本
-    // 对于向量语义搜索，大小写差异通常不影响结果
-    return text.trim().toLowerCase();
+  /** 生成缓存 key，加入 context 前缀避免查询/文档混用 */
+  private hash(text: string, context: 'query' | 'doc' = 'doc'): string {
+    return `${context}:${text.trim().toLowerCase()}`;
   }
 
   /** 获取缓存 */
-  get(text: string): number[] | null {
-    const key = this.hash(text);
+  get(text: string, context: 'query' | 'doc' = 'doc'): number[] | null {
+    const key = this.hash(text, context);
     const entry = this.cache.get(key);
 
     if (!entry) return null;
@@ -60,8 +58,8 @@ class EmbeddingCache {
   }
 
   /** 设置缓存 */
-  set(text: string, embedding: number[]): void {
-    const key = this.hash(text);
+  set(text: string, embedding: number[], context: 'query' | 'doc' = 'doc'): void {
+    const key = this.hash(text, context);
 
     // 如果已存在，先删除
     if (this.cache.has(key)) {
@@ -128,10 +126,11 @@ export async function getEmbedding(
   apiKey: string,
   signal?: AbortSignal,
   model: string = DEFAULT_MODEL,
-  baseURL: string = DEFAULT_BASE_URL
+  baseURL: string = DEFAULT_BASE_URL,
+  context: 'query' | 'doc' = 'doc'
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
-  const cached = embeddingCache.get(text);
+  const cached = embeddingCache.get(text, context);
   if (cached) {
     return { embedding: cached, tokens: 0, cached: true };
   }
@@ -162,7 +161,7 @@ export async function getEmbedding(
   const embedding = data.data[0].embedding;
 
   // 存入缓存
-  embeddingCache.set(text, embedding);
+  embeddingCache.set(text, embedding, context);
 
   return {
     embedding,
@@ -172,6 +171,9 @@ export async function getEmbedding(
 }
 
 /** 批量生成向量 — 使用 SiliconFlow 原生批量 input 接口 (单次请求多个向量) + 缓存优化 */
+/** 单次 API 请求最大批量条数 — 防止超过 SiliconFlow 每请求 token 限制 */
+const MAX_BATCH_CHUNK = 32;
+
 export async function batchEmbedTexts(
   texts: string[],
   apiKey: string,
@@ -186,7 +188,7 @@ export async function batchEmbedTexts(
 
   // 1. 检查缓存
   texts.forEach((text, i) => {
-    const cached = embeddingCache.get(text);
+    const cached = embeddingCache.get(text, 'doc');
     if (cached) {
       results[i] = cached;
     } else {
@@ -202,40 +204,45 @@ export async function batchEmbedTexts(
 
   console.log(`[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length}`);
 
-  // 3. 只嵌入未缓存的文本
   const truncated = uncachedTexts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
   const endpoint = `${baseURL}/v1/embeddings`;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      input: truncated,
-      encoding_format: "float",
-    }),
-  });
+  // 3. 分批请求，避免超过 API 单次 token/item 限制
+  for (let chunkStart = 0; chunkStart < truncated.length; chunkStart += MAX_BATCH_CHUNK) {
+    const chunkTexts = truncated.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
+    const chunkOriginals = uncachedTexts.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
+    const chunkIndices = uncachedIndices.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
 
-  if (!response.ok) {
-    const error = await response.json() as EmbeddingError;
-    throw new Error(error.error?.message || `API error: ${response.status}`);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        input: chunkTexts,
+        encoding_format: "float",
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as EmbeddingError;
+      throw new Error(error.error?.message || `API error: ${response.status}`);
+    }
+
+    const data = await response.json() as EmbeddingResponse;
+    const embeddings = data.data
+      .sort((a, b) => a.index - b.index)
+      .map((d) => d.embedding);
+
+    // 4. 写入缓存并填充结果
+    embeddings.forEach((embedding, i) => {
+      const globalIdx = chunkIndices[i];
+      results[globalIdx] = embedding;
+      embeddingCache.set(chunkOriginals[i], embedding, 'doc');
+    });
   }
-
-  const data = await response.json() as EmbeddingResponse;
-  // API 返回的 data 数组按 index 排序
-  const embeddings = data.data
-    .sort((a, b) => a.index - b.index)
-    .map((d) => d.embedding);
-
-  // 4. 写入缓存并填充结果
-  embeddings.forEach((embedding, i) => {
-    const globalIdx = uncachedIndices[i];
-    results[globalIdx] = embedding;
-    embeddingCache.set(uncachedTexts[i], embedding);
-  });
 
   return results;
 }
@@ -271,7 +278,7 @@ export async function batchEmbed(
   return results;
 }
 
-/** 生成查询向量 (优先使用缓存) */
+/** 生成查询向量 (优先使用缓存，使用 query 上下文) */
 export async function getQueryEmbedding(
   query: string,
   apiKey: string,
@@ -279,7 +286,7 @@ export async function getQueryEmbedding(
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL
 ): Promise<number[]> {
-  const { embedding } = await getEmbedding(query, apiKey, signal, model, baseURL);
+  const { embedding } = await getEmbedding(query, apiKey, signal, model, baseURL, 'query');
   return embedding;
 }
 

@@ -2,11 +2,11 @@
  * 混合搜索 - RRF (Reciprocal Rank Fusion) 算法
  * 结合关键词搜索和向量语义搜索
  *
- * 使用 EdgeVec HNSW 索引实现 O(log n) 向量搜索
+ * 向量搜索使用纯 JS 余弦相似度（基于内存缓存），无需 WASM 或额外 IDB
  */
 
 import type { BookmarkRecord, SearchOptions } from './types';
-import { searchVectors, searchVectorsBQ } from './vectorIndex';
+import { rankBySimilarity } from './vector';
 
 /** RRF 常数 K (通常取 60) */
 const RRF_K = 60;
@@ -41,7 +41,21 @@ interface MergedResult {
 }
 
 /**
- * 计算关键词搜索得分
+ * 安全 Min-Max 归一化
+ * 处理空数组、单元素、全同值等边界情况 — 避免 0/0 和 Infinity
+ */
+function safeNormalize(values: number[]): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return [0.5];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  if (range === 0) return values.map(() => 0.5);
+  return values.map(v => (v - min) / range);
+}
+
+/**
+ * 计算关键词搜索得分 (RRF: 1 / (K + rank))
  */
 function scoreKeywordResults(
   keywordResults: BookmarkInput[]
@@ -62,13 +76,14 @@ function scoreKeywordResults(
 
 /**
  * RRF 混合搜索
- * 使用 EdgeVec HNSW 进行向量搜索，然后与关键词结果融合
+ * 使用纯 JS 余弦相似度进行向量搜索，然后与关键词结果融合
  */
 export async function hybridSearch(
   keywordResults: BookmarkInput[],
   allRecords: BookmarkRecord[],
   queryVector: number[],
-  options: SearchOptions = {}
+  options: SearchOptions = {},
+  signal?: AbortSignal
 ): Promise<BookmarkRecord[]> {
   const {
     vectorWeight = 0.4,
@@ -76,7 +91,6 @@ export async function hybridSearch(
   } = options;
 
   const keywordWeight = 1 - vectorWeight;
-
   const keywordScores = scoreKeywordResults(keywordResults);
 
   const recordMap = new Map<string, BookmarkRecord>();
@@ -86,97 +100,68 @@ export async function hybridSearch(
 
   let vectorResults: VectorSearchResult[] = [];
   try {
-    vectorResults = await searchVectorsBQ(queryVector, limit * 3, 5);
+    // 直接对内存缓存中的书签做余弦相似度，无需 WASM/IDB
+    const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
+    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, { limit: limit * 3 })
+      .map(r => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
-    console.warn('[hybrid] EdgeVec search failed:', error);
-    vectorResults = [];
+    console.warn('[hybrid] Vector search failed:', error);
   }
 
-  // Min-Max 归一化
-  let vecMin = Infinity, vecMax = -Infinity;
-  for (const vr of vectorResults) {
-    if (vr.score < vecMin) vecMin = vr.score;
-    if (vr.score > vecMax) vecMax = vr.score;
-  }
-  const vecRange = vecMax - vecMin;
+  if (signal?.aborted) return [];
 
-  let kwMin = Infinity, kwMax = -Infinity;
-  for (const [, kr] of keywordScores) {
-    const raw = kr.score * (RRF_K + 1);
-    if (raw < kwMin) kwMin = raw;
-    if (raw > kwMax) kwMax = raw;
-  }
-  const kwRange = kwMax - kwMin;
+  // 对关键词和向量分数分别进行 Min-Max 归一化
+  const kwUrls = [...keywordScores.keys()];
+  const kwNorm = safeNormalize(kwUrls.map(url => keywordScores.get(url)!.score));
+  const kwScoreNorm = new Map(kwUrls.map((url, i) => [url, kwNorm[i]]));
 
+  const vecNorm = safeNormalize(vectorResults.map(r => r.score));
+  const vecScoreNorm = new Map(vectorResults.map((r, i) => [r.url, vecNorm[i]]));
+
+  // 合并所有候选 URL（向量命中 + 关键词命中）
+  const allUrls = new Set([...kwScoreNorm.keys(), ...vecScoreNorm.keys()]);
   const merged = new Map<string, MergedResult>();
 
-  for (const vr of vectorResults) {
-    const record = recordMap.get(vr.url);
-    if (!record) continue;
-
-    const keywordEntry = keywordScores.get(vr.url);
-
-    const normalizedVector = vecRange > 0
-      ? (vr.score - vecMin) / vecRange
-      : 0.5;
-
-    let keywordScore = 0;
-    if (keywordEntry) {
-      const rawKwScore = keywordEntry.score * (RRF_K + 1);
-      keywordScore = kwRange > 0
-        ? (rawKwScore - kwMin) / kwRange
-        : 0.5;
-    }
-
-    const finalScore = keywordWeight * keywordScore + vectorWeight * normalizedVector;
-
-    merged.set(vr.url, {
-      record,
-      keywordScore,
-      vectorScore: normalizedVector,
-      finalScore,
-    });
-  }
-
-  for (const [url, keywordEntry] of keywordScores) {
-    if (merged.has(url)) continue;
+  for (const url of allUrls) {
+    const kwScore = kwScoreNorm.get(url) ?? 0;
+    const vecScore = vecScoreNorm.get(url) ?? 0;
+    const finalScore = keywordWeight * kwScore + vectorWeight * vecScore;
 
     const record = recordMap.get(url);
-    if (!record) {
-      const newRecord: BookmarkRecord = {
-        id: keywordEntry.bookmark.id,
-        url: keywordEntry.bookmark.url!,
-        title: keywordEntry.bookmark.title,
-        summary: '',
-        status: 'pending',
-      };
-      const rawKwScore = keywordEntry.score * (RRF_K + 1);
-      const keywordScore = kwRange > 0
-        ? (rawKwScore - kwMin) / kwRange
-        : 0.5;
-      const finalScore = keywordWeight * keywordScore;
-
-      merged.set(url, {
-        record: newRecord,
-        keywordScore,
-        vectorScore: 0,
-        finalScore,
-      });
+    if (record) {
+      merged.set(url, { record, keywordScore: kwScore, vectorScore: vecScore, finalScore });
+    } else {
+      // 关键词命中但尚未索引 — 以基础记录形式加入（无 AI 前缀）
+      const kwEntry = keywordScores.get(url);
+      if (kwEntry) {
+        merged.set(url, {
+          record: {
+            id: kwEntry.bookmark.id,
+            url: kwEntry.bookmark.url!,
+            title: kwEntry.bookmark.title,
+            summary: '',
+            status: 'pending',
+          },
+          keywordScore: kwScore,
+          vectorScore: 0,
+          finalScore: keywordWeight * kwScore,
+        });
+      }
     }
   }
 
   const sorted = [...merged.values()].sort((a, b) => b.finalScore - a.finalScore);
-
   return sorted.slice(0, limit).map(m => m.record);
 }
 
 /**
- * 纯向量搜索 (使用 EdgeVec HNSW)
+ * 纯向量搜索（余弦相似度）
  */
 export async function vectorSearch(
   allRecords: BookmarkRecord[],
   queryVector: number[],
-  options: SearchOptions = {}
+  options: SearchOptions = {},
+  signal?: AbortSignal
 ): Promise<BookmarkRecord[]> {
   const { limit = 9 } = options;
 
@@ -187,11 +172,15 @@ export async function vectorSearch(
 
   let results: VectorSearchResult[] = [];
   try {
-    results = await searchVectorsBQ(queryVector, limit, 5);
+    // 直接对内存缓存中的书签做余弦相似度
+    const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
+    results = rankBySimilarity(queryVector, withEmbedding as any, { limit })
+      .map(r => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
-    console.warn('[vectorSearch] EdgeVec search failed:', error);
-    results = [];
+    console.warn('[vectorSearch] Vector search failed:', error);
   }
+
+  if (signal?.aborted) return [];
 
   return results
     .map(r => recordMap.get(r.url))

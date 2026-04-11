@@ -96,54 +96,74 @@ function buildHeaders(csrfToken: string, authToken: string): Record<string, stri
 
 /**
  * 解析推文数据为 TwitterBookmark
+ * 使用防御性访问，任意必填字段缺失时跳过该推文
  */
 function parseTweetData(tweetResult: any): TwitterBookmark | null {
+  if (!tweetResult || typeof tweetResult !== "object") return null;
+
   const tweet = tweetResult.tweet ?? tweetResult;
   const legacy = tweet?.legacy;
-  if (!legacy) return null;
+  if (!legacy || typeof legacy !== "object") return null;
 
   const tweetId = legacy.id_str ?? tweet?.rest_id;
-  if (!tweetId) return null;
+  if (!tweetId || typeof tweetId !== "string") return null;
 
   const userResult = tweet?.core?.user_results?.result;
-  const authorHandle = userResult?.core?.screen_name ?? userResult?.legacy?.screen_name;
-  const authorName = userResult?.core?.name ?? userResult?.legacy?.name;
+  const authorHandle =
+    userResult?.core?.screen_name ??
+    userResult?.legacy?.screen_name ??
+    undefined;
+  const authorName =
+    userResult?.core?.name ?? userResult?.legacy?.name ?? undefined;
   const authorProfileImageUrl =
     userResult?.avatar?.image_url ??
     userResult?.legacy?.profile_image_url_https ??
-    userResult?.legacy?.profile_image_url;
+    userResult?.legacy?.profile_image_url ??
+    undefined;
 
   // 提取媒体
-  const mediaEntities = legacy?.extended_entities?.media ?? legacy?.entities?.media ?? [];
-  const media: string[] = mediaEntities
-    .map((m: any) => m.media_url_https ?? m.media_url)
-    .filter(Boolean);
+  const mediaEntities: any[] =
+    legacy?.extended_entities?.media ?? legacy?.entities?.media ?? [];
+  const media: string[] = Array.isArray(mediaEntities)
+    ? mediaEntities
+        .map((m: any) => m?.media_url_https ?? m?.media_url)
+        .filter((u): u is string => typeof u === "string")
+    : [];
 
   // 提取链接
-  const urlEntities = legacy?.entities?.urls ?? [];
-  const links: string[] = urlEntities
-    .map((u: any) => u.expanded_url)
-    .filter((u: string | undefined) => u && !u.includes("t.co"));
+  const urlEntities: any[] = legacy?.entities?.urls ?? [];
+  const links: string[] = Array.isArray(urlEntities)
+    ? urlEntities
+        .map((u: any) => u?.expanded_url)
+        .filter(
+          (u): u is string => typeof u === "string" && !u.includes("t.co"),
+        )
+    : [];
 
   // 提取引用推文
   const quotedResult = tweet?.quoted_status_result?.result;
   let quotedTweetId: string | undefined;
   let quotedTweetText: string | undefined;
 
-  if (quotedResult) {
+  if (quotedResult && typeof quotedResult === "object") {
     const qtTweet = quotedResult.tweet ?? quotedResult;
     const qtLegacy = qtTweet?.legacy;
-    if (qtLegacy) {
-      quotedTweetId = qtLegacy.id_str ?? qtTweet?.rest_id;
-      // X Articles / long-form note tweets store full text separately
-      const qtNoteTweetText = qtTweet?.note_tweet?.note_tweet_results?.result?.text;
-      quotedTweetText = qtNoteTweetText ?? qtLegacy.full_text ?? qtLegacy.text ?? "";
+    if (qtLegacy && typeof qtLegacy === "object") {
+      quotedTweetId =
+        typeof qtLegacy.id_str === "string"
+          ? qtLegacy.id_str
+          : qtTweet?.rest_id;
+      const qtNoteTweetText =
+        qtTweet?.note_tweet?.note_tweet_results?.result?.text;
+      quotedTweetText =
+        qtNoteTweetText ?? qtLegacy.full_text ?? qtLegacy.text ?? "";
     }
   }
 
   // X Articles / long-form note tweets
   const noteTweetText = tweet?.note_tweet?.note_tweet_results?.result?.text;
   const text = noteTweetText ?? legacy.full_text ?? legacy.text ?? "";
+  if (typeof text !== "string") return null;
 
   return {
     tweetId,
@@ -151,14 +171,14 @@ function parseTweetData(tweetResult: any): TwitterBookmark | null {
     authorHandle,
     authorName,
     authorProfileImageUrl,
-    postedAt: legacy.created_at ?? undefined,
+    postedAt: typeof legacy.created_at === "string" ? legacy.created_at : undefined,
     engagement: {
-      likeCount: legacy.favorite_count,
-      repostCount: legacy.retweet_count,
-      replyCount: legacy.reply_count,
-      quoteCount: legacy.quote_count,
-      bookmarkCount: legacy.bookmark_count,
-      viewCount: tweet?.views?.count ? Number(tweet.views.count) : undefined,
+      likeCount: typeof legacy.favorite_count === "number" ? legacy.favorite_count : undefined,
+      repostCount: typeof legacy.retweet_count === "number" ? legacy.retweet_count : undefined,
+      replyCount: typeof legacy.reply_count === "number" ? legacy.reply_count : undefined,
+      quoteCount: typeof legacy.quote_count === "number" ? legacy.quote_count : undefined,
+      bookmarkCount: typeof legacy.bookmark_count === "number" ? legacy.bookmark_count : undefined,
+      viewCount: tweet?.views?.count != null ? Number(tweet.views.count) : undefined,
     },
     media,
     quotedTweetId,

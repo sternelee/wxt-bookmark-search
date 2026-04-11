@@ -10,6 +10,8 @@ const SETTINGS_KEY = 'settings';
 
 // === 已索引书签内存缓存 ===
 let _indexedCache: BookmarkRecord[] | null = null;
+/** 并发加载锁：防止同时发起多次 DB 读取 */
+let _cacheLoadingPromise: Promise<BookmarkRecord[]> | null = null;
 
 /** 从 DB 加载已索引书签到缓存 */
 async function loadIndexedCache(): Promise<BookmarkRecord[]> {
@@ -17,12 +19,14 @@ async function loadIndexedCache(): Promise<BookmarkRecord[]> {
   return _indexedCache;
 }
 
-/** 获取已索引书签（优先使用缓存） */
+/** 获取已索引书签（优先使用缓存，并发安全） */
 export async function ensureCachedIndexedBookmarks(): Promise<BookmarkRecord[]> {
-  if (_indexedCache === null) {
-    return loadIndexedCache();
-  }
-  return _indexedCache;
+  if (_indexedCache !== null) return _indexedCache;
+  if (_cacheLoadingPromise) return _cacheLoadingPromise;
+  _cacheLoadingPromise = loadIndexedCache().finally(() => {
+    _cacheLoadingPromise = null;
+  });
+  return _cacheLoadingPromise;
 }
 
 /** 使缓存失效（供 clearAll 调用） */
@@ -62,8 +66,17 @@ class BookmarkDB extends Dexie {
 
   constructor() {
     super('FlowSearch');
+    // v1: original schema (Dexie 3 installs stored IDB version as-is)
+    this.version(1).stores({
+      bookmarks: 'id, url, status, indexedAt'
+    });
+    // v2: added vectorId index (Dexie 4 stores IDB version as version*10)
     this.version(2).stores({
       bookmarks: 'id, url, status, indexedAt, vectorId'
+    });
+    // v3: remove unused vectorId index (EdgeVec removed; pure cosine similarity)
+    this.version(3).stores({
+      bookmarks: 'id, url, status, indexedAt'
     });
   }
 }
@@ -118,16 +131,6 @@ export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> 
   for (const record of records) {
     syncCacheRecord(record);
   }
-  // 同步到 EdgeVec 向量索引
-  try {
-    const { bulkUpsertVectors } = await import('./vectorIndex');
-    const withEmbeddings = records.filter(r => r.embedding && r.status === 'indexed');
-    if (withEmbeddings.length > 0) {
-      await bulkUpsertVectors(withEmbeddings.map(r => ({ url: r.url, embedding: r.embedding! })));
-    }
-  } catch (err) {
-    console.warn('[db] Failed to sync with EdgeVec:', err);
-  }
 }
 
 /** 更新单条记录 */
@@ -139,7 +142,6 @@ export async function updateBookmark(id: string, updates: Partial<BookmarkRecord
     const idx = _indexedCache.findIndex(r => r.id === id);
     const newStatus = updates.status as string | undefined;
     if (newStatus === 'indexed') {
-      // 状态变为 indexed，从 DB 读取完整记录或更新现有
       if (idx >= 0) {
         _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
       } else {
@@ -147,42 +149,17 @@ export async function updateBookmark(id: string, updates: Partial<BookmarkRecord
         if (fullRecord) _indexedCache.push(fullRecord);
       }
     } else if (newStatus && newStatus !== 'indexed') {
-      // 状态变为非 indexed，移除
       if (idx >= 0) _indexedCache.splice(idx, 1);
     } else if (idx >= 0) {
-      // 状态未变，仅更新其他字段
       _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
-    }
-  }
-
-  // 同步到 EdgeVec 向量索引
-  if (updates.embedding && updates.status === 'indexed') {
-    try {
-      const record = await db.bookmarks.get(id);
-      if (record?.url) {
-        const { upsertVector } = await import('./vectorIndex');
-        await upsertVector(record.url, updates.embedding);
-      }
-    } catch (err) {
-      console.warn('[db] Failed to update EdgeVec:', err);
     }
   }
 }
 
 /** 删除书签记录 */
 export async function deleteBookmark(id: string): Promise<void> {
-  const record = await db.bookmarks.get(id);
   await db.bookmarks.delete(id);
   removeCacheRecord(id);
-  // 从 EdgeVec 删除向量
-  if (record?.url) {
-    try {
-      const { deleteVector } = await import('./vectorIndex');
-      await deleteVector(record.url);
-    } catch (err) {
-      console.warn('[db] Failed to delete from EdgeVec:', err);
-    }
-  }
 }
 
 /** 获取索引统计 */
@@ -205,13 +182,6 @@ export async function getIndexStats(): Promise<{
 export async function clearAll(): Promise<void> {
   await db.bookmarks.clear();
   invalidateIndexedCache();
-  // 清空 EdgeVec 向量索引
-  try {
-    const { clearAll: clearVectorIndex } = await import('./vectorIndex');
-    await clearVectorIndex();
-  } catch (err) {
-    console.warn('[db] Failed to clear EdgeVec:', err);
-  }
 }
 
 /** 获取所有失败的书签 */

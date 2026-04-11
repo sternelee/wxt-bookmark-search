@@ -45,6 +45,16 @@ export interface BookmarkRecord {
   quotedTweetText?: string;
 }
 
+/** 搜索结果 DTO — 仅含 UI 所需字段，不暴露向量/内部元数据 */
+export interface SearchResult {
+  url: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  source: "github" | "twitter" | "bookmark";
+  indexed: boolean;
+}
+
 /** 搜索模式 */
 export type SearchMode = 'keyword' | 'vector' | 'hybrid';
 

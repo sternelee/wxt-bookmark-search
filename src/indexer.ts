@@ -34,17 +34,63 @@ let totalToProcess = 0; // 总待处理数
 let processedCount = 0; // 已处理数
 const MAX_RETRIES = 2;
 
-/** 自适应限流配置 */
-const RATE_LIMIT_CONFIG = {
-  minDelay: 200, // 最小延迟 200ms
-  maxDelay: 10000, // 最大延迟 10s
-  currentDelay: 500, // 当前延迟
-  baseDelay: 500, // 基础延迟
-  backoffMultiplier: 2, // 退避倍数
-  recoveryMultiplier: 0.9, // 恢复倍数 (每次成功稍微加快)
-  consecutiveSuccesses: 0, // 连续成功次数
-  successThreshold: 5, // 连续成功 N 次后开始加速
+/** 自适应限流器 */
+class RateLimiter {
+  private currentDelay: number;
+  private consecutiveSuccesses = 0;
+
+  constructor(
+    private readonly name: string,
+    private readonly config: {
+      minDelay: number;
+      maxDelay: number;
+      baseDelay: number;
+      backoffMultiplier: number;
+      recoveryMultiplier: number;
+      successThreshold: number;
+    }
+  ) {
+    this.currentDelay = config.baseDelay;
+  }
+
+  getDelay(): number {
+    return Math.min(Math.max(this.currentDelay, this.config.minDelay), this.config.maxDelay);
+  }
+
+  onSuccess(): void {
+    this.consecutiveSuccesses++;
+    if (this.consecutiveSuccesses >= this.config.successThreshold) {
+      this.currentDelay = Math.max(
+        this.config.minDelay,
+        this.currentDelay * this.config.recoveryMultiplier,
+      );
+      this.consecutiveSuccesses = 0;
+    }
+  }
+
+  onRateLimit(): void {
+    this.currentDelay = Math.min(
+      this.config.maxDelay,
+      this.currentDelay * this.config.backoffMultiplier,
+    );
+    this.consecutiveSuccesses = 0;
+    console.warn(`[indexer] [${this.name}] Rate limit, delay → ${this.currentDelay}ms`);
+  }
+}
+
+const RATE_LIMITER_DEFAULTS = {
+  minDelay: 200,
+  maxDelay: 10000,
+  baseDelay: 500,
+  backoffMultiplier: 2,
+  recoveryMultiplier: 0.9,
+  successThreshold: 5,
 };
+
+/** 各端点独立限流器，避免某端点 429 拖累其他请求 */
+const embeddingLimiter = new RateLimiter("embedding", RATE_LIMITER_DEFAULTS);
+const jinaLimiter = new RateLimiter("jina", { ...RATE_LIMITER_DEFAULTS, minDelay: 500 });
+const githubLimiter = new RateLimiter("github", { ...RATE_LIMITER_DEFAULTS, maxDelay: 30000 });
 
 /** 进度信息 */
 export interface IndexingProgress {
@@ -81,44 +127,64 @@ function notifyProgress(progress: IndexingProgress): void {
 
 /**
  * 从 Markdown 提取标题和摘要
+ * 跳过代码块、表格分隔符、图片、徽章行，清理 Markdown 格式符号
  */
 function extractFromMarkdown(
   markdown: string,
   fallbackTitle: string,
 ): { title: string; summary: string } {
-  const lines = markdown.split("\n").filter((line) => line.trim());
+  const lines = markdown.split("\n");
 
-  // 提取标题 (第一个 # 开头的行)
   let title = fallbackTitle;
-  for (const line of lines) {
-    const match = line.match(/^#\s+(.+)$/);
-    if (match) {
-      title = match[1].trim();
-      break;
-    }
-  }
-
-  // 提取摘要 (跳过标题，取前几段有效内容)
-  let summary = "";
-  let started = false;
+  let titleFound = false;
+  let inCodeBlock = false;
   const contentLines: string[] = [];
 
-  for (const line of lines) {
-    // 跳过标题行
-    if (line.startsWith("#") && !started) {
-      started = true;
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    // 跟踪代码围栏状态
+    if (/^[`~]{3}/.test(line)) {
+      inCodeBlock = !inCodeBlock;
       continue;
     }
-    // 跳过空行和图片
-    if (!line.trim() || line.match(/^!\[.*\]\(.*\)$/)) {
+    if (inCodeBlock) continue;
+
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // 提取第一个 H1 作为标题
+    if (!titleFound && trimmed.startsWith("# ")) {
+      title = trimmed.slice(2).trim();
+      titleFound = true;
       continue;
     }
-    contentLines.push(line.trim());
-    if (contentLines.length >= 10) break; // 取前 10 行有效内容
+
+    // 跳过其他标题行
+    if (/^#{1,6}\s/.test(trimmed)) continue;
+    // 跳过表格分隔符行 (|---|---|)
+    if (/^\|[-| :]+\|/.test(trimmed)) continue;
+    // 跳过图片行
+    if (/^!\[.*?\]\(.*?\)/.test(trimmed)) continue;
+    // 跳过徽章行 (shield.io 等)
+    if (/^\[!\[/.test(trimmed)) continue;
+
+    // 清理 Markdown 格式符号
+    const cleaned = trimmed
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // 链接 → 纯文本
+      .replace(/[*_`~]{1,2}([^*_`~\n]+?)[*_`~]{1,2}/g, "$1") // 粗体/斜体/行内代码
+      .replace(/^\s*[-*+]\s+/, "") // 无序列表
+      .replace(/^\s*\d+\.\s+/, "") // 有序列表
+      .replace(/^>\s*/, "") // 引用块
+      .trim();
+
+    if (cleaned.length > 10) {
+      contentLines.push(cleaned);
+      if (contentLines.length >= 10) break;
+    }
   }
 
-  summary = contentLines.join(" ").slice(0, 1000);
-
+  const summary = contentLines.join(" ").slice(0, 1000);
   return { title, summary };
 }
 
@@ -137,14 +203,22 @@ interface EnrichmentJob {
 }
 
 const ENRICHMENT_QUEUE_KEY = "enrichment_queue";
+const ENRICHMENT_QUEUE_VERSION = 1;
 const enrichmentQueue: EnrichmentJob[] = [];
 let isEnriching = false;
 
-/** 持久化 enrichment 队列到 storage */
+/** 持久化 enrichment 队列到 storage（带版本号和去重） */
 async function persistEnrichmentQueue(): Promise<void> {
   try {
+    // 按 URL 去重后再持久化
+    const seen = new Set<string>();
+    const deduped = enrichmentQueue.filter(job => {
+      if (seen.has(job.url)) return false;
+      seen.add(job.url);
+      return true;
+    });
     await browser.storage.local.set({
-      [ENRICHMENT_QUEUE_KEY]: enrichmentQueue,
+      [ENRICHMENT_QUEUE_KEY]: { version: ENRICHMENT_QUEUE_VERSION, jobs: deduped },
     });
   } catch (err) {
     console.warn("[indexer] Failed to persist enrichment queue:", err);
@@ -155,11 +229,27 @@ async function persistEnrichmentQueue(): Promise<void> {
 async function restoreEnrichmentQueue(): Promise<void> {
   try {
     const data = await browser.storage.local.get(ENRICHMENT_QUEUE_KEY);
-    if (data[ENRICHMENT_QUEUE_KEY] && Array.isArray(data[ENRICHMENT_QUEUE_KEY])) {
-      enrichmentQueue.length = 0; // 清空当前队列
-      enrichmentQueue.push(...data[ENRICHMENT_QUEUE_KEY]);
-      console.log(`[indexer] Restored ${enrichmentQueue.length} enrichment jobs from storage`);
+    const stored = data[ENRICHMENT_QUEUE_KEY] as any;
+    if (!stored) return;
+
+    let jobs: EnrichmentJob[];
+    if (Array.isArray(stored)) {
+      // 旧格式兼容
+      jobs = stored as EnrichmentJob[];
+    } else if (
+      stored &&
+      stored.version === ENRICHMENT_QUEUE_VERSION &&
+      Array.isArray(stored.jobs)
+    ) {
+      jobs = stored.jobs as EnrichmentJob[];
+    } else {
+      console.warn("[indexer] Unknown enrichment queue format, discarding");
+      return;
     }
+
+    enrichmentQueue.length = 0;
+    enrichmentQueue.push(...jobs);
+    console.log(`[indexer] Restored ${jobs.length} enrichment jobs from storage`);
   } catch (err) {
     console.warn("[indexer] Failed to restore enrichment queue:", err);
   }
@@ -444,7 +534,10 @@ async function fetchPageContent(
         signal: AbortSignal.timeout(8000),
       });
 
-      if (jinaResponse.ok) {
+      if (jinaResponse.status === 429) {
+        jinaLimiter.onRateLimit();
+      } else if (jinaResponse.ok) {
+        jinaLimiter.onSuccess();
         const markdown = await jinaResponse.text();
         const { title, summary } = extractFromMarkdown(markdown, "");
         console.log(`[indexer] Strategy 3: Jina Reader success`);
@@ -518,42 +611,21 @@ async function indexBookmark(
  * 计算下一个延迟
  */
 function calculateDelay(): number {
-  return Math.min(
-    Math.max(RATE_LIMIT_CONFIG.currentDelay, RATE_LIMIT_CONFIG.minDelay),
-    RATE_LIMIT_CONFIG.maxDelay,
-  );
+  return embeddingLimiter.getDelay();
 }
 
 /**
  * 请求成功，逐渐加速
  */
 function onSuccess(): void {
-  RATE_LIMIT_CONFIG.consecutiveSuccesses++;
-
-  if (
-    RATE_LIMIT_CONFIG.consecutiveSuccesses >= RATE_LIMIT_CONFIG.successThreshold
-  ) {
-    // 连续成功多次，可以加速
-    RATE_LIMIT_CONFIG.currentDelay = Math.max(
-      RATE_LIMIT_CONFIG.minDelay,
-      RATE_LIMIT_CONFIG.currentDelay * RATE_LIMIT_CONFIG.recoveryMultiplier,
-    );
-    RATE_LIMIT_CONFIG.consecutiveSuccesses = 0;
-  }
+  embeddingLimiter.onSuccess();
 }
 
 /**
  * 遇到限流错误，指数退避
  */
 function onRateLimit(): void {
-  RATE_LIMIT_CONFIG.currentDelay = Math.min(
-    RATE_LIMIT_CONFIG.maxDelay,
-    RATE_LIMIT_CONFIG.currentDelay * RATE_LIMIT_CONFIG.backoffMultiplier,
-  );
-  RATE_LIMIT_CONFIG.consecutiveSuccesses = 0;
-  console.warn(
-    `[indexer] Rate limit detected, increasing delay to ${RATE_LIMIT_CONFIG.currentDelay}ms`,
-  );
+  embeddingLimiter.onRateLimit();
 }
 
 /**

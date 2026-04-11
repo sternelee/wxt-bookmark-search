@@ -13,15 +13,17 @@ export interface GithubRepo {
   language: string | null;
 }
 
-/** 获取所有加星仓库 - 支持流式分页回调 */
+/** 获取所有加星仓库 - 支持流式分页回调，含超时保护 */
 export async function fetchAllStarredRepos(
   token: string,
   onPage?: (repos: GithubRepo[]) => Promise<void>,
   onProgress?: (totalCount: number) => void,
-  shouldStopPagination?: (repos: GithubRepo[]) => Promise<boolean>
+  shouldStopPagination?: (repos: GithubRepo[]) => Promise<boolean>,
+  timeoutMs = 5 * 60 * 1000 // 默认 5 分钟超时
 ): Promise<GithubRepo[]> {
   const octokit = new Octokit({ auth: token });
   const allRepos: GithubRepo[] = [];
+  const deadline = Date.now() + timeoutMs;
 
   try {
     const iterator = octokit.paginate.iterator("GET /user/starred", {
@@ -29,6 +31,11 @@ export async function fetchAllStarredRepos(
     });
 
     for await (const { data: repos } of iterator) {
+      if (Date.now() > deadline) {
+        console.warn("[FlowSearch] fetchAllStarredRepos: timeout reached, stopping pagination");
+        break;
+      }
+
       const mappedRepos: GithubRepo[] = (repos as any[]).map(repo => ({
         id: repo.id,
         name: repo.name,
@@ -40,14 +47,12 @@ export async function fetchAllStarredRepos(
 
       allRepos.push(...mappedRepos);
 
-      // 如果提供了 onPage 回调，立即处理这一页数据
       if (onPage) {
         await onPage(mappedRepos);
       }
 
       if (onProgress) onProgress(allRepos.length);
 
-      // 检查是否应该停止分页
       if (shouldStopPagination) {
         const shouldStop = await shouldStopPagination(mappedRepos);
         if (shouldStop) {

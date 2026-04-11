@@ -11,6 +11,7 @@ import {
   ensureCachedIndexedBookmarks,
   hasApiKey,
 } from "../src/db";
+import type { BookmarkRecord, SearchResult } from "../src/types";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import {
@@ -30,6 +31,178 @@ import {
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchAbortController: AbortController | null = null;
+
+/**
+ * 判断字符串是否为可直接导航的 URL（http/https）
+ */
+function isNavigableUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 将 BookmarkRecord 转换为轻量 SearchResult DTO
+ */
+function toSearchResult(record: BookmarkRecord): SearchResult {
+  let source: SearchResult["source"] = "bookmark";
+  if (record.id.startsWith("gh-")) source = "github";
+  else if (record.id.startsWith("tw-")) source = "twitter";
+
+  return {
+    url: record.url,
+    title: record.title,
+    summary: record.summary ?? "",
+    tags: record.tags ?? [],
+    source,
+    indexed: record.status === "indexed",
+  };
+}
+
+/**
+ * 执行全局搜索（供独立搜索页调用）
+ * 复用 omnibox 搜索的完整逻辑，返回最多 20 条 SearchResult
+ */
+async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
+  let query = rawInput.trim();
+  let explicitFolderNames: string[] = [];
+  let sourceFilter: "github" | "twitter" | null = null;
+
+  // 解析 /github /twitter /folder: 语法
+  const githubMatch = query.match(/^\/github\s+(.*)/i);
+  if (githubMatch) {
+    sourceFilter = "github";
+    query = githubMatch[1].trim();
+  }
+  const twitterMatch = query.match(/^\/twitter\s+(.*)/i);
+  if (twitterMatch) {
+    sourceFilter = "twitter";
+    query = twitterMatch[1].trim();
+  }
+  if (!sourceFilter) {
+    const folderMatch = query.match(/^\/folder:(\S+)\s+(.*)/i);
+    if (folderMatch) {
+      explicitFolderNames = [folderMatch[1].toLowerCase()];
+      query = folderMatch[2].trim();
+    }
+  }
+
+  if (!query) return [];
+
+  const settings = await getSettings();
+  let allowedUrls: Set<string> | null = null;
+
+  if (sourceFilter === "github") {
+    const { db } = await import("../src/db");
+    const ghBookmarks = await db.bookmarks
+      .filter((r) => r.id.startsWith("gh-"))
+      .toArray();
+    allowedUrls = new Set(ghBookmarks.map((r) => r.url));
+  } else if (sourceFilter === "twitter") {
+    const { db } = await import("../src/db");
+    const twBookmarks = await db.bookmarks
+      .filter((r) => r.id.startsWith("tw-"))
+      .toArray();
+    allowedUrls = new Set(twBookmarks.map((r) => r.url));
+  } else if (explicitFolderNames.length > 0) {
+    const folders = await browser.bookmarks.search({
+      title: explicitFolderNames[0],
+    });
+    const folderIds = folders.filter((f) => !f.url).map((f) => f.id);
+    if (folderIds.length > 0) {
+      allowedUrls = await getAllUrlsInFoldersForSearch(folderIds);
+    }
+  } else if (settings.selectedFolderIds && settings.selectedFolderIds.length > 0) {
+    allowedUrls = await getAllUrlsInFoldersForSearch(settings.selectedFolderIds);
+  }
+
+  // 关键词搜索
+  let chromeResults = await browser.bookmarks.search(query);
+  let valid = chromeResults.filter((b) => b.url != null);
+  if (allowedUrls) {
+    valid = valid.filter((b) => allowedUrls!.has(b.url!));
+  }
+
+  if (!settings.openaiApiKey) {
+    return valid.slice(0, 20).map((b) => ({
+      url: b.url!,
+      title: b.title ?? b.url!,
+      summary: "",
+      tags: [],
+      source: "bookmark" as const,
+      indexed: false,
+    }));
+  }
+
+  // 向量搜索
+  const allIndexed = await ensureCachedIndexedBookmarks();
+  let filteredIndexed = allowedUrls
+    ? allIndexed.filter((idx) => allowedUrls!.has(idx.url))
+    : allIndexed;
+
+  if (filteredIndexed.length === 0 && valid.length === 0) return [];
+
+  try {
+    const queryVector = await getQueryEmbedding(
+      query,
+      settings.openaiApiKey,
+      undefined,
+      settings.embeddingModel,
+    );
+    const mode = settings.searchMode || "hybrid";
+    let results: BookmarkRecord[];
+
+    if (mode === "vector") {
+      results = await vectorSearch(filteredIndexed, queryVector, { limit: 20 });
+    } else {
+      results = await hybridSearch(valid, filteredIndexed, queryVector, {
+        mode,
+        vectorWeight: settings.vectorWeight || 0.4,
+        limit: 20,
+      });
+    }
+
+    return results.map(toSearchResult);
+  } catch (err) {
+    console.error("[FlowSearch] performFullSearch error:", err);
+    // 降级到关键词结果
+    return valid.slice(0, 20).map((b) => ({
+      url: b.url!,
+      title: b.title ?? b.url!,
+      summary: "",
+      tags: [],
+      source: "bookmark" as const,
+      indexed: false,
+    }));
+  }
+}
+
+/**
+ * 递归获取文件夹下所有书签 URL（供 performFullSearch 使用）
+ */
+async function getAllUrlsInFoldersForSearch(
+  folderIds: string[],
+): Promise<Set<string>> {
+  const urls = new Set<string>();
+  for (const id of folderIds) {
+    try {
+      const subtree = await browser.bookmarks.getSubTree(id);
+      const traverse = (nodes: any[]) => {
+        for (const node of nodes) {
+          if (node.url) urls.add(node.url);
+          if (node.children) traverse(node.children);
+        }
+      };
+      traverse(subtree);
+    } catch (e) {
+      console.warn(`[FlowSearch] Failed to fetch subtree for folder ${id}:`, e);
+    }
+  }
+  return urls;
+}
 
 export default defineBackground(() => {
   // 加载频率缓存
@@ -66,7 +239,8 @@ export default defineBackground(() => {
   // Omnibox 交互
   browser.omnibox.onInputStarted.addListener(() => {
     browser.omnibox.setDefaultSuggestion({
-      description: "🔍 Flow Search: <match>bi</match> <dim>/github /twitter /folder:</dim>",
+      description:
+        "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 <dim>(/github /twitter /folder:名称)</dim>",
     });
   });
 
@@ -179,10 +353,16 @@ export default defineBackground(() => {
     }
 
     if (!query) {
-      // 空查询逻辑 - 显示最近访问或指定来源的最新书签
+      // 空查询 — 显示最近访问书签，并按来源过滤
       const recent = getRecentBookmarks(8);
+      let filtered: Array<{ url: string }> = recent;
+      if (sourceFilter === 'github') {
+        filtered = recent.filter(({ url }) => url.includes('github.com'));
+      } else if (sourceFilter === 'twitter') {
+        filtered = recent.filter(({ url }) => url.includes('x.com') || url.includes('twitter.com'));
+      }
       suggest(
-        recent.map(({ url }) => ({
+        filtered.slice(0, 8).map(({ url }) => ({
           content: url,
           description: highlightBookmark(url, "", url),
         })),
@@ -277,13 +457,13 @@ export default defineBackground(() => {
         if (mode === "vector") {
           results = await vectorSearch(filteredIndexed, queryVector, {
             limit: 9,
-          });
+          }, signal);
         } else {
           results = await hybridSearch(valid, filteredIndexed, queryVector, {
             mode,
             vectorWeight: settings.vectorWeight || 0.4,
             limit: 9,
-          });
+          }, signal);
         }
 
         suggest(
@@ -302,16 +482,40 @@ export default defineBackground(() => {
     }, 150);
   });
 
-  // 打开选中的书签
-  browser.omnibox.onInputEntered.addListener(async (url, disposition) => {
-    const active =
-      disposition === "newForegroundTab" || disposition === "currentTab";
+  // 打开选中的书签，或在非 URL 选中时打开全局搜索页
+  browser.omnibox.onInputEntered.addListener(async (text, disposition) => {
+    let targetUrl: string;
 
-    await browser.tabs.create({ url, active });
+    if (isNavigableUrl(text)) {
+      // 用户选择了具体书签建议
+      targetUrl = text;
+      incrementFreq(targetUrl);
+    } else {
+      // 用户按下 Enter 选中了默认建议（原始查询文本）
+      // 打开独立搜索页
+      const searchPageUrl =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (browser.runtime.getURL as any)("/search.html") +
+        "?q=" +
+        encodeURIComponent(text);
+      targetUrl = searchPageUrl;
+    }
 
-    // 记录访问频率
-    incrementFreq(url);
-    console.log("[FlowSearch] Opened:", url);
+    // 根据 disposition 正确处理标签页语义
+    switch (disposition) {
+      case "currentTab":
+        await browser.tabs.update({ url: targetUrl });
+        break;
+      case "newBackgroundTab":
+        await browser.tabs.create({ url: targetUrl, active: false });
+        break;
+      case "newForegroundTab":
+      default:
+        await browser.tabs.create({ url: targetUrl, active: true });
+        break;
+    }
+
+    console.log("[FlowSearch] onInputEntered:", disposition, "→", targetUrl);
   });
 
   // 监听来自 Options 页面的消息
@@ -326,6 +530,10 @@ export default defineBackground(() => {
     const handleAsync = async () => {
       try {
         switch (message.type) {
+          case "FULL_SEARCH": {
+            const results = await performFullSearch(message.query ?? "");
+            return { success: true, results };
+          }
           case "START_INDEXING":
             indexAllBookmarks();
             return { success: true };
@@ -379,13 +587,15 @@ export default defineBackground(() => {
 
 /**
  * 格式化搜索建议
+ * 仅对已索引记录显示 🤖 前缀
  */
 function formatSuggestion(
-  record: { url: string; title: string; summary: string },
+  record: BookmarkRecord,
   query: string,
   showAi: boolean,
 ): string {
-  const prefix = showAi ? "🤖 " : "";
+  const aiActive = showAi && record.status === 'indexed';
+  const prefix = aiActive ? "🤖 " : "";
   const title = record.title || record.url;
   const summary = record.summary?.slice(0, 50) || "";
 
