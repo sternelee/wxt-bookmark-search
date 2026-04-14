@@ -431,10 +431,9 @@ export default defineBackground(() => {
       };
 
       const collectRemovedBookmarks = (
-        node?: RemovedNode,
+        node: RemovedNode,
         folderPath: string[] = [],
       ): Array<{ url: string; title: string; folderPath: string[] }> => {
-        if (!node) return [];
         if (node.url) {
           return [{
             url: node.url,
@@ -453,7 +452,10 @@ export default defineBackground(() => {
         return results;
       };
 
-      for (const bookmark of collectRemovedBookmarks((removeInfo as { node?: RemovedNode }).node)) {
+      const removedNode = (removeInfo as { node?: RemovedNode }).node;
+      if (!removedNode) return;
+
+      for (const bookmark of collectRemovedBookmarks(removedNode)) {
         await recordBookmarkDeletion(
           bookmark.url,
           bookmark.title,
@@ -806,10 +808,12 @@ export default defineBackground(() => {
             return { success: true, ...syncResult };
           }
           case "GIST_CREATE": {
+            const { Octokit } = await import("octokit");
             const settings = await getSettings();
             if (!settings.githubToken) {
               return { success: false, error: "GitHub Token 未配置" };
             }
+            const octokit = new Octokit({ auth: settings.githubToken });
             const deviceId = await ensureDeviceId(settings.gistDeviceId);
             if (!settings.gistDeviceId) {
               await saveSettings({ gistDeviceId: deviceId });
@@ -817,7 +821,7 @@ export default defineBackground(() => {
             const tree = await browser.bookmarks.getTree();
             const { exportBookmarkTree, createGist } = await import("../src/gist-sync");
             const localTree = exportBookmarkTree(tree);
-            const gistId = await createGist(settings.githubToken, {
+            const gistId = await createGist(octokit, {
               version: 1,
               exportedAt: Date.now(),
               deviceId,
@@ -831,12 +835,14 @@ export default defineBackground(() => {
             return { success: true, gistId };
           }
           case "GIST_LINK": {
+            const { Octokit } = await import("octokit");
             const { fetchGistData } = await import("../src/gist-sync");
             const linkSettings = await getSettings();
             if (!linkSettings.githubToken) {
               return { success: false, error: "GitHub Token 未配置" };
             }
-            const remoteData = await fetchGistData(linkSettings.githubToken, message.gistId);
+            const octokit = new Octokit({ auth: linkSettings.githubToken });
+            const remoteData = await fetchGistData(octokit, message.gistId);
             if (!remoteData) {
               return { success: false, error: "Gist 不存在或不包含书签数据" };
             }

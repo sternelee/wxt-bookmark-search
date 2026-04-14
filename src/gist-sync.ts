@@ -59,10 +59,9 @@ function getErrorMessage(error: unknown): string {
 
 /** 创建新 Gist */
 export async function createGist(
-  token: string,
+  octokit: InstanceType<typeof Octokit>,
   data: GistBookmarkData,
 ): Promise<string> {
-  const octokit = new Octokit({ auth: token });
   const response = await octokit.rest.gists.create({
     description: "Flow Search - Bookmark Sync",
     public: false,
@@ -77,11 +76,10 @@ export async function createGist(
 
 /** 更新已有 Gist */
 export async function updateGist(
-  token: string,
+  octokit: InstanceType<typeof Octokit>,
   gistId: string,
   data: GistBookmarkData,
 ): Promise<void> {
-  const octokit = new Octokit({ auth: token });
   await octokit.rest.gists.update({
     gist_id: gistId,
     files: {
@@ -94,10 +92,9 @@ export async function updateGist(
 
 /** 从 Gist 获取书签数据 */
 export async function fetchGistData(
-  token: string,
+  octokit: InstanceType<typeof Octokit>,
   gistId: string,
 ): Promise<GistBookmarkData | null> {
-  const octokit = new Octokit({ auth: token });
   try {
     const response = await octokit.rest.gists.get({ gist_id: gistId });
     const file = response.data.files?.[GIST_FILENAME];
@@ -379,13 +376,14 @@ export async function fullGistSync(
   localTree: BrowserBookmarkNode[],
   createBookmark: (folderPath: string[], node: GistBookmarkNode) => Promise<void>,
 ): Promise<SyncResult> {
+  const octokit = new Octokit({ auth: token });
   const localGistTree = exportBookmarkTree(localTree);
   const deletedEntries = await getDeletedBookmarks();
 
   let remoteData: GistBookmarkData | null = null;
   let currentGistId = gistId;
   if (gistId) {
-    remoteData = await fetchGistData(token, gistId);
+    remoteData = await fetchGistData(octokit, gistId);
     if (!remoteData) {
       console.warn("[gist-sync] Existing gist is unavailable, creating a new gist on next upload");
       currentGistId = undefined;
@@ -418,7 +416,7 @@ export async function fullGistSync(
       deviceId,
       bookmarks: result.merged,
     };
-    await updateGist(token, currentGistId, uploadData);
+    await updateGist(octokit, currentGistId, uploadData);
 
     return { added, removed, uploaded: countUrls(result.merged), gistId: currentGistId };
   } else {
@@ -430,8 +428,8 @@ export async function fullGistSync(
     };
 
     const newGistId = currentGistId
-      ? (await updateGist(token, currentGistId, uploadData), currentGistId)
-      : await createGist(token, uploadData);
+      ? (await updateGist(octokit, currentGistId, uploadData), currentGistId)
+      : await createGist(octokit, uploadData);
 
     return { added: 0, removed: 0, uploaded: countUrls(localGistTree), gistId: newGistId };
   }
