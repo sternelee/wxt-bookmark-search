@@ -59,9 +59,13 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | File | Purpose |
 |------|---------|
 | `entrypoints/background.ts` | Service worker: omnibox handlers, message passing, indexer init |
-| `entrypoints/popup/` | Solid.js popup UI (`.tsx`) |
-| `entrypoints/options/` | Vanilla TS settings page |
+| `entrypoints/popup/` | Solid.js popup UI (`.tsx`) — stats, recent bookmarks, indexing HUD |
+| `entrypoints/options/` | Solid.js settings page (`.tsx`) — API keys, indexing controls, folder tree, GitHub/Twitter config |
 | `entrypoints/content.ts` | Content script placeholder |
+
+### Message types (background.ts `onMessage` switch)
+
+`GET_INDEXING_STATUS` (sync), `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`
 
 ### Data flow
 
@@ -90,9 +94,13 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 - **Indentation:** 2 spaces. **Quotes:** double. **Semicolons:** always. **Trailing commas:** in multi-line
 - `camelCase` for variables/functions, `SCREAMING_SNAKE_CASE` for module-level constants, `PascalCase` for interfaces/types/classes/components
 - Use `import type` for type-only imports
+- Path aliases: `@/*` → `./src/*`, `~/*` → `./*` — use `@/` in entrypoints for `src/` imports
 - `async/await` throughout — no raw `.then()` chains except fire-and-forget
 - Error logging: `console.error('[ModuleName] Description:', error)` — prefixes like `[FlowSearch]`, `[indexer]`, `[hybrid]`
+- Type safety: never `as any` or `@ts-ignore` — use `instanceof Error` for error handling
 - Chinese comments are present in the codebase — match the language of surrounding code
+- Solid.js UI: use `class` (not `className`), `createSignal`/`For`/`Show` from `solid-js`
+- Tailwind v3 with shadcn-style HSL CSS variables (`hsl(var(--primary))`), dark mode via `prefers-color-scheme`
 
 ## Browser Extension Constraints
 

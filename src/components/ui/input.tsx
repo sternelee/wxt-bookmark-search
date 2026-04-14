@@ -9,10 +9,16 @@ export interface InputProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input(props: InputProps) {
-  const [local, others] = splitProps(props, ["class", "label", "hint", "error", "type"]);
+  const [local, others] = splitProps(props, [
+    "class",
+    "label",
+    "hint",
+    "error",
+    "type",
+  ]);
 
   return (
-    <div class="mb-5">
+    <div class={cn(local.class)}>
       {local.label && (
         <label class="block text-sm font-semibold mb-2 text-foreground">
           {local.label}
@@ -26,7 +32,6 @@ export function Input(props: InputProps) {
           "disabled:opacity-50 disabled:cursor-not-allowed",
           "placeholder:text-muted-foreground",
           local.error && "border-destructive",
-          local.class
         )}
         {...others}
       />

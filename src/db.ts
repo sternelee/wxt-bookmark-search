@@ -203,6 +203,10 @@ const defaultSettings: Settings = {
   enableLLMEnrichment: true, // 默认启用 LLM 增强
   embeddingModel: 'BAAI/bge-m3', // 默认 embedding 模型
   llmModel: 'deepseek-ai/DeepSeek-V3', // 默认 LLM 模型
+  gistSyncEnabled: false,
+  gistId: undefined,
+  gistDeviceId: undefined,
+  lastGistSync: undefined,
 };
 
 /** 获取设置 */

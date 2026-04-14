@@ -10,8 +10,9 @@ import {
   getSettings,
   ensureCachedIndexedBookmarks,
   hasApiKey,
+  saveSettings,
 } from "../src/db";
-import type { BookmarkRecord, SearchResult } from "../src/types";
+import type { BookmarkRecord, SearchResult, GistBookmarkNode } from "../src/types";
 import { getQueryEmbedding } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import {
@@ -27,10 +28,25 @@ import {
   syncGithubStars,
   syncTwitterBookmarks,
 } from "../src/indexer";
+import {
+  fullGistSync,
+  ensureDeviceId,
+  recordBookmarkDeletion,
+  buildBookmarkKey,
+} from "../src/gist-sync";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchAbortController: AbortController | null = null;
+
+// Gist 同步防抖状态
+const GIST_SYNC_DEBOUNCE_MS = 5000;
+let gistSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let isSyncingGist = false;
+/** 当 gist 同步正在向本地添加书签时，跳过事件监听以防递归 */
+let gistSyncLock = false;
+/** 同步进行中若又有本地变更，完成后补一次同步，避免丢事件 */
+let pendingGistSync = false;
 
 /**
  * 判断字符串是否为可直接导航的 URL（http/https）
@@ -234,6 +250,220 @@ export default defineBackground(() => {
       console.log("[FlowSearch] API key found, starting initial index...");
       indexAllBookmarks();
     }
+  });
+
+  // === Gist 同步 ===
+
+  /** 触发 debounced Gist 同步（5 秒合并多次事件） */
+  function scheduleDebouncedGistSync(): void {
+    if (gistSyncLock || isSyncingGist) {
+      pendingGistSync = true;
+      return;
+    }
+    if (gistSyncTimer) clearTimeout(gistSyncTimer);
+    gistSyncTimer = setTimeout(() => {
+      gistSyncTimer = null;
+      triggerGistSync().catch((err) => {
+        console.error("[gist-sync] Auto sync failed:", err);
+      });
+    }, GIST_SYNC_DEBOUNCE_MS);
+  }
+
+  /** 取得默认可写书签根目录 */
+  async function getDefaultWritableBookmarkParentId(): Promise<string> {
+    const rootChildren = await browser.bookmarks.getChildren("0");
+    const preferred = rootChildren.find(
+      (item) => !item.url && /bookmark|书签|toolbar|bar/i.test(item.title || ""),
+    );
+    if (preferred) {
+      return preferred.id;
+    }
+    const firstFolder = rootChildren.find((item) => !item.url);
+    if (firstFolder) {
+      return firstFolder.id;
+    }
+    throw new Error("No writable bookmark root folder found");
+  }
+
+  /** 在本地按路径创建缺失文件夹后写入书签 */
+  async function createBookmarkFromGistPath(
+    folderPath: string[],
+    node: GistBookmarkNode,
+  ): Promise<void> {
+    const rootChildren = await browser.bookmarks.getChildren("0");
+    let currentParentId = await getDefaultWritableBookmarkParentId();
+    let startIndex = 0;
+
+    if (folderPath.length > 0) {
+      const topLevelFolder = rootChildren.find(
+        (item) => !item.url && item.title === folderPath[0],
+      );
+      if (topLevelFolder) {
+        currentParentId = topLevelFolder.id;
+        startIndex = 1;
+      }
+    }
+
+    for (let i = startIndex; i < folderPath.length; i++) {
+      const segment = folderPath[i];
+      const children = await browser.bookmarks.getChildren(currentParentId);
+      const existingFolder = children.find(
+        (item) => !item.url && item.title === segment,
+      );
+
+      if (existingFolder) {
+        currentParentId = existingFolder.id;
+        continue;
+      }
+
+      const createdFolder = await browser.bookmarks.create({
+        parentId: currentParentId,
+        title: segment,
+      });
+      currentParentId = createdFolder.id;
+    }
+
+    if (!node.url) return;
+
+    const existingChildren = await browser.bookmarks.getChildren(currentParentId);
+    const targetKey = buildBookmarkKey(node.url, node.title, folderPath);
+    const existsInTargetFolder = existingChildren.some((item) => {
+      if (!item.url) return false;
+      return buildBookmarkKey(item.url, item.title || "", folderPath) === targetKey;
+    });
+    if (existsInTargetFolder) {
+      return;
+    }
+
+    await browser.bookmarks.create({
+      parentId: currentParentId,
+      title: node.title,
+      url: node.url,
+    });
+  }
+
+  /** 执行 Gist 同步 */
+  async function triggerGistSync(force = false): Promise<{
+    added: number;
+    removed: number;
+    uploaded: number;
+    gistId: string;
+  }> {
+    const settings = await getSettings();
+    if ((!settings.gistSyncEnabled && !force) || !settings.githubToken) {
+      throw new Error("Gist 同步未启用或缺少 GitHub Token");
+    }
+
+    if (isSyncingGist) {
+      throw new Error("同步正在进行中");
+    }
+
+    isSyncingGist = true;
+    let result: {
+      added: number;
+      removed: number;
+      uploaded: number;
+      gistId: string;
+    };
+
+    try {
+      const deviceId = await ensureDeviceId(settings.gistDeviceId);
+      if (!settings.gistDeviceId) {
+        await saveSettings({ gistDeviceId: deviceId });
+      }
+
+      const tree = await browser.bookmarks.getTree();
+
+      gistSyncLock = true;
+      try {
+        result = await fullGistSync(
+          settings.githubToken,
+          settings.gistId,
+          deviceId,
+          tree,
+          async (folderPath, node) => {
+            await createBookmarkFromGistPath(folderPath, node);
+          },
+        );
+
+        await saveSettings({
+          gistId: result.gistId,
+          lastGistSync: Date.now(),
+        });
+
+        console.log(
+          `[gist-sync] Sync complete: +${result.added} -${result.removed}, uploaded ${result.uploaded} bookmarks`,
+        );
+      } finally {
+        gistSyncLock = false;
+      }
+    } finally {
+      isSyncingGist = false;
+    }
+
+    if (pendingGistSync) {
+      pendingGistSync = false;
+      queueMicrotask(() => scheduleDebouncedGistSync());
+    }
+
+    return result!;
+  }
+
+  // 监听书签变更 → 触发 Gist 同步
+  browser.bookmarks.onCreated.addListener(() => {
+    scheduleDebouncedGistSync();
+  });
+
+  browser.bookmarks.onChanged.addListener(() => {
+    scheduleDebouncedGistSync();
+  });
+
+  browser.bookmarks.onMoved.addListener(() => {
+    scheduleDebouncedGistSync();
+  });
+
+  browser.bookmarks.onRemoved.addListener(async (_id, removeInfo) => {
+    try {
+      type RemovedNode = {
+        title?: string;
+        url?: string;
+        children?: RemovedNode[];
+      };
+
+      const collectRemovedBookmarks = (
+        node?: RemovedNode,
+        folderPath: string[] = [],
+      ): Array<{ url: string; title: string; folderPath: string[] }> => {
+        if (!node) return [];
+        if (node.url) {
+          return [{
+            url: node.url,
+            title: node.title || "",
+            folderPath,
+          }];
+        }
+
+        const nextPath = node.title ? [...folderPath, node.title] : folderPath;
+        const results: Array<{ url: string; title: string; folderPath: string[] }> = [];
+        if (node.children) {
+          for (const child of node.children) {
+            results.push(...collectRemovedBookmarks(child, nextPath));
+          }
+        }
+        return results;
+      };
+
+      for (const bookmark of collectRemovedBookmarks((removeInfo as { node?: RemovedNode }).node)) {
+        await recordBookmarkDeletion(
+          bookmark.url,
+          bookmark.title,
+          bookmark.folderPath,
+        );
+      }
+    } catch (error) {
+      console.warn("[gist-sync] Failed to record deleted bookmark:", error);
+    }
+    scheduleDebouncedGistSync();
   });
 
   // Omnibox 交互
@@ -571,6 +801,53 @@ export default defineBackground(() => {
           case "SYNC_TWITTER_BOOKMARKS":
             const twResult = await syncTwitterBookmarks();
             return { success: true, ...twResult };
+          case "GIST_SYNC": {
+            const syncResult = await triggerGistSync(true);
+            return { success: true, ...syncResult };
+          }
+          case "GIST_CREATE": {
+            const settings = await getSettings();
+            if (!settings.githubToken) {
+              return { success: false, error: "GitHub Token 未配置" };
+            }
+            const deviceId = await ensureDeviceId(settings.gistDeviceId);
+            if (!settings.gistDeviceId) {
+              await saveSettings({ gistDeviceId: deviceId });
+            }
+            const tree = await browser.bookmarks.getTree();
+            const { exportBookmarkTree, createGist } = await import("../src/gist-sync");
+            const localTree = exportBookmarkTree(tree);
+            const gistId = await createGist(settings.githubToken, {
+              version: 1,
+              exportedAt: Date.now(),
+              deviceId,
+              bookmarks: localTree,
+            });
+            await saveSettings({
+              gistId,
+              gistSyncEnabled: true,
+              lastGistSync: Date.now(),
+            });
+            return { success: true, gistId };
+          }
+          case "GIST_LINK": {
+            const { fetchGistData } = await import("../src/gist-sync");
+            const linkSettings = await getSettings();
+            if (!linkSettings.githubToken) {
+              return { success: false, error: "GitHub Token 未配置" };
+            }
+            const remoteData = await fetchGistData(linkSettings.githubToken, message.gistId);
+            if (!remoteData) {
+              return { success: false, error: "Gist 不存在或不包含书签数据" };
+            }
+            await saveSettings({
+              gistId: message.gistId,
+              gistSyncEnabled: true,
+            });
+            // 关联后立即同步
+            const linkResult = await triggerGistSync();
+            return { success: true, ...linkResult };
+          }
           default:
             return { success: false, error: "Unknown message type" };
         }

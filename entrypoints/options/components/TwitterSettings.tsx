@@ -1,5 +1,10 @@
 import { createSignal } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../../src/components/ui/card";
 import { Input } from "../../../src/components/ui/input";
 import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
@@ -11,7 +16,10 @@ export default function TwitterSettings() {
   const [ct0, setCt0] = createSignal("");
   const [authToken, setAuthToken] = createSignal("");
   const [lastSync, setLastSync] = createSignal<string | null>(null);
-  const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [status, setStatus] = createSignal<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
   const [isSyncing, setIsSyncing] = createSignal(false);
 
   // 初始化
@@ -79,7 +87,8 @@ export default function TwitterSettings() {
       </CardHeader>
       <CardContent>
         <p class="text-xs text-muted-foreground mb-3">
-          需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie 进行同步，无需开发者账号。
+          需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie
+          进行同步，无需开发者账号。
         </p>
 
         <Checkbox
@@ -104,7 +113,7 @@ export default function TwitterSettings() {
           onInput={(e) => setAuthToken(e.currentTarget.value)}
         />
 
-        <div class="flex gap-3 flex-wrap">
+        <div class="flex gap-3 flex-wrap mt-4">
           <Button onClick={handleSave}>💾 保存 Twitter 设置</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
             {isSyncing() ? "正在同步..." : "🔄 立即同步书签"}

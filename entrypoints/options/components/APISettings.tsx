@@ -1,5 +1,10 @@
 import { createSignal, Show } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../../src/components/ui/card";
 import { Input } from "../../../src/components/ui/input";
 import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
@@ -14,7 +19,10 @@ export default function APISettings() {
   const [llmModel, setLLMModel] = createSignal("");
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
-  const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [status, setStatus] = createSignal<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [isTesting, setIsTesting] = createSignal(false);
 

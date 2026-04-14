@@ -65,6 +65,31 @@ export interface SearchOptions {
   limit?: number;
 }
 
+/** Gist 同步数据结构 */
+export interface GistBookmarkNode {
+  id: string;
+  title: string;
+  url?: string;               // 文件夹无 url
+  dateAdded?: number;
+  children?: GistBookmarkNode[];
+}
+
+export interface GistBookmarkData {
+  version: 1;
+  exportedAt: number;         // 导出时间戳
+  deviceId: string;           // 设备标识
+  bookmarks: GistBookmarkNode[];
+}
+
+/** 本地删除记录 — 用于合并时区分 "远程新增" vs "本地删除" */
+export interface DeletedBookmarkEntry {
+  key: string;                 // 书签唯一键: url + title + folderPath
+  url: string;
+  title: string;
+  folderPath: string[];
+  deletedAt: number;
+}
+
 /** 设置存储结构 */
 export interface Settings {
   openaiApiKey?: string;
@@ -86,4 +111,10 @@ export interface Settings {
   // 模型配置
   embeddingModel?: string;       // Embedding 模型名称
   llmModel?: string;             // LLM 模型名称
+
+  // Gist 同步配置
+  gistSyncEnabled?: boolean;    // 是否启用 Gist 书签同步
+  gistId?: string;              // Gist ID
+  gistDeviceId?: string;        // 本设备 UUID
+  lastGistSync?: number;        // 上次同步时间戳
 }

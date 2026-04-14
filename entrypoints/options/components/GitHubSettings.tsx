@@ -1,5 +1,10 @@
 import { createSignal } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../../src/components/ui/card";
 import { Input } from "../../../src/components/ui/input";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
@@ -8,7 +13,10 @@ import { getSettings, saveSettings } from "../../../src/db";
 export default function GitHubSettings() {
   const [githubToken, setGithubToken] = createSignal("");
   const [lastSync, setLastSync] = createSignal<string | null>(null);
-  const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [status, setStatus] = createSignal<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
   const [isSyncing, setIsSyncing] = createSignal(false);
 
   // 初始化
@@ -71,10 +79,10 @@ export default function GitHubSettings() {
           placeholder="ghp_..."
           value={githubToken()}
           onInput={(e) => setGithubToken(e.currentTarget.value)}
-          hint="需要 public_repo 权限。配置后可将你的加星仓库纳入 AI 搜索范围。"
+          hint="同步 GitHub Stars 需要读取 starred repos；若启用下方 Gist 书签同步，还需额外包含 gist 权限。"
         />
 
-        <div class="flex gap-3 flex-wrap">
+        <div class="flex gap-3 flex-wrap mt-4">
           <Button onClick={handleSave}>💾 保存 GitHub 设置</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
             {isSyncing() ? "正在获取 Stars..." : "🔄 立即同步 Stars"}
