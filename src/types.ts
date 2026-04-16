@@ -51,7 +51,7 @@ export interface SearchResult {
   title: string;
   summary: string;
   tags: string[];
-  source: "github" | "twitter" | "bookmark";
+  source: "github" | "twitter" | "bookmark" | "history";
   indexed: boolean;
 }
 
@@ -117,4 +117,8 @@ export interface Settings {
   gistId?: string;              // Gist ID
   gistDeviceId?: string;        // 本设备 UUID
   lastGistSync?: number;        // 上次同步时间戳
+
+  // 浏览历史同步配置
+  historySyncEnabled?: boolean; // 是否启用历史同步
+  historyDays?: number;         // 同步最近 N 天，默认 30
 }
