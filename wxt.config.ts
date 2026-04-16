@@ -4,7 +4,7 @@ export default defineConfig({
   modules: ["@wxt-dev/module-solid"],
   manifest: {
     name: "Flow Search",
-    permissions: ["storage", "tabs", "bookmarks", "cookies"],
+    permissions: ["storage", "tabs", "bookmarks", "cookies", "history"],
     host_permissions: [
       "https://r.jina.ai/*",
       "https://x.com/*",
