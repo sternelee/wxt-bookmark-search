@@ -3,6 +3,7 @@ import { getSettings } from "../../src/db";
 import APISettings from "./components/APISettings";
 import GitHubSettings from "./components/GitHubSettings";
 import TwitterSettings from "./components/TwitterSettings";
+import HistorySettings from "./components/HistorySettings";
 import GistSyncSettings from "./components/GistSyncSettings";
 import SearchSettings from "./components/SearchSettings";
 import IndexManager from "./components/IndexManager";
@@ -32,6 +33,7 @@ function App() {
         <APISettings />
         <GitHubSettings />
         <TwitterSettings />
+        <HistorySettings />
         <GistSyncSettings />
         <SearchSettings />
         <IndexManager />
