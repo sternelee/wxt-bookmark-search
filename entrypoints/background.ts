@@ -28,6 +28,7 @@ import {
   syncGithubStars,
   syncTwitterBookmarks,
 } from "../src/indexer";
+import { syncHistoryBookmarks } from "../src/history";
 import {
   fullGistSync,
   ensureDeviceId,
@@ -67,6 +68,7 @@ function toSearchResult(record: BookmarkRecord): SearchResult {
   let source: SearchResult["source"] = "bookmark";
   if (record.id.startsWith("gh-")) source = "github";
   else if (record.id.startsWith("tw-")) source = "twitter";
+  else if (record.id.startsWith("hi-")) source = "history";
 
   return {
     url: record.url,
@@ -85,7 +87,7 @@ function toSearchResult(record: BookmarkRecord): SearchResult {
 async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   let query = rawInput.trim();
   let explicitFolderNames: string[] = [];
-  let sourceFilter: "github" | "twitter" | null = null;
+  let sourceFilter: "github" | "twitter" | "history" | null = null;
 
   // 解析 /github /twitter /folder: 语法
   const githubMatch = query.match(/^\/github\s+(.*)/i);
@@ -97,6 +99,11 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   if (twitterMatch) {
     sourceFilter = "twitter";
     query = twitterMatch[1].trim();
+  }
+  const historyMatch = query.match(/^\/history\s+(.*)/i);
+  if (historyMatch) {
+    sourceFilter = "history";
+    query = historyMatch[1].trim();
   }
   if (!sourceFilter) {
     const folderMatch = query.match(/^\/folder:(\S+)\s+(.*)/i);
@@ -123,6 +130,12 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
       .filter((r) => r.id.startsWith("tw-"))
       .toArray();
     allowedUrls = new Set(twBookmarks.map((r) => r.url));
+  } else if (sourceFilter === "history") {
+    const { db } = await import("../src/db");
+    const hiBookmarks = await db.bookmarks
+      .filter((r) => r.id.startsWith("hi-"))
+      .toArray();
+    allowedUrls = new Set(hiBookmarks.map((r) => r.url));
   } else if (explicitFolderNames.length > 0) {
     const folders = await browser.bookmarks.search({
       title: explicitFolderNames[0],
@@ -529,6 +542,11 @@ export default defineBackground(() => {
             "🐦 <match>/twitter</match><dim>关键词</dim> — 搜索 Twitter 书签",
         },
         {
+          content: "/history ",
+          description:
+            "📜 <match>/history</match><dim>关键词</dim> — 搜索浏览历史",
+        },
+        {
           content: "/folder:",
           description:
             "📁 <match>/folder:</match><dim>名称 关键词</dim> — 限定在特定文件夹中搜索",
@@ -559,7 +577,7 @@ export default defineBackground(() => {
 
     let query = rawInput;
     let explicitFolderNames: string[] = [];
-    let sourceFilter: 'github' | 'twitter' | null = null;
+    let sourceFilter: 'github' | 'twitter' | 'history' | null = null;
 
     // 解析 /github 语法
     const githubMatch = query.match(/^\/github\s+(.*)$/i);
@@ -573,6 +591,13 @@ export default defineBackground(() => {
     if (twitterMatch) {
       sourceFilter = 'twitter';
       query = twitterMatch[1].trim();
+    }
+
+    // 解析 /history 语法
+    const historyMatch = query.match(/^\/history\s+(.*)$/i);
+    if (historyMatch) {
+      sourceFilter = 'history';
+      query = historyMatch[1].trim();
     }
 
     // 解析 /folder:xxx keyword (兼容)
@@ -592,6 +617,8 @@ export default defineBackground(() => {
         filtered = recent.filter(({ url }) => url.includes('github.com'));
       } else if (sourceFilter === 'twitter') {
         filtered = recent.filter(({ url }) => url.includes('x.com') || url.includes('twitter.com'));
+      } else if (sourceFilter === 'history') {
+        filtered = recent.filter(({ url }) => !url.startsWith('chrome') && !url.startsWith('about'));
       }
       suggest(
         filtered.slice(0, 8).map(({ url }) => ({
@@ -620,6 +647,13 @@ export default defineBackground(() => {
         .filter(r => r.id.startsWith('tw-'))
         .toArray();
       allowedUrls = new Set(twBookmarks.map(r => r.url));
+    } else if (sourceFilter === 'history') {
+      // History: 从 DB 获取所有 hi- 开头的书签
+      const { db } = await import("../src/db");
+      const hiBookmarks = await db.bookmarks
+        .filter(r => r.id.startsWith('hi-'))
+        .toArray();
+      allowedUrls = new Set(hiBookmarks.map(r => r.url));
     } else if (explicitFolderNames.length > 0) {
       // 如果使用了 /folder: 语法，优先级最高，精准定位文件夹
       const folders = await browser.bookmarks.search({
@@ -803,6 +837,10 @@ export default defineBackground(() => {
           case "SYNC_TWITTER_BOOKMARKS":
             const twResult = await syncTwitterBookmarks();
             return { success: true, ...twResult };
+          case "SYNC_HISTORY": {
+            const histResult = await syncHistoryBookmarks();
+            return { success: true, ...histResult };
+          }
           case "GIST_SYNC": {
             const syncResult = await triggerGistSync(true);
             return { success: true, ...syncResult };
