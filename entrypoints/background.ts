@@ -13,7 +13,7 @@ import {
   saveSettings,
 } from "../src/db";
 import type { BookmarkRecord, SearchResult, GistBookmarkNode } from "../src/types";
-import { getQueryEmbedding } from "../src/embedding";
+import { getQueryEmbedding, getCacheStats, clearEmbeddingCache } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import {
   initIndexer,
@@ -840,6 +840,13 @@ export default defineBackground(() => {
           case "SYNC_HISTORY": {
             const histResult = await syncHistoryBookmarks();
             return { success: true, ...histResult };
+          }
+          case "GET_CACHE_STATS": {
+            return { success: true, ...getCacheStats() };
+          }
+          case "CLEAR_EMBEDDING_CACHE": {
+            clearEmbeddingCache();
+            return { success: true, ...getCacheStats() };
           }
           case "GIST_SYNC": {
             const syncResult = await triggerGistSync(true);
