@@ -207,6 +207,8 @@ const defaultSettings: Settings = {
   gistId: undefined,
   gistDeviceId: undefined,
   lastGistSync: undefined,
+  historySyncEnabled: false,
+  historyDays: 30,
 };
 
 /** 获取设置 */
