@@ -501,7 +501,11 @@ async function fetchPageContent(
             headingStyle: "atx",
             codeBlockStyle: "fenced",
           });
-          const markdown = `# ${article.title}\n\n${turndown.turndown(article.content)}`;
+          // Service Worker 中 DOMParser 不支持 text/html（document 未定义），
+          // 需用 linkedom 将 article.content 解析为 DOM 节点再传给 Turndown，
+          // 避免 Turndown 内部调用 DOMParser.parseFromString 触发 ReferenceError。
+          const { document: contentDoc } = parseHTML(article.content);
+          const markdown = `# ${article.title}\n\n${turndown.turndown(contentDoc.body as unknown as HTMLElement)}`;
 
           localBestEffort = {
             markdown,
