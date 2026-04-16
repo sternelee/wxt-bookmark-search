@@ -4,7 +4,6 @@ import { Button } from "../../../src/components/ui/button";
 import { Progress } from "../../../src/components/ui/progress";
 import { Alert } from "../../../src/components/ui/alert";
 import { getIndexStats, getSettings, saveSettings, clearAll } from "../../../src/db";
-import { getCacheStats, clearEmbeddingCache } from "../../../src/embedding";
 import FolderTree from "./FolderTree";
 
 export default function IndexManager() {
@@ -14,6 +13,19 @@ export default function IndexManager() {
   const [isIndexing, setIsIndexing] = createSignal(false);
   const [isPaused, setIsPaused] = createSignal(false);
   const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [cacheStats, setCacheStats] = createSignal({ size: 0, maxSize: 100 });
+
+  // 加载嵌入缓存状态（从 background 获取真实值）
+  const loadCacheStats = async () => {
+    try {
+      const result = await browser.runtime.sendMessage({ type: "GET_CACHE_STATS" });
+      if (result) {
+        setCacheStats({ size: result.size ?? 0, maxSize: result.maxSize ?? 100 });
+      }
+    } catch (error) {
+      console.warn("[IndexManager] Failed to get cache stats:", error);
+    }
+  };
 
   // 加载统计
   const loadStats = async () => {
@@ -42,6 +54,11 @@ export default function IndexManager() {
   onMount(async () => {
     await loadStats();
     await loadSelectedFolders();
+    await loadCacheStats();
+
+    // 定期刷新缓存状态
+    const cacheInterval = setInterval(loadCacheStats, 5000);
+    onCleanup(() => clearInterval(cacheInterval));
 
     // 检查当前是否有索引任务在跑
     const statusResult = await browser.runtime.sendMessage({ type: "GET_INDEXING_STATUS" });
@@ -159,13 +176,15 @@ export default function IndexManager() {
   };
 
   // 清空缓存
-  const handleClearCache = () => {
-    clearEmbeddingCache();
-    const cache = getCacheStats();
-    setStatus({ message: "✓ 查询缓存已清空", type: "success" });
+  const handleClearCache = async () => {
+    try {
+      await browser.runtime.sendMessage({ type: "CLEAR_EMBEDDING_CACHE" });
+      await loadCacheStats();
+      setStatus({ message: "✓ 查询缓存已清空", type: "success" });
+    } catch (error) {
+      setStatus({ message: `清空缓存失败: ${error}`, type: "error" });
+    }
   };
-
-  const cache = getCacheStats();
 
   return (
     <Card class="mb-6">
@@ -259,7 +278,7 @@ export default function IndexManager() {
 
         <div class="mt-4 text-xs text-muted-foreground border-t border-border pt-3">
           🧠 向量查询缓存状态:
-          <span class="font-bold"> {cache.size}/{cache.maxSize}</span>
+          <span class="font-bold"> {cacheStats().size}/{cacheStats().maxSize}</span>
           (已缓存最近的查询结果，提升搜索速度)
         </div>
       </CardContent>
