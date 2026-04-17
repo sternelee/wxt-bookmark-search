@@ -62,3 +62,16 @@ export function highlightBookmark(
   const host = urlHost(url);
   return `${highlighted} 🌐 ${host}`;
 }
+
+/**
+ * Plain-text omnibox description (no XML tags).
+ * Firefox does not support <match>/<dim>/<url>; tags are displayed literally.
+ */
+export function highlightBookmarkPlain(
+  title: string,
+  _query: string,
+  url: string,
+): string {
+  const host = urlHost(url);
+  return `${title} 🌐 ${host}`;
+}

@@ -6,7 +6,7 @@ import {
   getFreqCache,
 } from "../src/freq";
 import { rerankBookmarks } from "../src/search";
-import { highlightBookmark, escapeXml } from "../src/highlight";
+import { highlightBookmark, highlightBookmarkPlain, escapeXml } from "../src/highlight";
 import {
   getSettings,
   ensureCachedIndexedBookmarks,
@@ -157,7 +157,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   }
 
   if (!settings.openaiApiKey) {
-    const suggestions = rerankBookmarks(query, valid);
+    const suggestions = rerankBookmarks(query, valid, IS_FIREFOX);
     return suggestions.slice(0, 20).map((s) => {
       const b = valid.find((x) => x.url === s.content);
       return {
@@ -237,6 +237,8 @@ async function getAllUrlsInFolders(
   }
   return urls;
 }
+
+const IS_FIREFOX = import.meta.env.FIREFOX;
 
 export default defineBackground(() => {
   installPolyfills();
@@ -490,9 +492,11 @@ export default defineBackground(() => {
 
   // Omnibox 交互
   browser.omnibox.onInputStarted.addListener(() => {
+    const defaultDesc = IS_FIREFOX
+      ? "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 (/github /twitter /folder:名称)"
+      : "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 <dim>(/github /twitter /folder:名称)</dim>";
     browser.omnibox.setDefaultSuggestion({
-      description:
-        "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 <dim>(/github /twitter /folder:名称)</dim>",
+      description: defaultDesc,
     });
   });
 
@@ -505,23 +509,27 @@ export default defineBackground(() => {
       suggest([
         {
           content: "/github ",
-          description:
-            "🔮 <match>/github</match><dim>关键词</dim> — 搜索 GitHub Stars",
+          description: IS_FIREFOX
+            ? "🔮 /github 关键词 — 搜索 GitHub Stars"
+            : "🔮 <match>/github</match><dim>关键词</dim> — 搜索 GitHub Stars",
         },
         {
           content: "/twitter ",
-          description:
-            "🐦 <match>/twitter</match><dim>关键词</dim> — 搜索 Twitter 书签",
+          description: IS_FIREFOX
+            ? "🐦 /twitter 关键词 — 搜索 Twitter 书签"
+            : "🐦 <match>/twitter</match><dim>关键词</dim> — 搜索 Twitter 书签",
         },
         {
           content: "/history ",
-          description:
-            "📜 <match>/history</match><dim>关键词</dim> — 搜索浏览历史",
+          description: IS_FIREFOX
+            ? "📜 /history 关键词 — 搜索浏览历史"
+            : "📜 <match>/history</match><dim>关键词</dim> — 搜索浏览历史",
         },
         {
           content: "/folder:",
-          description:
-            "📁 <match>/folder:</match><dim>名称 关键词</dim> — 限定在特定文件夹中搜索",
+          description: IS_FIREFOX
+            ? "📁 /folder:名称 关键词 — 限定在特定文件夹中搜索"
+            : "📁 <match>/folder:</match><dim>名称 关键词</dim> — 限定在特定文件夹中搜索",
         },
       ]);
       return;
@@ -539,7 +547,9 @@ export default defineBackground(() => {
       );
       const folderSuggestions = folders.slice(0, 8).map((f) => ({
         content: `/folder:${f.title} `,
-        description: `📁 搜索文件夹: <match>${escapeXml(f.title)}</match>`,
+        description: IS_FIREFOX
+          ? `📁 搜索文件夹: ${f.title}`
+          : `📁 搜索文件夹: <match>${escapeXml(f.title)}</match>`,
       }));
       if (folderSuggestions.length > 0) {
         suggest(folderSuggestions);
@@ -595,7 +605,9 @@ export default defineBackground(() => {
       suggest(
         filtered.slice(0, 8).map(({ url }) => ({
           content: url,
-          description: highlightBookmark(url, "", url),
+          description: IS_FIREFOX
+            ? highlightBookmarkPlain(url, "", url)
+            : highlightBookmark(url, "", url),
         })),
       );
       return;
@@ -891,13 +903,17 @@ export default defineBackground(() => {
  */
 function formatSuggestion(
   record: BookmarkRecord,
-  query: string,
+  _query: string,
   showAi: boolean,
 ): string {
   const aiActive = showAi && record.status === 'indexed';
   const prefix = aiActive ? "🤖 " : "";
   const title = record.title || record.url;
   const summary = record.summary?.slice(0, 50) || "";
+
+  if (IS_FIREFOX) {
+    return `${prefix}${title}${summary ? " — " + summary : ""} (${record.url})`;
+  }
 
   return `${prefix}<match>${escapeXml(title)}</match> <dim>${escapeXml(summary)}...</dim> <url>${escapeXml(record.url)}</url>`;
 }

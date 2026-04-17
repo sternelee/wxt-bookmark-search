@@ -1,5 +1,5 @@
 import type { OmniboxSuggestion } from "./types.js";
-import { highlightBookmark } from "./highlight.js";
+import { highlightBookmark, highlightBookmarkPlain } from "./highlight.js";
 import { getFreqCache } from "./freq.js";
 
 /** 书签类型 (兼容 browser.bookmarks.BookmarkTreeNode) */
@@ -131,9 +131,11 @@ function scoreBookmark(
 export function rerankBookmarks(
   query: string,
   chromeResults: BookmarkInput[],
+  plainMode = false,
 ): OmniboxSuggestion[] {
   const freqCache = getFreqCache();
   const maxFreq = Math.max(1, ...Object.values(freqCache));
+  const fmt = plainMode ? highlightBookmarkPlain : highlightBookmark;
 
   const scored: ScoredBookmark[] = [];
 
@@ -193,7 +195,7 @@ export function rerankBookmarks(
 
   return scored.map((entry) => ({
     content: entry.bookmark.url!,
-    description: highlightBookmark(
+    description: fmt(
       entry.bookmark.title,
       query,
       entry.bookmark.url!,
