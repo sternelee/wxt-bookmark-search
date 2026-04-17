@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, Show } from "solid-js";
+import { createSignal, onMount, For, Show, onCleanup } from "solid-js";
 import { getIndexStats, hasApiKey, getIndexedBookmarks } from "../../src/db";
 import { getRecentBookmarks } from "../../src/freq";
 import { Button } from "../../src/components/ui/button";
@@ -73,6 +73,10 @@ function App() {
       }
     };
     browser.runtime.onMessage.addListener(handleMessage);
+
+    onCleanup(() => {
+      browser.runtime.onMessage.removeListener(handleMessage);
+    });
   });
 
   const openSettings = () => {

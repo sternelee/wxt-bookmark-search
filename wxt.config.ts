@@ -12,9 +12,5 @@ export default defineConfig({
       "https://api.x.com/*"
     ],
     omnibox: { keyword: "bi" },
-    // wasm-unsafe-eval 是 MV3 中允许 WebAssembly (EdgeVec HNSW) 的官方方式
-    content_security_policy: {
-      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
-    },
   },
 });

@@ -1,4 +1,5 @@
 import { createSignal, onMount, For, Show, onCleanup } from "solid-js";
+import { incrementFreq } from "../../src/freq";
 import type { SearchResult } from "../../src/types";
 
 function sourceIcon(source: string): string {
@@ -66,6 +67,7 @@ function App() {
   };
 
   const openResult = (url: string) => {
+    incrementFreq(url);
     browser.tabs.create({ url });
   };
 

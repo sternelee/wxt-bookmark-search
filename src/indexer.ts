@@ -565,53 +565,6 @@ async function fetchPageContent(
 }
 
 /**
- * 处理单个书签索引
- */
-async function indexBookmark(
-  job: IndexJob,
-  settings: Settings,
-): Promise<{ success: boolean; error?: string }> {
-  if (!settings.openaiApiKey) {
-    return { success: false, error: "No API key configured" };
-  }
-
-  try {
-    // 1. 根据优先级策略获取网页内容
-    const pageContent = await fetchPageContent(job.url, settings);
-
-    const title = pageContent?.title || job.title;
-    const summary = pageContent?.summary || "";
-    const textToEmbed = pageContent ? `${title}\n${summary}` : job.title;
-
-    const { embedding } = await getEmbedding(
-      textToEmbed,
-      settings.openaiApiKey,
-      undefined,
-      settings.embeddingModel,
-      settings.baseURL
-    );
-
-    // 3. 更新数据库
-    const record: BookmarkRecord = {
-      id: job.bookmarkId,
-      url: job.url,
-      title: title,
-      summary: summary,
-      embedding,
-      status: "indexed",
-      indexedAt: Date.now(),
-    };
-
-    await upsertBookmarks([record]);
-
-    return { success: true };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, error: errorMessage };
-  }
-}
-
-/**
  * 计算下一个延迟
  */
 function calculateDelay(): number {
@@ -772,6 +725,7 @@ async function processQueue(): Promise<void> {
         for (const { job } of contents) {
           if (job.retryCount < MAX_RETRIES) {
             queue.unshift({ ...job, retryCount: job.retryCount + 1 });
+            totalToProcess++;
           } else {
             await updateBookmark(job.bookmarkId, {
               status: "failed",

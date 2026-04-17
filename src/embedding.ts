@@ -247,37 +247,6 @@ export async function batchEmbedTexts(
   return results;
 }
 
-/** 批量生成向量 (带并发控制) */
-export async function batchEmbed(
-  texts: string[],
-  apiKey: string,
-  options?: { concurrency?: number; onProgress?: (done: number, total: number) => void; model?: string; baseURL?: string }
-): Promise<Array<{ embedding?: number[]; error?: string }>> {
-  const { concurrency = 5, onProgress, model = DEFAULT_MODEL, baseURL = DEFAULT_BASE_URL } = options || {};
-  const results: Array<{ embedding?: number[]; error?: string }> = new Array(texts.length);
-  let done = 0;
-
-  // 分批处理
-  for (let i = 0; i < texts.length; i += concurrency) {
-    const batch = texts.slice(i, i + concurrency);
-    const batchPromises = batch.map(async (text, batchIndex) => {
-      const globalIndex = i + batchIndex;
-      try {
-        const { embedding } = await getEmbedding(text, apiKey, undefined, model, baseURL);
-        results[globalIndex] = { embedding };
-      } catch (err) {
-        results[globalIndex] = { error: String(err) };
-      }
-      done++;
-      onProgress?.(done, texts.length);
-    });
-
-    await Promise.all(batchPromises);
-  }
-
-  return results;
-}
-
 /** 生成查询向量 (优先使用缓存，使用 query 上下文) */
 export async function getQueryEmbedding(
   query: string,

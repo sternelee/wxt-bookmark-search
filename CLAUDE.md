@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Flow Search** is a Manifest V3 Chrome extension for AI-powered bookmark search. Trigger: type `bi <keyword>` in Chrome's omnibox. Supports keyword, vector (semantic), and hybrid search modes using SiliconFlow BGE-M3 embeddings. Also indexes GitHub starred repos.
+**Flow Search** is a Manifest V3 Chrome extension for AI-powered bookmark search. Trigger: type `bi <keyword>` in Chrome's omnibox. Supports keyword, vector (semantic), and hybrid search modes using SiliconFlow BGE-M3 embeddings. Also indexes GitHub starred repos, Twitter/X bookmarks, and browser history.
 
 Stack: WXT framework, TypeScript, Solid.js (popup/options UI), Dexie.js (IndexedDB), SiliconFlow BGE-M3 (embeddings), Jina AI Reader (content extraction), Octokit (GitHub API).
 
@@ -42,10 +42,9 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `types.ts` | All shared interfaces (`BookmarkRecord` with Twitter-specific fields, `Settings`, `SearchMode`, etc.) |
 | `db.ts` | Dexie.js IndexedDB wrapper + `browser.storage.local` settings + in-memory cache for indexed bookmarks |
 | `embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache + AbortSignal support + native batch embedding API |
-| `hybrid.ts` | RRF hybrid search with min-max normalization |
+| `hybrid.ts` | RRF hybrid search with min-max normalization (pure JS cosine similarity on in-memory cache) |
 | `search.ts` | Keyword-only search + Levenshtein fuzzy (sliding window) reranking |
 | `vector.ts` | Cosine similarity utilities |
-| `vectorWorkerManager.ts` | Web Worker for offloading vector computations |
 | `indexer.ts` | Background indexing queue with rate-limiting, enrichment queue recovery on restart |
 | `freq.ts` | Visit frequency cache with debounced writes |
 | `highlight.ts` | XML escaping for omnibox `<match>/<dim>/<url>` tags |
@@ -53,31 +52,44 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `twitter.ts` | Twitter/X GraphQL API client for bookmarks sync with retry logic |
 | `twitter-cookies.ts` | Auto-extraction of Twitter cookies via `browser.cookies` API |
 | `llm.ts` | SiliconFlow Chat API (DeepSeek-V3) for summaries/tags |
+| `history.ts` | Browser history sync via `browser.history` API |
+| `gist-sync.ts` | GitHub Gist bookmark sync with union merge + deletion tracking |
+| `lib/utils.ts` | `cn()` utility for Tailwind class merging |
+| `components/ui/` | Reusable UI components (Button, Card, Badge, Progress, Input, Select, etc.) |
 
 ### Entry points
 
 | File | Purpose |
 |------|---------|
-| `entrypoints/background.ts` | Service worker: omnibox handlers, message passing, indexer init |
+| `entrypoints/background.ts` | Service worker: omnibox handlers, message passing, indexer init, Gist sync scheduling |
 | `entrypoints/popup/` | Solid.js popup UI (`.tsx`) — stats, recent bookmarks, indexing HUD |
-| `entrypoints/options/` | Solid.js settings page (`.tsx`) — API keys, indexing controls, folder tree, GitHub/Twitter config |
+| `entrypoints/options/` | Solid.js settings page (`.tsx`) — API keys, indexing controls, folder tree, GitHub/Twitter/History/Gist config |
+| `entrypoints/search/` | Solid.js full-page search UI (`.tsx`) — independent search page with source/folder filters |
 | `entrypoints/content.ts` | Content script placeholder |
 
 ### Message types (background.ts `onMessage` switch)
 
-`GET_INDEXING_STATUS` (sync), `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`
+Synchronous: `GET_INDEXING_STATUS`
+
+Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY`, `GET_CACHE_STATS`, `CLEAR_EMBEDDING_CACHE`, `GIST_SYNC`, `GIST_CREATE`, `GIST_LINK`
 
 ### Data flow
 
 **Omnibox search:** `onInputChanged` → debounce 150ms + AbortController → `ensureCachedIndexedBookmarks` (in-memory cache) → `getQueryEmbedding` → `hybridSearch` / `vectorSearch` with min-max normalized RRF fusion → suggestions (max 9) → `browser.omnibox.setDefaultSuggestion`
 
-**Hybrid/vector search:** query → `getQueryEmbedding` (cached or API) → `hybridSearch` (RRF fusion with normalized scores) or `vectorSearch` (pure semantic) → results
+**Full-page search:** popup/options or Enter in omnibox → `performFullSearch` → same pipeline as omnibox but returns `SearchResult[]` DTOs (max 20) with source/folder filters (`/github`, `/twitter`, `/history`, `/folder:name`)
+
+**Hybrid/vector search:** query → `getQueryEmbedding` (cached or API) → `hybridSearch` (RRF fusion with normalized scores) or `vectorSearch` (pure semantic) → results. Vector search uses pure JS cosine similarity over the in-memory cache — no WASM or external vector DB.
 
 **Indexing pipeline:** bookmark URL → Jina AI Reader (extract markdown) → `llm.ts` (generate summary/tags via DeepSeek-V3) → `embedding.ts` (BGE-M3 vector with native batch API) → Dexie IndexedDB → update in-memory cache
 
 **GitHub Stars sync:** fetch with early-exit when all URLs already indexed → background enrichment queue resumes on SW restart
 
 **Twitter/X sync:** auto-extract cookies via `browser.cookies` (fallback to manual input) → GraphQL API with retry/rate-limit handling → convert to BookmarkRecord with Twitter-specific metadata → enqueue for indexing
+
+**History sync:** `browser.history.search` → filter system URLs → skip already-indexed URLs → convert to BookmarkRecord (`hi-` prefix IDs) → upsert to IndexedDB → enqueue for indexing
+
+**Gist sync:** bookmark CRUD events → debounced 5s trigger → `browser.bookmarks.getTree` → union merge with remote Gist → apply local deletions (30-day TTL) → update Gist. Uses `gistSyncLock` to prevent recursion during sync.
 
 **Message passing:** popup/options ↔ background via `browser.runtime.sendMessage` / `onMessage.addListener` with string-literal action types in a `switch` statement.
 
@@ -88,16 +100,24 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 3. **New message type** → add a `case` to the `switch` in `background.ts` `onMessage` handler
 4. **New settings field** → extend `Settings` in `types.ts`, add to `defaultSettings` in `db.ts`
 5. **New DB column** → bump the Dexie version in `db.ts` with a migration
+6. **Always verify:** `pnpm compile` before finishing
 
 ## Code Style
 
+### TypeScript
+
+- **Interfaces vs Types:** Use `interface` for exported object shapes (e.g., `BookmarkRecord`, `Settings`). Use `type` for unions, aliases, and function-scoped shapes (e.g., `SearchMode`).
+- **Type safety:** never `as any` or `@ts-ignore` — use `instanceof Error` for error handling. Explicit `as` casts only for untyped browser APIs.
+- **Imports:** Framework/library imports first, then internal imports. Use `import type` for type-only imports. Path aliases: `@/*` → `./src/*`, `~/*` → `./*` — use `@/` in entrypoints for `src/` imports.
+- **Functions:** Prefer named `function` declarations for exported top-level functions. Arrow functions for callbacks and event handlers.
+- **JSDoc:** One-line `/** Brief description */` on all exported functions.
+
+### Formatting and Naming
+
 - **Indentation:** 2 spaces. **Quotes:** double. **Semicolons:** always. **Trailing commas:** in multi-line
 - `camelCase` for variables/functions, `SCREAMING_SNAKE_CASE` for module-level constants, `PascalCase` for interfaces/types/classes/components
-- Use `import type` for type-only imports
-- Path aliases: `@/*` → `./src/*`, `~/*` → `./*` — use `@/` in entrypoints for `src/` imports
-- `async/await` throughout — no raw `.then()` chains except fire-and-forget
+- `async/await` throughout — no raw `.then()` chains except fire-and-forget: `promise().catch(() => {})`
 - Error logging: `console.error('[ModuleName] Description:', error)` — prefixes like `[FlowSearch]`, `[indexer]`, `[hybrid]`
-- Type safety: never `as any` or `@ts-ignore` — use `instanceof Error` for error handling
 - Chinese comments are present in the codebase — match the language of surrounding code
 - Solid.js UI: use `class` (not `className`), `createSignal`/`For`/`Show` from `solid-js`
 - Tailwind v3 with shadcn-style HSL CSS variables (`hsl(var(--primary))`), dark mode via `prefers-color-scheme`
@@ -114,5 +134,5 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 - **SiliconFlow API Key** — required for embeddings (BGE-M3) and LLM summaries (DeepSeek-V3). Configured in extension options
 - **Jina AI Reader** (`https://r.jina.ai/*`) — free, no key needed, used for content extraction
-- **GitHub PAT** — optional, for syncing starred repos
+- **GitHub PAT** — optional, for syncing starred repos and Gist bookmark sync
 - **Twitter/X cookies** — optional, auto-extracted via `browser.cookies` API (requires `cookies` permission + `https://x.com/*` host_permissions), with manual fallback for auth tokens

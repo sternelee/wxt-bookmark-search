@@ -27,11 +27,21 @@ export function urlHost(url: string): string {
  */
 function highlightMatches(text: string, query: string): string {
   if (!query) return escapeXml(text);
-  const escaped = escapeXml(text);
-  // Build a regex that matches the query as a whole (case-insensitive)
   const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(`(${escapedQuery})`, "gi");
-  return escaped.replace(regex, "<match>$1</match>");
+
+  let result = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    result += escapeXml(text.slice(lastIndex, match.index));
+    result += `<match>${escapeXml(match[1])}</match>`;
+    lastIndex = match.index + match[1].length;
+  }
+
+  result += escapeXml(text.slice(lastIndex));
+  return result;
 }
 
 /**

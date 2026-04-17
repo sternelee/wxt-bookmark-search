@@ -12,7 +12,6 @@ export function Checkbox(props: CheckboxProps) {
     "class",
     "label",
     "hint",
-    "checked",
   ]);
 
   return (

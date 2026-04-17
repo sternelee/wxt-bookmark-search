@@ -5,7 +5,7 @@ import {
   getFreqCache,
 } from "../src/freq";
 import { rerankBookmarks } from "../src/search";
-import { highlightBookmark } from "../src/highlight";
+import { highlightBookmark, escapeXml } from "../src/highlight";
 import {
   getSettings,
   ensureCachedIndexedBookmarks,
@@ -142,10 +142,10 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     });
     const folderIds = folders.filter((f) => !f.url).map((f) => f.id);
     if (folderIds.length > 0) {
-      allowedUrls = await getAllUrlsInFoldersForSearch(folderIds);
+      allowedUrls = await getAllUrlsInFolders(folderIds);
     }
   } else if (settings.selectedFolderIds && settings.selectedFolderIds.length > 0) {
-    allowedUrls = await getAllUrlsInFoldersForSearch(settings.selectedFolderIds);
+    allowedUrls = await getAllUrlsInFolders(settings.selectedFolderIds);
   }
 
   // 关键词搜索
@@ -156,14 +156,18 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   }
 
   if (!settings.openaiApiKey) {
-    return valid.slice(0, 20).map((b) => ({
-      url: b.url!,
-      title: b.title ?? b.url!,
-      summary: "",
-      tags: [],
-      source: "bookmark" as const,
-      indexed: false,
-    }));
+    const suggestions = rerankBookmarks(query, valid);
+    return suggestions.slice(0, 20).map((s) => {
+      const b = valid.find((x) => x.url === s.content);
+      return {
+        url: s.content,
+        title: b?.title ?? s.content,
+        summary: "",
+        tags: [],
+        source: "bookmark" as const,
+        indexed: false,
+      };
+    });
   }
 
   // 向量搜索
@@ -210,9 +214,9 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
 }
 
 /**
- * 递归获取文件夹下所有书签 URL（供 performFullSearch 使用）
+ * 递归获取文件夹及其子文件夹下所有的书签 URL
  */
-async function getAllUrlsInFoldersForSearch(
+async function getAllUrlsInFolders(
   folderIds: string[],
 ): Promise<Set<string>> {
   const urls = new Set<string>();
@@ -488,41 +492,6 @@ export default defineBackground(() => {
         "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 <dim>(/github /twitter /folder:名称)</dim>",
     });
   });
-
-  /**
-   * 递归获取文件夹及其子文件夹下所有的书签 URL
-   */
-  async function getAllUrlsInFolders(
-    folderIds: string[],
-  ): Promise<Set<string>> {
-    const urls = new Set<string>();
-
-    for (const id of folderIds) {
-      try {
-        const subtree = await browser.bookmarks.getSubTree(id);
-
-        const traverse = (nodes: any[]) => {
-          for (const node of nodes) {
-            if (node.url) {
-              urls.add(node.url);
-            }
-            if (node.children) {
-              traverse(node.children);
-            }
-          }
-        };
-
-        traverse(subtree);
-      } catch (e) {
-        console.warn(
-          `[FlowSearch] Failed to fetch subtree for folder ${id}:`,
-          e,
-        );
-      }
-    }
-
-    return urls;
-  }
 
   // 核心搜索逻辑
   browser.omnibox.onInputChanged.addListener(async (text, suggest) => {
@@ -930,14 +899,3 @@ function formatSuggestion(
   return `${prefix}<match>${escapeXml(title)}</match> <dim>${escapeXml(summary)}...</dim> <url>${escapeXml(record.url)}</url>`;
 }
 
-/**
- * XML 转义 (用于 omnibox description)
- */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
