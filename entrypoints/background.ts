@@ -1,3 +1,4 @@
+import { installPolyfills } from "../src/polyfills";
 import {
   loadFreqCache,
   incrementFreq,
@@ -238,6 +239,8 @@ async function getAllUrlsInFolders(
 }
 
 export default defineBackground(() => {
+  installPolyfills();
+
   // 加载频率缓存
   loadFreqCache().then((cache) => {
     console.log(

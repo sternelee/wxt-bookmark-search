@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Flow Search** is a Manifest V3 Chrome extension for AI-powered bookmark search. Trigger: type `bi <keyword>` in Chrome's omnibox. Supports keyword, vector (semantic), and hybrid search modes using SiliconFlow BGE-M3 embeddings. Also indexes GitHub starred repos, Twitter/X bookmarks, and browser history.
+**Flow Search** is a Manifest V3 browser extension for AI-powered bookmark search. Trigger: type `bi <keyword>` in the omnibox. Supports keyword, vector (semantic), and hybrid search modes using SiliconFlow BGE-M3 embeddings. Also indexes GitHub starred repos, Twitter/X bookmarks, and browser history.
 
 Stack: WXT framework, TypeScript, Solid.js (popup/options UI), Dexie.js (IndexedDB), SiliconFlow BGE-M3 (embeddings), Jina AI Reader (content extraction), Octokit (GitHub API).
+
+**Browsers:** Chrome (primary) and Firefox (MV3 via `--mv3` flag). WXT handles cross-browser manifest differences automatically.
 
 ## Commands
 
@@ -20,7 +22,9 @@ pnpm zip           # Package as .zip for distribution
 pnpm compile       # TypeScript type-check only (tsc --noEmit)
 ```
 
-**No test runner is configured.** Manual testing only: load unpacked from `.output/chrome-mv3/` in `chrome://extensions/`.
+**No test runner is configured.** Manual testing:
+- Chrome: load unpacked from `.output/chrome-mv3/` in `chrome://extensions/`
+- Firefox: load unpacked from `.output/firefox-mv3/` in `about:debugging#/runtime/this-firefox`
 
 **Always run `pnpm compile` before marking work done.**
 
@@ -124,11 +128,21 @@ Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RE
 
 ## Browser Extension Constraints
 
-- **MV3 service worker** — no persistent background page. Avoid large in-memory state; use `browser.storage.local` or IndexedDB
-- **In-memory cache optimization** — `ensureCachedIndexedBookmarks()` loads all indexed bookmarks into memory on SW startup for fast omnibox search (no IndexedDB queries in hot path). Cache stays warm during session, rebuilt on SW restart
+- **MV3 service worker (Chrome)** / **non-persistent background page (Firefox)** — no persistent background page. Avoid large in-memory state; use `browser.storage.local` or IndexedDB. WXT abstracts the difference; same `background.ts` entrypoint works for both.
+- **In-memory cache optimization** — `ensureCachedIndexedBookmarks()` loads all indexed bookmarks into memory on background startup for fast omnibox search (no IndexedDB queries in hot path). Cache stays warm during session, rebuilt on restart
 - **Omnibox descriptions must be XML-escaped** — always use `escapeXml()` from `highlight.ts`; only `<match>`, `<dim>`, `<url>` tags are valid
 - `browser.*` APIs are globally available in entry points via WXT auto-injection — no explicit import needed
 - Message passing: return `true` from `onMessage` listener to keep channel open for async responses
+
+## Cross-Browser Compatibility
+
+WXT handles most manifest differences automatically. Code-level considerations:
+
+- **Never use `chrome.*` APIs directly** — always use `browser.*` (WXT polyfills Chrome to Promise-based API)
+- **`AbortSignal.timeout`** — polyfilled in `src/polyfills.ts` for Firefox <124; imported at `background.ts` startup
+- **`browser.cookies`** — works on both browsers; ensure host permissions for target domains are declared in manifest
+- **`browser.history`** — Firefox requires `history` permission (same as Chrome)
+- **Firefox MV3** uses `background.scripts` (non-persistent page) instead of `service_worker`; WXT generates the correct manifest per target
 
 ## API Dependencies
 
