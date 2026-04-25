@@ -25,6 +25,9 @@ export interface BookmarkRecord {
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
   llmEnhanced?: boolean;   // 是否经过 LLM 增强
 
+  /** 预计算的 embedding 向量模长（内存缓存专用，不持久化到 DB） */
+  _embeddingNorm?: number;
+
   // Twitter/X 特定字段
   tweetId?: string;
   authorHandle?: string;

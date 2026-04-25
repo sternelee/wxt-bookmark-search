@@ -3,6 +3,7 @@ import { getIndexStats, hasApiKey, getIndexedBookmarks } from "../../src/db";
 import { getRecentBookmarks } from "../../src/freq";
 import { Button } from "../../src/components/ui/button";
 import { Separator } from "../../src/components/ui/separator";
+import { Input } from "../../src/components/ui/input";
 import Header from "./components/Header";
 import SearchHint from "./components/SearchHint";
 import StatsGrid from "./components/StatsGrid";
@@ -21,6 +22,7 @@ function App() {
     total: number;
     status: string;
   } | null>(null);
+  const [quickQuery, setQuickQuery] = createSignal("");
 
   const fetchStats = async () => {
     const stats = await getIndexStats();
@@ -83,11 +85,39 @@ function App() {
     browser.runtime.openOptionsPage();
   };
 
+  const openSearchPage = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const searchPageUrl = browser.runtime.getURL("/search.html") + "?q=" + encodeURIComponent(trimmed);
+    browser.tabs.create({ url: searchPageUrl, active: true });
+  };
+
   return (
     <div class="w-[280px] p-5 bg-background text-foreground">
       <Header isConfigured={isConfigured()} />
 
       <SearchHint />
+
+      {/* 快速搜索 */}
+      <div class="flex gap-2 mb-4">
+        <Input
+          type="text"
+          placeholder="快速搜索书签..."
+          value={quickQuery()}
+          onInput={(e) => setQuickQuery(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") openSearchPage(quickQuery());
+          }}
+          class="flex-1"
+        />
+        <Button
+          size="sm"
+          onClick={() => openSearchPage(quickQuery())}
+          disabled={!quickQuery().trim()}
+        >
+          🔍
+        </Button>
+      </div>
 
       <Separator class="my-4" />
 

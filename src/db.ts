@@ -13,9 +13,20 @@ let _indexedCache: BookmarkRecord[] | null = null;
 /** 并发加载锁：防止同时发起多次 DB 读取 */
 let _cacheLoadingPromise: Promise<BookmarkRecord[]> | null = null;
 
-/** 从 DB 加载已索引书签到缓存 */
+/** 从 DB 加载已索引书签到缓存，并预计算 embedding 模长 */
 async function loadIndexedCache(): Promise<BookmarkRecord[]> {
-  _indexedCache = await db.bookmarks.where('status').equals('indexed').toArray();
+  const records = await db.bookmarks.where('status').equals('indexed').toArray();
+  // 预计算 embedding 模长，加速后续余弦相似度计算
+  for (const r of records) {
+    if (r.embedding && r.embedding.length > 0 && r._embeddingNorm === undefined) {
+      let norm = 0;
+      for (let i = 0; i < r.embedding.length; i++) {
+        norm += r.embedding[i] * r.embedding[i];
+      }
+      r._embeddingNorm = Math.sqrt(norm);
+    }
+  }
+  _indexedCache = records;
   return _indexedCache;
 }
 
@@ -128,11 +139,7 @@ export async function getIndexedUrls(urls: string[]): Promise<Set<string>> {
 
 /** 批量插入或更新书签记录 */
 export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> {
-  await db.transaction('rw', db.bookmarks, async () => {
-    for (const record of records) {
-      await db.bookmarks.put(record);
-    }
-  });
+  await db.bookmarks.bulkPut(records);
   // 同步缓存
   for (const record of records) {
     syncCacheRecord(record);
@@ -152,7 +159,16 @@ export async function updateBookmark(id: string, updates: Partial<BookmarkRecord
         _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
       } else {
         const fullRecord = await db.bookmarks.get(id);
-        if (fullRecord) _indexedCache.push(fullRecord);
+        if (fullRecord) {
+          if (fullRecord.embedding && fullRecord.embedding.length > 0 && fullRecord._embeddingNorm === undefined) {
+            let norm = 0;
+            for (let i = 0; i < fullRecord.embedding.length; i++) {
+              norm += fullRecord.embedding[i] * fullRecord.embedding[i];
+            }
+            fullRecord._embeddingNorm = Math.sqrt(norm);
+          }
+          _indexedCache.push(fullRecord);
+        }
       }
     } else if (newStatus && newStatus !== 'indexed') {
       if (idx >= 0) _indexedCache.splice(idx, 1);

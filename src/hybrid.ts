@@ -7,9 +7,13 @@
 
 import type { BookmarkRecord, SearchOptions } from './types';
 import { rankBySimilarity } from './vector';
+import { getFreqCache } from './freq';
 
 /** RRF 常数 K (通常取 60) */
 const RRF_K = 60;
+
+/** 频率权重在混合搜索中的最大加分 */
+const FREQ_BOOST_MAX = 0.15;
 
 /** 书签类型 (兼容 browser.bookmarks.BookmarkTreeNode) */
 type BookmarkInput = {
@@ -102,7 +106,7 @@ export async function hybridSearch(
   try {
     // 直接对内存缓存中的书签做余弦相似度，无需 WASM/IDB
     const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
-    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, { limit: limit * 3 })
+    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, { limit: limit * 3, signal })
       .map(r => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
     console.warn('[hybrid] Vector search failed:', error);
@@ -150,7 +154,17 @@ export async function hybridSearch(
     }
   }
 
-  const sorted = [...merged.values()].sort((a, b) => b.finalScore - a.finalScore);
+  // 融入访问频率权重（时间衰减）
+  const freqCache = getFreqCache();
+  const maxFreq = Math.max(1, ...Object.values(freqCache));
+
+  const withFreq = [...merged.values()].map(m => {
+    const freq = freqCache[m.record.url] ?? 0;
+    const freqBoost = (freq / maxFreq) * FREQ_BOOST_MAX;
+    return { ...m, finalScore: m.finalScore + freqBoost };
+  });
+
+  const sorted = withFreq.sort((a, b) => b.finalScore - a.finalScore);
   return sorted.slice(0, limit).map(m => m.record);
 }
 
@@ -174,7 +188,7 @@ export async function vectorSearch(
   try {
     // 直接对内存缓存中的书签做余弦相似度
     const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
-    results = rankBySimilarity(queryVector, withEmbedding as any, { limit })
+    results = rankBySimilarity(queryVector, withEmbedding as any, { limit, signal })
       .map(r => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
     console.warn('[vectorSearch] Vector search failed:', error);
@@ -182,7 +196,20 @@ export async function vectorSearch(
 
   if (signal?.aborted) return [];
 
-  return results
-    .map(r => recordMap.get(r.url))
-    .filter((r): r is BookmarkRecord => r !== undefined);
+  // 融入访问频率权重
+  const freqCache = getFreqCache();
+  const maxFreq = Math.max(1, ...Object.values(freqCache));
+
+  const boosted = results
+    .map(r => {
+      const record = recordMap.get(r.url);
+      if (!record) return null;
+      const freq = freqCache[record.url] ?? 0;
+      const freqBoost = (freq / maxFreq) * FREQ_BOOST_MAX;
+      return { record, score: r.score + freqBoost };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  boosted.sort((a, b) => b.score - a.score);
+  return boosted.map(b => b.record);
 }
