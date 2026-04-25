@@ -1,12 +1,12 @@
 /**
- * SiliconFlow Embedding API 封装
+ * OpenAI-compatible Embedding API 封装
  * 包含查询向量缓存
  */
 
 import type { Settings } from './types';
 
-export const DEFAULT_BASE_URL = 'https://api.siliconflow.cn';
-export const DEFAULT_MODEL = 'BAAI/bge-m3';
+export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+export const DEFAULT_MODEL = 'text-embedding-3-small';
 const MAX_INPUT_LENGTH = 8000; // 字符数限制
 
 /** 缓存配置 */

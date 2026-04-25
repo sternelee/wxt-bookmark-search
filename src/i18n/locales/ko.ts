@@ -51,7 +51,7 @@ export default {
     allBookmarks: "모든 북마크",
     indexing: "⚡ 색인 동기화 중...",
     searchHint: "주소창에 bi <키워드>를 입력하여 북마크 검색",
-    poweredBy: "Powered by SiliconFlow & Jina AI",
+    poweredBy: "Powered by OpenAI & Jina AI",
   },
 
   options: {
@@ -60,13 +60,13 @@ export default {
 
     api: {
       title: "🔑 API 설정",
-      apiKeyHint: "SiliconFlow, OpenAI, Azure OpenAI 등 호환 API 지원",
+      apiKeyHint: "OpenAI, SiliconFlow, Azure OpenAI 등 호환 API 지원",
       baseURL: "API 기본 URL",
-      baseURLHint: "API 기본 URL, 기본값: https://api.siliconflow.cn",
+      baseURLHint: "API 기본 URL, 기본값: https://api.openai.com/v1",
       embeddingModel: "Embedding 모델",
-      embeddingModelHint: "기본값: BAAI/bge-m3 (1024차원 벡터)",
+      embeddingModelHint: "기본값: text-embedding-3-small (1536차원 벡터)",
       llmModel: "LLM 모델",
-      llmModelHint: "기본값: deepseek-ai/DeepSeek-V3 (요약 및 태그 생성용)",
+      llmModelHint: "기본값: gpt-4o-mini (요약 및 태그 생성용)",
       enableLLM: "LLM 콘텐츠 강화 활성화",
       enableLLMHint: "LLM을 사용하여 요약과 태그를 생성하고 검색 품질 향상",
       advanced: "고급 설정",

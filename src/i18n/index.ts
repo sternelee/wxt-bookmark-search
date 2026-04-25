@@ -52,7 +52,7 @@ function getNestedValue(obj: any, path: string): string | undefined {
   return typeof current === 'string' ? current : undefined;
 }
 
-let currentLocale: Locale = 'zh-CN';
+let currentLocale: Locale = 'en';
 
 /** 设置当前语言 */
 export function setLocale(locale: Locale): void {

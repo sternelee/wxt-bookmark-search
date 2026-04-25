@@ -51,7 +51,7 @@ export default {
     allBookmarks: "All Bookmarks",
     indexing: "⚡ Indexing in progress...",
     searchHint: "Type bi <keyword> in the address bar to search bookmarks",
-    poweredBy: "Powered by SiliconFlow & Jina AI",
+    poweredBy: "Powered by OpenAI & Jina AI",
   },
 
   options: {
@@ -60,13 +60,13 @@ export default {
 
     api: {
       title: "🔑 API Configuration",
-      apiKeyHint: "Supports SiliconFlow, OpenAI, Azure OpenAI and compatible APIs",
+      apiKeyHint: "Supports OpenAI, SiliconFlow, Azure OpenAI and compatible APIs",
       baseURL: "API Base URL",
-      baseURLHint: "API base URL, default: https://api.siliconflow.cn",
+      baseURLHint: "API base URL, default: https://api.openai.com/v1",
       embeddingModel: "Embedding Model",
-      embeddingModelHint: "Default: BAAI/bge-m3 (1024-dim vectors)",
+      embeddingModelHint: "Default: text-embedding-3-small (1536-dim vectors)",
       llmModel: "LLM Model",
-      llmModelHint: "Default: deepseek-ai/DeepSeek-V3 (for summaries and tags)",
+      llmModelHint: "Default: gpt-4o-mini (for summaries and tags)",
       enableLLM: "Enable LLM Content Enrichment",
       enableLLMHint: "Use LLM to generate summaries and tags, improving search quality",
       advanced: "Advanced Settings",

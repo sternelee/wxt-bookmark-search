@@ -215,7 +215,7 @@ export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
 
 const defaultSettings: Settings = {
   openaiApiKey: undefined,
-  baseURL: 'https://api.siliconflow.cn',
+  baseURL: 'https://api.openai.com/v1',
   searchMode: 'hybrid',
   vectorWeight: 0.4,
   selectedFolderIds: [],
@@ -223,15 +223,15 @@ const defaultSettings: Settings = {
   githubSyncEnabled: false,
   twitterSyncEnabled: false,
   enableLLMEnrichment: true, // 默认启用 LLM 增强
-  embeddingModel: 'BAAI/bge-m3', // 默认 embedding 模型
-  llmModel: 'deepseek-ai/DeepSeek-V3', // 默认 LLM 模型
+  embeddingModel: 'text-embedding-3-small', // 默认 embedding 模型
+  llmModel: 'gpt-4o-mini', // 默认 LLM 模型
   gistSyncEnabled: false,
   gistId: undefined,
   gistDeviceId: undefined,
   lastGistSync: undefined,
   historySyncEnabled: false,
   historyDays: 30,
-  language: 'zh-CN',
+  language: 'en',
 };
 
 /** 获取设置 */

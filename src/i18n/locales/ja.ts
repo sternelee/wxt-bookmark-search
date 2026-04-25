@@ -51,7 +51,7 @@ export default {
     allBookmarks: "すべてのブックマーク",
     indexing: "⚡ インデックス構築中...",
     searchHint: "アドレスバーに bi <キーワード> と入力してブックマークを検索",
-    poweredBy: "Powered by SiliconFlow & Jina AI",
+    poweredBy: "Powered by OpenAI & Jina AI",
   },
 
   options: {
@@ -60,13 +60,13 @@ export default {
 
     api: {
       title: "🔑 API 設定",
-      apiKeyHint: "SiliconFlow、OpenAI、Azure OpenAI など互換 API に対応",
+      apiKeyHint: "OpenAI、SiliconFlow、Azure OpenAI など互換 API に対応",
       baseURL: "API ベース URL",
-      baseURLHint: "API ベース URL、デフォルト: https://api.siliconflow.cn",
+      baseURLHint: "API ベース URL、デフォルト: https://api.openai.com/v1",
       embeddingModel: "Embedding モデル",
-      embeddingModelHint: "デフォルト: BAAI/bge-m3 (1024次元ベクトル)",
+      embeddingModelHint: "デフォルト: text-embedding-3-small (1536次元ベクトル)",
       llmModel: "LLM モデル",
-      llmModelHint: "デフォルト: deepseek-ai/DeepSeek-V3 (要約とタグ生成用)",
+      llmModelHint: "デフォルト: gpt-4o-mini (要約とタグ生成用)",
       enableLLM: "LLM コンテンツ強化を有効化",
       enableLLMHint: "LLM を使用して要約とタグを生成し、検索品質を向上",
       advanced: "詳細設定",

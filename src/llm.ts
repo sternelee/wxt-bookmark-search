@@ -1,10 +1,10 @@
 /**
- * SiliconFlow Chat Completion API 封装
+ * OpenAI-compatible Chat Completion API 封装
  * 用于生成网页摘要和标签
  */
 
-export const DEFAULT_BASE_URL = 'https://api.siliconflow.cn';
-export const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V3'; // 默认使用 DeepSeek 速度快且准确
+export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+export const DEFAULT_MODEL = 'gpt-4o-mini'; // 默认使用 OpenAI 模型
 
 const MAX_LLM_RETRIES = 2;
 const LLM_RETRY_BASE_MS = 2000;

@@ -51,7 +51,7 @@ export default {
     allBookmarks: "全部书签",
     indexing: "⚡ 正在同步索引...",
     searchHint: "在地址栏输入 bi <关键词> 即可搜索书签",
-    poweredBy: "Powered by SiliconFlow & Jina AI",
+    poweredBy: "Powered by OpenAI & Jina AI",
   },
 
   options: {
@@ -60,13 +60,13 @@ export default {
 
     api: {
       title: "🔑 API 配置",
-      apiKeyHint: "支持 SiliconFlow、OpenAI、Azure OpenAI 等兼容 API",
+      apiKeyHint: "支持 OpenAI、SiliconFlow、Azure OpenAI 等兼容 API",
       baseURL: "API 基础地址",
-      baseURLHint: "API 基础地址，默认: https://api.siliconflow.cn",
+      baseURLHint: "API 基础地址，默认: https://api.openai.com/v1",
       embeddingModel: "Embedding 模型",
-      embeddingModelHint: "默认: BAAI/bge-m3 (1024维向量)",
+      embeddingModelHint: "默认: text-embedding-3-small (1536维向量)",
       llmModel: "LLM 模型",
-      llmModelHint: "默认: deepseek-ai/DeepSeek-V3 (用于摘要和标签)",
+      llmModelHint: "默认: gpt-4o-mini (用于摘要和标签)",
       enableLLM: "启用 LLM 内容增强",
       enableLLMHint: "使用 LLM 生成摘要和标签，提升搜索质量",
       advanced: "高级设置",
