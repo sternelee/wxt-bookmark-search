@@ -14,7 +14,7 @@ import {
   saveSettings,
 } from "../src/db";
 import type { BookmarkRecord, SearchResult, GistBookmarkNode } from "../src/types";
-import { getQueryEmbedding, getCacheStats, clearEmbeddingCache } from "../src/embedding";
+import { getQueryEmbedding, getCacheStats, clearEmbeddingCache, hasCachedQuery } from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import {
   initIndexer,
@@ -697,6 +697,17 @@ export default defineBackground(() => {
     searchAbortController = new AbortController();
     const signal = searchAbortController.signal;
 
+    // 查询向量已缓存时跳过 debounce 直接搜索
+    const debounceMs = hasCachedQuery(query) ? 0 : 300;
+
+    if (debounceMs > 0) {
+      browser.omnibox.setDefaultSuggestion({
+        description: IS_FIREFOX
+          ? "🔍 正在语义搜索..."
+          : "🔍 <dim>正在语义搜索...</dim>",
+      });
+    }
+
     searchTimer = setTimeout(async () => {
       try {
         // 4. 生成查询向量
@@ -740,7 +751,7 @@ export default defineBackground(() => {
         console.error("[FlowSearch] Search error:", error);
         suggest(rerankBookmarks(query, valid));
       }
-    }, 150);
+    }, debounceMs);
   });
 
   // 打开选中的书签，或在非 URL 选中时打开全局搜索页

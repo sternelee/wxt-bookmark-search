@@ -4,7 +4,7 @@
  */
 
 import Dexie, { Table } from 'dexie';
-import type { BookmarkRecord, Settings } from './types';
+import type { BookmarkRecord, IndexQueueRecord, Settings } from './types';
 
 const SETTINGS_KEY = 'settings';
 
@@ -63,6 +63,7 @@ function removeCacheRecord(id: string): void {
 
 class BookmarkDB extends Dexie {
   bookmarks!: Table<BookmarkRecord, string>;
+  indexQueue!: Table<IndexQueueRecord, string>;
 
   constructor() {
     super('FlowSearch');
@@ -77,6 +78,11 @@ class BookmarkDB extends Dexie {
     // v3: remove unused vectorId index (EdgeVec removed; pure cosine similarity)
     this.version(3).stores({
       bookmarks: 'id, url, status, indexedAt'
+    });
+    // v4: add indexQueue for persistent indexing queue
+    this.version(4).stores({
+      bookmarks: 'id, url, status, indexedAt',
+      indexQueue: 'bookmarkId, url, enqueuedAt',
     });
   }
 }

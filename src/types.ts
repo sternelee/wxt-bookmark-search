@@ -122,3 +122,12 @@ export interface Settings {
   historySyncEnabled?: boolean; // 是否启用历史同步
   historyDays?: number;         // 同步最近 N 天，默认 30
 }
+
+/** 索引队列持久化记录（用于 Service Worker 重启后恢复） */
+export interface IndexQueueRecord {
+  bookmarkId: string;
+  url: string;
+  title: string;
+  retryCount: number;
+  enqueuedAt: number;
+}

@@ -93,6 +93,18 @@ class EmbeddingCache {
       maxSize: this.maxSize,
     };
   }
+
+  /** 检查 key 是否存在且未过期 */
+  has(text: string, context: 'query' | 'doc' = 'doc'): boolean {
+    const key = this.hash(text, context);
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    if (Date.now() - entry.timestamp > this.ttlMs) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
 }
 
 /** 全局缓存实例 */
@@ -277,4 +289,9 @@ export function clearEmbeddingCache(): void {
 /** 获取缓存统计 */
 export function getCacheStats(): { size: number; maxSize: number } {
   return embeddingCache.stats();
+}
+
+/** 检查查询向量是否已缓存 */
+export function hasCachedQuery(query: string): boolean {
+  return embeddingCache.has(query, 'query');
 }

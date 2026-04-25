@@ -409,37 +409,24 @@ async function fetchPageContent(
   url: string,
   settings: Settings,
 ): Promise<{ markdown: string; title?: string; summary?: string } | null> {
-  let localBestEffort: {
-    markdown: string;
-    title?: string;
-    summary?: string;
-  } | null = null;
-
   try {
     console.log(`[FlowSearch] fetchPageContent starting for: ${url}`);
-    
+
     // --- 策略 0: GitHub 专用 API 提取 ---
     const isGithub = url.includes('github.com');
     if (isGithub && settings.githubToken) {
-      // 更加鲁棒的正则解析 owner/repo
       const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
       if (match) {
         const owner = match[1];
-        const repo = match[2].replace(/\/$/, ""); // 移除末尾斜杠
-        
-        console.log(`[FlowSearch] Strategy 0: GitHub API target identified: ${owner}/${repo}`);
-        
+        const repo = match[2].replace(/\/$/, "");
         try {
           const readme = await fetchRepoReadme(settings.githubToken, owner, repo);
           if (readme && readme.length > 10) {
-            console.log(`[FlowSearch] Strategy 0: GitHub README fetch success (${readme.length} chars)`);
             return {
               markdown: readme,
               title: `${owner}/${repo}`,
               summary: readme.slice(0, 500)
             };
-          } else {
-            console.warn(`[FlowSearch] Strategy 0: GitHub README empty or too short, trying fallback`);
           }
         } catch (ghError) {
           console.error(`[FlowSearch] Strategy 0: GitHub API README request failed:`, ghError);
@@ -469,92 +456,101 @@ async function fetchPageContent(
       }
     }
 
-    // 策略 2: 后台本地 Fetch + Readability (via linkedom)
-    try {
-      console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(5000),
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-      });
+    // 策略 2 和 3 并行执行：本地 Fetch + Jina Reader
+    const localPromise = (async () => {
+      try {
+        console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(5000),
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+        });
 
-      if (response.ok) {
-        const html = await response.text();
-        const { document } = parseHTML(html);
+        if (response.ok) {
+          const html = await response.text();
+          const { document } = parseHTML(html);
 
-        // 尝试提取元数据作为兜底
-        const metaDescription =
-          document
-            .querySelector('meta[name="description"]')
-            ?.getAttribute("content") ||
-          document
-            .querySelector('meta[property="og:description"]')
-            ?.getAttribute("content");
+          const metaDescription =
+            document
+              .querySelector('meta[name="description"]')
+              ?.getAttribute("content") ||
+            document
+              .querySelector('meta[property="og:description"]')
+              ?.getAttribute("content");
 
-        const reader = new Readability(document as unknown as Document);
-        const article = reader.parse();
+          const reader = new Readability(document as unknown as Document);
+          const article = reader.parse();
 
-        if (article && article.content) {
-          const turndown = new TurndownService({
-            headingStyle: "atx",
-            codeBlockStyle: "fenced",
-          });
-          // Service Worker 中 DOMParser 不支持 text/html（document 未定义），
-          // 需用 linkedom 将 article.content 解析为 DOM 节点再传给 Turndown，
-          // 避免 Turndown 内部调用 DOMParser.parseFromString 触发 ReferenceError。
-          const { document: contentDoc } = parseHTML(article.content);
-          const markdown = `# ${article.title}\n\n${turndown.turndown(contentDoc.body as unknown as HTMLElement)}`;
+          if (article && article.content) {
+            const turndown = new TurndownService({
+              headingStyle: "atx",
+              codeBlockStyle: "fenced",
+            });
+            const { document: contentDoc } = parseHTML(article.content);
+            const markdown = `# ${article.title}\n\n${turndown.turndown(contentDoc.body as unknown as HTMLElement)}`;
 
-          localBestEffort = {
-            markdown,
-            title: article.title ?? undefined,
-            summary: article.excerpt || metaDescription || "",
-          };
+            const content = {
+              markdown,
+              title: article.title ?? undefined,
+              summary: article.excerpt || metaDescription || "",
+            };
 
-          const textLen = article.textContent?.length ?? 0;
-          if (textLen > 150) {
+            const textLen = article.textContent?.length ?? 0;
+            const isHighQuality = textLen > 150;
             console.log(
-              `[indexer] Strategy 2: High quality local extraction (${textLen} chars)`,
+              `[indexer] Strategy 2: Local extraction ${isHighQuality ? "high quality" : "short"} (${textLen} chars)`,
             );
-            return localBestEffort;
+            return { content, isHighQuality };
           }
-          console.log(
-            `[indexer] Strategy 2: Local extraction successful but short (${textLen} chars), will try Jina as backup`,
-          );
         }
+      } catch (e) {
+        console.debug(`[indexer] Strategy 2: Local fetch failed:`, e);
       }
-    } catch (e) {
-      console.debug(`[indexer] Strategy 2: Local fetch failed:`, e);
+      return null;
+    })();
+
+    const jinaPromise = (async () => {
+      try {
+        console.log(`[indexer] Strategy 3: Requesting Jina Reader for ${url}`);
+        const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+        const jinaResponse = await fetch(readerUrl, {
+          headers: { Accept: "text/markdown" },
+          signal: AbortSignal.timeout(8000),
+        });
+
+        if (jinaResponse.status === 429) {
+          jinaLimiter.onRateLimit();
+        } else if (jinaResponse.ok) {
+          jinaLimiter.onSuccess();
+          const markdown = await jinaResponse.text();
+          const { title, summary } = extractFromMarkdown(markdown, "");
+          console.log(`[indexer] Strategy 3: Jina Reader success`);
+          return { markdown, title, summary };
+        }
+      } catch (e) {
+        console.warn(`[indexer] Strategy 3: Jina Reader failed:`, e);
+      }
+      return null;
+    })();
+
+    // 先等本地结果；高质量则直接返回
+    const localResult = await localPromise;
+    if (localResult && localResult.isHighQuality) {
+      return localResult.content;
     }
 
-    // 策略 3: 回退到 Jina Reader (r.jina.ai)
-    try {
-      console.log(`[indexer] Strategy 3: Requesting Jina Reader for ${url}`);
-      const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
-      const jinaResponse = await fetch(readerUrl, {
-        headers: { Accept: "text/markdown" },
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (jinaResponse.status === 429) {
-        jinaLimiter.onRateLimit();
-      } else if (jinaResponse.ok) {
-        jinaLimiter.onSuccess();
-        const markdown = await jinaResponse.text();
-        const { title, summary } = extractFromMarkdown(markdown, "");
-        console.log(`[indexer] Strategy 3: Jina Reader success`);
-        return { markdown, title, summary };
-      }
-    } catch (e) {
-      console.warn(`[indexer] Strategy 3: Jina Reader failed:`, e);
+    // 本地不够高或失败，等 Jina
+    const jinaResult = await jinaPromise;
+    if (jinaResult) {
+      return jinaResult;
     }
 
-    // 最终兜底：如果 Jina 失败了，但我们有本地的 Best Effort 结果，就用它
-    if (localBestEffort) {
+    // 最终兜底：回退到本地 best-effort
+    if (localResult) {
       console.log(`[indexer] Using local best-effort result as final fallback`);
-      return localBestEffort;
+      return localResult.content;
     }
 
     return null;
@@ -638,6 +634,13 @@ async function processQueue(): Promise<void> {
 
     // 1. 取出一批任务
     const batch = queue.splice(0, BATCH_SIZE);
+
+    // 从持久化队列中删除
+    try {
+      await db.indexQueue.bulkDelete(batch.map((j) => j.bookmarkId));
+    } catch (err) {
+      console.warn("[indexer] Failed to remove queued items from DB:", err);
+    }
 
     notifyProgress({
       total: totalToProcess,
@@ -840,6 +843,19 @@ export async function enqueueBookmark(bookmark: {
     retryCount: 0,
   });
 
+  // 持久化到 IndexedDB
+  try {
+    await db.indexQueue.put({
+      bookmarkId: bookmark.id,
+      url: bookmark.url,
+      title: bookmark.title,
+      retryCount: 0,
+      enqueuedAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn("[indexer] Failed to persist queue item:", err);
+  }
+
   // 触发队列处理
   processQueue();
   return true;
@@ -873,6 +889,23 @@ export async function enqueueBookmarks(
       title: bookmark.title,
       retryCount: 0,
     });
+  }
+
+  // 持久化到 IndexedDB
+  if (newBookmarks.length > 0) {
+    try {
+      await db.indexQueue.bulkPut(
+        newBookmarks.map((b) => ({
+          bookmarkId: b.id,
+          url: b.url,
+          title: b.title,
+          retryCount: 0,
+          enqueuedAt: Date.now(),
+        })),
+      );
+    } catch (err) {
+      console.warn("[indexer] Failed to persist queue batch:", err);
+    }
   }
 
   console.log(
@@ -1147,6 +1180,29 @@ export async function retryFailed(): Promise<number> {
  * 初始化：监听书签变更
  */
 export async function initIndexer(): Promise<void> {
+  // === 恢复索引队列 ===
+  try {
+    const persistedQueue = await db.indexQueue.toArray();
+    for (const item of persistedQueue) {
+      if (!queue.some((j) => j.bookmarkId === item.bookmarkId)) {
+        queue.push({
+          bookmarkId: item.bookmarkId,
+          url: item.url,
+          title: item.title,
+          retryCount: item.retryCount,
+        });
+      }
+    }
+    if (persistedQueue.length > 0) {
+      console.log(
+        `[indexer] Restored ${persistedQueue.length} items from persistent queue`,
+      );
+      processQueue();
+    }
+  } catch (err) {
+    console.warn("[indexer] Failed to restore persistent queue:", err);
+  }
+
   // 新增书签
   browser.bookmarks.onCreated.addListener((id, bookmark) => {
     if (bookmark.url) {
