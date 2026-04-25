@@ -294,8 +294,17 @@ export default defineBackground(() => {
   }
 
   /** 取得默认可写书签根目录 */
+  /** 获取浏览器实际根目录下的子节点（跳过合成根节点） */
+  async function getBrowserRootChildren() {
+    const tree = await browser.bookmarks.getTree();
+    if (tree.length === 1 && !tree[0].url && tree[0].children) {
+      return tree[0].children;
+    }
+    return tree;
+  }
+
   async function getDefaultWritableBookmarkParentId(): Promise<string> {
-    const rootChildren = await browser.bookmarks.getChildren("0");
+    const rootChildren = await getBrowserRootChildren();
     const preferred = rootChildren.find(
       (item) => !item.url && /bookmark|书签|toolbar|bar/i.test(item.title || ""),
     );
@@ -314,7 +323,7 @@ export default defineBackground(() => {
     folderPath: string[],
     node: GistBookmarkNode,
   ): Promise<void> {
-    const rootChildren = await browser.bookmarks.getChildren("0");
+    const rootChildren = await getBrowserRootChildren();
     let currentParentId = await getDefaultWritableBookmarkParentId();
     let startIndex = 0;
 

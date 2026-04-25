@@ -129,7 +129,9 @@ type BrowserBookmarkNode = {
 export function exportBookmarkTree(
   tree: BrowserBookmarkNode[],
 ): GistBookmarkNode[] {
-  return tree.map(node => {
+  // 去掉浏览器合成根节点，只导出用户实际的书签内容
+  const roots = getWritableRoot(tree);
+  return roots.map(node => {
     const gistNode: GistBookmarkNode = {
       id: node.id,
       title: node.title || "",
@@ -178,10 +180,10 @@ function collectUrls(
   folderPath: string[] = [],
 ): void {
   for (const node of nodes) {
-    if (node.id === "0") {
-      if (node.children) {
-        collectUrls(node.children, map, folderPath);
-      }
+    // 跳过浏览器合成根节点（Chrome "0" 或 Firefox "root________"）。
+    // 新版 Gist 数据已不含合成根，但旧版数据兼容需要。
+    if (!node.url && !node.title && node.children) {
+      collectUrls(node.children, map, folderPath);
       continue;
     }
 
@@ -199,8 +201,12 @@ function collectUrls(
   }
 }
 
-/** 取得真正可写入书签的根 children（跳过 Chrome synthetic root） */
-function getWritableRoot(nodes: GistBookmarkNode[]): GistBookmarkNode[] {
+/**
+ * 去掉浏览器合成根节点，返回实际可写的根目录列表。
+ * Chrome: getTree() 返回 [{ id: "0", children: [toolbar, other] }]
+ * Firefox: getTree() 返回 [{ id: "root________", children: [menu, toolbar, unfiled, mobile] }]
+ */
+function getWritableRoot<T extends { url?: string; children?: T[] }>(nodes: T[]): T[] {
   if (nodes.length === 1 && !nodes[0].url && nodes[0].children) {
     return nodes[0].children;
   }
@@ -472,11 +478,8 @@ async function clearLocalBookmarks(
   removeTree: (id: string) => Promise<void>,
 ): Promise<number> {
   let cleared = 0;
-  // getTree() returns [{ id: "0", children: [...] }]
-  const roots =
-    localTree.length === 1 && !localTree[0].url && localTree[0].children
-      ? localTree[0].children
-      : localTree;
+  // 去掉浏览器合成根节点，获取实际根目录
+  const roots = getWritableRoot(localTree);
 
   for (const root of roots) {
     if (root.children) {
