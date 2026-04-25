@@ -888,11 +888,9 @@ export default defineBackground(() => {
             }
             await saveSettings({
               gistId: message.gistId,
-              gistSyncEnabled: true,
+              gistSyncEnabled: false,
             });
-            // 关联后立即同步
-            const linkResult = await triggerGistSync();
-            return { success: true, ...linkResult };
+            return { success: true, gistId: message.gistId };
           }
           case "GIST_UPLOAD": {
             const uploadSettings = await getSettings();

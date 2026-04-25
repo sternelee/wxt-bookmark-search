@@ -104,7 +104,7 @@ export default function GistSyncSettings() {
       return;
     }
     setIsSyncing(true);
-    setStatus({ message: "正在关联 Gist 并同步书签...", type: "info" });
+    setStatus({ message: "正在验证并关联 Gist...", type: "info" });
     try {
       const result = await browser.runtime.sendMessage({
         type: "GIST_LINK",
@@ -112,12 +112,11 @@ export default function GistSyncSettings() {
       });
       if (result.success) {
         setGistId(id);
-        setSyncEnabled(true);
-        setLastSync(new Date().toLocaleString());
+        setSyncEnabled(false);
         setLinkGistId("");
-        await saveSettings({ gistId: id, gistSyncEnabled: true });
+        await saveSettings({ gistId: id, gistSyncEnabled: false });
         setStatus({
-          message: `✓ 关联成功！已同步: +${result.added} 新增, ${result.uploaded} 总计`,
+          message: `✓ 关联成功！Gist ID: ${result.gistId}。如需同步请手动点击「🔄 立即同步」。`,
           type: "success",
         });
       } else {
