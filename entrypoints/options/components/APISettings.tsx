@@ -11,8 +11,10 @@ import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { testApiKey } from "../../../src/embedding";
+import { useI18n } from "../../../src/i18n";
 
 export default function APISettings() {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = createSignal("");
   const [baseURL, setBaseURL] = createSignal("");
   const [embeddingModel, setEmbeddingModel] = createSignal("");
@@ -37,7 +39,7 @@ export default function APISettings() {
 
   const handleSave = async () => {
     if (!apiKey()) {
-      setStatus({ message: "请输入 API Key", type: "error" });
+      setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
       return;
     }
 
@@ -50,7 +52,7 @@ export default function APISettings() {
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
       });
-      setStatus({ message: "✓ 设置已保存", type: "success" });
+      setStatus({ message: t("options.api.saved"), type: "success" });
     } catch (error) {
       setStatus({ message: `保存失败: ${error}`, type: "error" });
     } finally {
@@ -60,7 +62,7 @@ export default function APISettings() {
 
   const handleTest = async () => {
     if (!apiKey()) {
-      setStatus({ message: "请输入 API Key", type: "error" });
+      setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
       return;
     }
 
@@ -68,9 +70,9 @@ export default function APISettings() {
     try {
       const valid = await testApiKey(apiKey(), undefined, baseURL());
       if (valid) {
-        setStatus({ message: "✓ API Key 有效，连接成功", type: "success" });
+        setStatus({ message: t("options.api.testSuccess"), type: "success" });
       } else {
-        setStatus({ message: "✗ API Key 无效", type: "error" });
+        setStatus({ message: t("options.api.testFail"), type: "error" });
       }
     } catch (error) {
       setStatus({ message: `测试失败: ${error}`, type: "error" });
@@ -82,7 +84,7 @@ export default function APISettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>🔑 API 配置</CardTitle>
+        <CardTitle>{t("options.api.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Input
@@ -91,7 +93,7 @@ export default function APISettings() {
           placeholder="sk-..."
           value={apiKey()}
           onInput={(e) => setApiKey(e.currentTarget.value)}
-          hint="支持 SiliconFlow、OpenAI、Azure OpenAI 等兼容 API"
+          hint={t("options.api.apiKeyHint")}
         />
 
         <div class="mt-4">
@@ -100,7 +102,7 @@ export default function APISettings() {
             onClick={() => setShowAdvanced(!showAdvanced())}
             class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
           >
-            {showAdvanced() ? "▼" : "▶"} 高级设置
+            {showAdvanced() ? "▼" : "▶"} {t("options.api.advanced")}
           </button>
 
           <Show when={showAdvanced()}>
@@ -110,42 +112,42 @@ export default function APISettings() {
                 placeholder="https://api.siliconflow.cn"
                 value={baseURL()}
                 onInput={(e) => setBaseURL(e.currentTarget.value)}
-                hint="API 基础地址，默认: https://api.siliconflow.cn"
+                hint={t("options.api.baseURLHint")}
               />
 
               <Input
-                label="Embedding 模型"
+                label={t("options.api.embeddingModel")}
                 placeholder="BAAI/bge-m3"
                 value={embeddingModel()}
                 onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
-                hint="默认: BAAI/bge-m3 (1024维向量)"
+                hint={t("options.api.embeddingModelHint")}
               />
 
               <Input
-                label="LLM 模型"
+                label={t("options.api.llmModel")}
                 placeholder="deepseek-ai/DeepSeek-V3"
                 value={llmModel()}
                 onInput={(e) => setLLMModel(e.currentTarget.value)}
-                hint="默认: deepseek-ai/DeepSeek-V3 (用于摘要和标签)"
+                hint={t("options.api.llmModelHint")}
               />
             </div>
           </Show>
         </div>
 
         <Checkbox
-          label="启用 LLM 内容增强"
+          label={t("options.api.enableLLM")}
           checked={enableLLMEnrichment()}
           onChange={(e) => setEnableLLMEnrichment(e.currentTarget.checked)}
-          hint="使用 LLM 生成摘要和标签，提升搜索质量"
+          hint={t("options.api.enableLLMHint")}
           class="mt-4"
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
           <Button onClick={handleSave} disabled={isSaving()}>
-            {isSaving() ? "保存中..." : "💾 保存"}
+            {isSaving() ? t("common.saving") : t("common.save")}
           </Button>
           <Button variant="outline" onClick={handleTest} disabled={isTesting()}>
-            {isTesting() ? "测试中..." : "⚡ 测试连接"}
+            {isTesting() ? t("common.testing") : t("common.test")}
           </Button>
         </div>
 

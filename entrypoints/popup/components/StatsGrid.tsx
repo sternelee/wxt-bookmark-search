@@ -1,4 +1,5 @@
 import { Card, CardContent } from "../../../src/components/ui/card";
+import { useI18n } from "../../../src/i18n";
 
 interface StatsGridProps {
   indexed: number;
@@ -6,6 +7,7 @@ interface StatsGridProps {
 }
 
 export default function StatsGrid(props: StatsGridProps) {
+  const { t } = useI18n();
   return (
     <div class="grid grid-cols-2 gap-3 mb-5">
       <Card class="text-center hover:bg-accent/50 transition-colors">
@@ -14,7 +16,7 @@ export default function StatsGrid(props: StatsGridProps) {
             {props.indexed}
           </div>
           <div class="text-[11px] text-muted-foreground font-medium mt-1">
-            AI 已索引
+            {t("popup.aiIndexed")}
           </div>
         </CardContent>
       </Card>
@@ -25,7 +27,7 @@ export default function StatsGrid(props: StatsGridProps) {
             {props.total}
           </div>
           <div class="text-[11px] text-muted-foreground font-medium mt-1">
-            全部书签
+            {t("popup.allBookmarks")}
           </div>
         </CardContent>
       </Card>

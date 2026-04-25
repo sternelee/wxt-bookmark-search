@@ -231,6 +231,7 @@ const defaultSettings: Settings = {
   lastGistSync: undefined,
   historySyncEnabled: false,
   historyDays: 30,
+  language: 'zh-CN',
 };
 
 /** 获取设置 */

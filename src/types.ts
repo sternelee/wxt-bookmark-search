@@ -124,6 +124,9 @@ export interface Settings {
   // 浏览历史同步配置
   historySyncEnabled?: boolean; // 是否启用历史同步
   historyDays?: number;         // 同步最近 N 天，默认 30
+
+  // 语言设置
+  language?: string;            // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */

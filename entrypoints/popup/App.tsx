@@ -1,6 +1,8 @@
 import { createSignal, onMount, For, Show, onCleanup } from "solid-js";
 import { getIndexStats, hasApiKey, getIndexedBookmarks } from "../../src/db";
 import { getRecentBookmarks } from "../../src/freq";
+import { useI18n, setReactiveLocale } from "../../src/i18n";
+import { getSettings } from "../../src/db";
 import { Button } from "../../src/components/ui/button";
 import { Separator } from "../../src/components/ui/separator";
 import { Input } from "../../src/components/ui/input";
@@ -11,6 +13,7 @@ import RecentList from "./components/RecentList";
 import IndexingHUD from "./components/IndexingHUD";
 
 function App() {
+  const { t } = useI18n();
   const [isConfigured, setIsConfigured] = createSignal(false);
   const [indexed, setIndexed] = createSignal(0);
   const [total, setTotal] = createSignal(0);
@@ -31,6 +34,10 @@ function App() {
   };
 
   onMount(async () => {
+    const settings = await getSettings();
+    if (settings.language) {
+      setReactiveLocale(settings.language as any);
+    }
     const configured = await hasApiKey();
     setIsConfigured(configured);
 
@@ -102,7 +109,7 @@ function App() {
       <div class="flex gap-2 mb-4">
         <Input
           type="text"
-          placeholder="快速搜索书签..."
+          placeholder={t("popup.quickSearchPlaceholder")}
           value={quickQuery()}
           onInput={(e) => setQuickQuery(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -136,11 +143,11 @@ function App() {
         onClick={openSettings}
         size="lg"
       >
-        {isConfigured() ? "管理索引与设置" : "去配置 API Key"}
+        {isConfigured() ? t("popup.manageSettings") : t("popup.goConfigure")}
       </Button>
 
       <div class="mt-4 text-center text-xs text-muted-foreground">
-        Powered by SiliconFlow & Jina AI
+        {t("popup.poweredBy")}
       </div>
     </div>
   );

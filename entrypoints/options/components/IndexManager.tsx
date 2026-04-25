@@ -4,9 +4,11 @@ import { Button } from "../../../src/components/ui/button";
 import { Progress } from "../../../src/components/ui/progress";
 import { Alert } from "../../../src/components/ui/alert";
 import { getIndexStats, getSettings, saveSettings, clearAll } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 import FolderTree from "./FolderTree";
 
 export default function IndexManager() {
+  const { t } = useI18n();
   const [stats, setStats] = createSignal({ total: 0, indexed: 0, pending: 0, failed: 0 });
   const [selectedFolders, setSelectedFolders] = createSignal<string[]>([]);
   const [progress, setProgress] = createSignal<{ processed: number; total: number; status: string } | null>(null);
@@ -75,21 +77,21 @@ export default function IndexManager() {
         if (message.progress.status === "processing") {
           setIsIndexing(true);
           setIsPaused(false);
-          setStatus({ message: `索引中 ${message.progress.processed}/${message.progress.total}`, type: "info" });
+          setStatus({ message: t("options.indexManager.indexing", { processed: message.progress.processed, total: message.progress.total }), type: "info" });
         } else if (message.progress.status === "paused") {
           setIsPaused(true);
-          setStatus({ message: `索引已暂停 (${message.progress.processed}/${message.progress.total})`, type: "info" });
+          setStatus({ message: t("options.indexManager.paused", { processed: message.progress.processed, total: message.progress.total }), type: "info" });
         } else if (message.progress.status === "complete") {
           setIsIndexing(false);
           setIsPaused(false);
           setProgress(null);
-          setStatus({ message: `✓ 索引完成，共处理 ${message.progress.processed} 个书签`, type: "success" });
+          setStatus({ message: t("options.indexManager.completed", { count: message.progress.processed }), type: "success" });
           loadStats();
         } else if (message.progress.status === "error") {
           setIsIndexing(false);
           setIsPaused(false);
           setProgress(null);
-          setStatus({ message: `索引出错: ${message.progress.error || "未知错误"}`, type: "error" });
+          setStatus({ message: `${t("common.error")}: ${message.progress.error || t("common.unknownError")}`, type: "error" });
         }
       }
     };
@@ -102,7 +104,7 @@ export default function IndexManager() {
   const handleStart = async () => {
     const settings = await getSettings();
     if (!settings.openaiApiKey) {
-      setStatus({ message: "请先配置 API Key", type: "error" });
+      setStatus({ message: t("options.indexManager.apiKeyRequired"), type: "error" });
       return;
     }
 
@@ -110,7 +112,7 @@ export default function IndexManager() {
 
     setIsIndexing(true);
     setIsPaused(false);
-    setStatus({ message: selected.length > 0 ? "正在执行定向索引..." : "正在执行全量增量索引...", type: "info" });
+    setStatus({ message: selected.length > 0 ? t("options.indexManager.scopeLabel") : t("common.start"), type: "info" });
 
     try {
       if (selected.length > 0) {
@@ -121,7 +123,7 @@ export default function IndexManager() {
 
         if (result && result.success && result.queued === 0) {
           setStatus({
-            message: `✓ 所选文件夹 (${result.total}个书签) 已全部同步`,
+            message: t("options.indexManager.folderSynced", { total: result.total }),
             type: "success",
           });
           setIsIndexing(false);
@@ -131,7 +133,7 @@ export default function IndexManager() {
         await browser.runtime.sendMessage({ type: "START_INDEXING" });
       }
     } catch (error) {
-      setStatus({ message: `启动失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("options.indexManager.startFailed")}: ${error}`, type: "error" });
       setIsIndexing(false);
       setProgress(null);
     }
@@ -142,9 +144,9 @@ export default function IndexManager() {
     try {
       await browser.runtime.sendMessage({ type: "PAUSE_INDEXING" });
       setIsPaused(true);
-      setStatus({ message: "索引已暂停", type: "info" });
+      setStatus({ message: t("common.pause").replace("⏸️ ", ""), type: "info" });
     } catch (error) {
-      setStatus({ message: `暂停失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("options.indexManager.pauseFailed")}: ${error}`, type: "error" });
     }
   };
 
@@ -153,9 +155,9 @@ export default function IndexManager() {
     try {
       await browser.runtime.sendMessage({ type: "RESUME_INDEXING" });
       setIsPaused(false);
-      setStatus({ message: "索引已恢复", type: "info" });
+      setStatus({ message: t("common.resume").replace("▶️ ", ""), type: "info" });
     } catch (error) {
-      setStatus({ message: `恢复失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("options.indexManager.resumeFailed")}: ${error}`, type: "error" });
     }
   };
 
@@ -163,15 +165,15 @@ export default function IndexManager() {
   const handleRetry = async () => {
     const settings = await getSettings();
     if (!settings.openaiApiKey) {
-      setStatus({ message: "请先配置 API Key", type: "error" });
+      setStatus({ message: t("options.indexManager.apiKeyRequired"), type: "error" });
       return;
     }
 
     try {
       await browser.runtime.sendMessage({ type: "RETRY_FAILED" });
-      setStatus({ message: "✓ 重试任务已启动", type: "success" });
+      setStatus({ message: t("options.indexManager.retryStarted"), type: "success" });
     } catch (error) {
-      setStatus({ message: `启动失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("options.indexManager.startFailed")}: ${error}`, type: "error" });
     }
   };
 
@@ -180,47 +182,47 @@ export default function IndexManager() {
     try {
       await browser.runtime.sendMessage({ type: "CLEAR_EMBEDDING_CACHE" });
       await loadCacheStats();
-      setStatus({ message: "✓ 查询缓存已清空", type: "success" });
+      setStatus({ message: t("options.indexManager.cacheCleared"), type: "success" });
     } catch (error) {
-      setStatus({ message: `清空缓存失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("options.indexManager.cacheClearFailed")}: ${error}`, type: "error" });
     }
   };
 
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>⚙️ 索引引擎管理</CardTitle>
+        <CardTitle>{t("options.indexManager.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         {/* 统计网格 */}
         <div class="grid grid-cols-2 gap-3 mb-6">
           <div class="text-center bg-muted p-3 rounded-lg border border-border">
             <div class="text-xl font-extrabold text-primary">{stats().total}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">总书签</div>
+            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.total")}</div>
           </div>
           <div class="text-center bg-muted p-3 rounded-lg border border-border">
             <div class="text-xl font-extrabold text-primary">{stats().indexed}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">已索引</div>
+            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.indexed")}</div>
           </div>
           <div class="text-center bg-muted p-3 rounded-lg border border-border">
             <div class="text-xl font-extrabold text-primary">{stats().pending}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">待处理</div>
+            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.pending")}</div>
           </div>
           <div class="text-center bg-muted p-3 rounded-lg border border-border">
             <div class="text-xl font-extrabold text-primary">{stats().failed}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">失败项</div>
+            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.failed")}</div>
           </div>
         </div>
 
         {/* 文件夹选择 */}
         <div class="mb-5">
-          <label class="block text-sm font-semibold mb-2 text-foreground">索引范围选择</label>
+          <label class="block text-sm font-semibold mb-2 text-foreground">{t("options.indexManager.scopeLabel")}</label>
           <FolderTree
             selectedIds={selectedFolders()}
             onChange={setSelectedFolders}
           />
           <p class="text-xs text-muted-foreground mt-1.5">
-            不勾选任何文件夹将默认对所有书签进行增量索引
+            {t("options.indexManager.scopeHint")}
           </p>
         </div>
 
@@ -231,28 +233,28 @@ export default function IndexManager() {
             disabled={isIndexing() && !isPaused()}
           >
             {selectedFolders().length > 0
-              ? `🚀 索引选中的 ${selectedFolders().length} 个文件夹`
-              : "🚀 开始全量/增量索引"}
+              ? t("common.startFolder", { count: selectedFolders().length })
+              : t("common.start")}
           </Button>
           <Button
             variant="outline"
             onClick={handlePause}
             disabled={!isIndexing() || isPaused()}
           >
-            ⏸️ 暂停
+            {t("common.pause")}
           </Button>
           <Button
             variant="outline"
             onClick={handleResume}
             disabled={!isPaused()}
           >
-            ▶️ 恢复
+            {t("common.resume")}
           </Button>
           <Button variant="outline" onClick={handleRetry}>
-            🔄 重试失败
+            {t("common.retry")}
           </Button>
           <Button variant="destructive" onClick={handleClearCache}>
-            🧹 清空缓存
+            {t("common.clearCache")}
           </Button>
         </div>
 
@@ -277,9 +279,9 @@ export default function IndexManager() {
         </Show>
 
         <div class="mt-4 text-xs text-muted-foreground border-t border-border pt-3">
-          🧠 向量查询缓存状态:
+          {t("options.indexManager.cacheStatus")}
           <span class="font-bold"> {cacheStats().size}/{cacheStats().maxSize}</span>
-          (已缓存最近的查询结果，提升搜索速度)
+          {t("options.indexManager.cacheStatusHint")}
         </div>
       </CardContent>
     </Card>

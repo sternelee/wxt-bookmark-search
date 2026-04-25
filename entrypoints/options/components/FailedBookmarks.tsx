@@ -1,6 +1,7 @@
 import { createSignal, onMount, For, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
+import { useI18n } from "../../../src/i18n";
 
 interface FailedItem {
   id: string;
@@ -10,6 +11,7 @@ interface FailedItem {
 }
 
 export default function FailedBookmarks() {
+  const { t } = useI18n();
   const [failedItems, setFailedItems] = createSignal<FailedItem[]>([]);
   const [isVisible, setIsVisible] = createSignal(false);
 
@@ -36,7 +38,7 @@ export default function FailedBookmarks() {
   onMount(loadFailed);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("确定要从浏览器中永久删除这个书签吗？")) {
+    if (!confirm(t("options.failedBookmarks.deleteConfirm"))) {
       return;
     }
 
@@ -52,10 +54,10 @@ export default function FailedBookmarks() {
           setIsVisible(false);
         }
       } else {
-        alert("删除失败: " + (res.error || "未知错误"));
+        alert(t("options.failedBookmarks.deleteFailed") + ": " + (res.error || t("common.unknownError")));
       }
     } catch (error) {
-      alert("删除失败: " + error);
+      alert(t("options.failedBookmarks.deleteFailed") + ": " + error);
     }
   };
 
@@ -63,11 +65,11 @@ export default function FailedBookmarks() {
     <Show when={isVisible()}>
       <Card class="mb-6">
         <CardHeader>
-          <CardTitle>⚠️ 失效 / 索引失败管理</CardTitle>
+          <CardTitle>{t("options.failedBookmarks.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <p class="text-xs text-muted-foreground mb-3">
-            以下书签在索引过程中遇到错误，可能是网址已失效。你可以点击链接测试或直接删除书签。
+            {t("options.failedBookmarks.description")}
           </p>
 
           <div class="max-h-96 overflow-y-auto border border-border rounded-lg">
@@ -76,18 +78,18 @@ export default function FailedBookmarks() {
                 <div class="flex items-center px-4 py-3.5 border-b border-border last:border-b-0 gap-3 hover:bg-muted transition-all">
                   <div class="flex-1 overflow-hidden">
                     <span class="block text-sm font-semibold truncate">
-                      {item.title || "无标题"}
+                      {item.title || t("options.failedBookmarks.noTitle")}
                     </span>
                     <a
                       href={item.url}
                       target="_blank"
                       class="block text-xs text-muted-foreground truncate hover:text-primary hover:underline"
-                      title="点击访问"
+                      title={t("options.failedBookmarks.visit")}
                     >
                       {item.url}
                     </a>
                     <div class="text-[11px] text-destructive mt-0.5 opacity-80">
-                      错误: {item.error || "未知错误"}
+                      {t("options.failedBookmarks.errorLabel")}: {item.error || t("common.unknownError")}
                     </div>
                   </div>
                   <Button
@@ -96,7 +98,7 @@ export default function FailedBookmarks() {
                     onClick={() => handleDelete(item.id)}
                     class="whitespace-nowrap"
                   >
-                    🗑️ 删除书签
+                    {t("common.delete")}
                   </Button>
                 </div>
               )}

@@ -1,4 +1,7 @@
+import { useI18n } from "../../../src/i18n";
+
 export default function SearchHint() {
+  const { t } = useI18n();
   return (
     <div class="text-center mb-5">
       <div class="flex justify-center gap-1 mb-2">
@@ -11,7 +14,7 @@ export default function SearchHint() {
         </kbd>
       </div>
       <p class="text-xs text-muted-foreground">
-        直接在地址栏搜索书签
+        {t("popup.searchHint")}
       </p>
     </div>
   );

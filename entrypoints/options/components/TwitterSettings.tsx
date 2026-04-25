@@ -10,8 +10,10 @@ import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 
 export default function TwitterSettings() {
+  const { t } = useI18n();
   const [syncEnabled, setSyncEnabled] = createSignal(false);
   const [ct0, setCt0] = createSignal("");
   const [authToken, setAuthToken] = createSignal("");
@@ -43,7 +45,7 @@ export default function TwitterSettings() {
 
     try {
       await saveSettings(settings);
-      setStatus({ message: "✓ Twitter 设置已保存", type: "success" });
+      setStatus({ message: t("options.twitter.saved"), type: "success" });
     } catch (error) {
       setStatus({ message: `保存失败: ${error}`, type: "error" });
     }
@@ -52,12 +54,12 @@ export default function TwitterSettings() {
   const handleSync = async () => {
     const settings = await getSettings();
     if (!settings.openaiApiKey) {
-      setStatus({ message: "请先配置 API Key", type: "error" });
+      setStatus({ message: t("options.twitter.apiKeyRequired"), type: "error" });
       return;
     }
 
     setIsSyncing(true);
-    setStatus({ message: "正在从 Twitter 获取书签...", type: "info" });
+    setStatus({ message: t("common.syncing"), type: "info" });
 
     try {
       const result = await browser.runtime.sendMessage({
@@ -66,7 +68,7 @@ export default function TwitterSettings() {
 
       if (result.success) {
         setStatus({
-          message: `✓ 同步成功！已将 ${result.total} 个书签加入索引`,
+          message: t("options.twitter.syncSuccess", { total: result.total }),
           type: "success",
         });
         setLastSync(new Date().toLocaleString());
@@ -83,40 +85,39 @@ export default function TwitterSettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>🐦 Twitter/X 书签语义化索引</CardTitle>
+        <CardTitle>{t("options.twitter.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <p class="text-xs text-muted-foreground mb-3">
-          需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie
-          进行同步，无需开发者账号。
+          {t("options.twitter.description")}
         </p>
 
         <Checkbox
-          label="启用 Twitter 书签同步"
+          label={t("options.twitter.enableSync")}
           checked={syncEnabled()}
           onChange={(e) => setSyncEnabled(e.currentTarget.checked)}
         />
 
         <Input
-          label="CSRF Token (ct0) - 可选"
-          placeholder="自动提取失败时手动输入"
+          label={t("options.twitter.csrfToken")}
+          placeholder={t("options.twitter.csrfPlaceholder")}
           value={ct0()}
           onInput={(e) => setCt0(e.currentTarget.value)}
-          hint="自动提取失败时，可从浏览器开发者工具中复制"
+          hint={t("options.twitter.csrfHint")}
         />
 
         <Input
-          label="Auth Token - 可选"
+          label={t("options.twitter.authToken")}
           type="password"
-          placeholder="自动提取失败时手动输入"
+          placeholder={t("options.twitter.authPlaceholder")}
           value={authToken()}
           onInput={(e) => setAuthToken(e.currentTarget.value)}
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
-          <Button onClick={handleSave}>💾 保存 Twitter 设置</Button>
+          <Button onClick={handleSave}>{t("options.twitter.saveSettings")}</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
-            {isSyncing() ? "正在同步..." : "🔄 立即同步书签"}
+            {isSyncing() ? t("common.syncing") : t("options.twitter.syncBookmarks")}
           </Button>
         </div>
 
@@ -130,7 +131,7 @@ export default function TwitterSettings() {
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">
-            上次同步: {lastSync()}
+            {t("common.lastSync")}: {lastSync()}
           </p>
         )}
       </CardContent>

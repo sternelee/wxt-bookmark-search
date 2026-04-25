@@ -1,5 +1,7 @@
 import { createSignal, onMount, For, Show, onCleanup } from "solid-js";
 import { incrementFreq } from "../../src/freq";
+import { getSettings } from "../../src/db";
+import { useI18n, setReactiveLocale } from "../../src/i18n";
 import type { SearchResult } from "../../src/types";
 
 function sourceIcon(source: string): string {
@@ -9,6 +11,7 @@ function sourceIcon(source: string): string {
 }
 
 function App() {
+  const { t } = useI18n();
   const params = new URLSearchParams(location.search);
   const initialQuery = params.get("q") ?? "";
 
@@ -43,11 +46,11 @@ function App() {
       if (resp?.success) {
         setResults(resp.results ?? []);
       } else {
-        setErrorMsg(resp?.error ?? "搜索失败");
+        setErrorMsg(resp?.error ?? t("search.searchFailed"));
       }
     } catch (e: any) {
       if (currentId !== searchId) return;
-      setErrorMsg(e?.message ?? "搜索出错");
+      setErrorMsg(e?.message ?? t("search.searchError"));
     } finally {
       if (currentId === searchId) setLoading(false);
     }
@@ -89,7 +92,11 @@ function App() {
 
   let inputRef: HTMLInputElement | undefined;
 
-  onMount(() => {
+  onMount(async () => {
+    const settings = await getSettings();
+    if (settings.language) {
+      setReactiveLocale(settings.language as any);
+    }
     inputRef?.focus();
     if (initialQuery) doSearch(initialQuery);
   });
@@ -112,7 +119,7 @@ function App() {
             id="search-input"
             type="search"
             class="flex-1 bg-muted rounded-lg px-4 py-2 text-base outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
-            placeholder="搜索书签、GitHub Stars、推文..."
+            placeholder={t("search.placeholder")}
             value={query()}
             onInput={(e) => handleInput(e.currentTarget.value)}
             autocomplete="off"
@@ -125,10 +132,10 @@ function App() {
           </Show>
         </div>
         <p class="text-xs text-muted-foreground max-w-3xl mx-auto mt-1 pl-9">
-          支持语法：<code class="bg-muted px-1 rounded">/github</code>{" "}
-          <code class="bg-muted px-1 rounded">/twitter</code>{" "}
-          <code class="bg-muted px-1 rounded">/folder:名称</code> ·
-          键盘：↑↓ 导航，Enter 打开，Esc 关闭
+          {t("search.syntaxHint")}：<code class="bg-muted px-1 rounded">{t("search.githubFilter")}</code>{" "}
+          <code class="bg-muted px-1 rounded">{t("search.twitterFilter")}</code>{" "}
+          <code class="bg-muted px-1 rounded">{t("search.folderFilter")}</code> ·
+          {t("search.keyboardHint")}
         </p>
       </header>
 
@@ -143,15 +150,15 @@ function App() {
         <Show when={!loading() && results().length === 0 && query().trim()}>
           <div class="text-center py-16 text-muted-foreground">
             <p class="text-4xl mb-4">🔎</p>
-            <p class="text-base">没有找到与「{query()}」相关的书签</p>
-            <p class="text-sm mt-2">试试其他关键词，或使用 /github /twitter 过滤来源</p>
+            <p class="text-base">{t("search.noResults", { query: query() })}</p>
+            <p class="text-sm mt-2">{t("search.tryOther")}</p>
           </div>
         </Show>
 
         <Show when={!query().trim() && results().length === 0 && !loading()}>
           <div class="text-center py-16 text-muted-foreground">
             <p class="text-4xl mb-4">🗂️</p>
-            <p class="text-base">输入关键词开始搜索</p>
+            <p class="text-base">{t("search.emptyState")}</p>
           </div>
         </Show>
 
@@ -197,7 +204,7 @@ function App() {
                 <Show when={result.indexed}>
                   <span
                     class="text-xs text-muted-foreground shrink-0 mt-0.5"
-                    title="已 AI 索引"
+                    title={t("search.aiIndexed")}
                   >
                     🤖
                   </span>
@@ -209,7 +216,7 @@ function App() {
 
         <Show when={results().length > 0}>
           <p class="text-center text-xs text-muted-foreground mt-4">
-            共 {results().length} 条结果
+            {t("search.resultsCount", { count: results().length })}
           </p>
         </Show>
       </main>

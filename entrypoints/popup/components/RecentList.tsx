@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import { Card, CardContent } from "../../../src/components/ui/card";
 import { Badge } from "../../../src/components/ui/badge";
+import { useI18n } from "../../../src/i18n";
 
 interface RecentListProps {
   items: Array<{
@@ -12,10 +13,11 @@ interface RecentListProps {
 }
 
 export default function RecentList(props: RecentListProps) {
+  const { t } = useI18n();
   return (
     <div class="mb-5">
       <h2 class="text-xs uppercase tracking-wide text-muted-foreground mb-2.5 font-medium">
-        最近访问
+        {t("popup.recentlyVisited")}
       </h2>
       <div class="flex flex-col gap-2">
         <For each={props.items}>

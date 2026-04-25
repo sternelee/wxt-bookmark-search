@@ -9,8 +9,10 @@ import { Input } from "../../../src/components/ui/input";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 
 export default function GitHubSettings() {
+  const { t } = useI18n();
   const [githubToken, setGithubToken] = createSignal("");
   const [lastSync, setLastSync] = createSignal<string | null>(null);
   const [status, setStatus] = createSignal<{
@@ -30,7 +32,7 @@ export default function GitHubSettings() {
   const handleSave = async () => {
     try {
       await saveSettings({ githubToken: githubToken() });
-      setStatus({ message: "✓ GitHub 设置已保存", type: "success" });
+      setStatus({ message: t("options.github.saved"), type: "success" });
     } catch (error) {
       setStatus({ message: `保存失败: ${error}`, type: "error" });
     }
@@ -39,12 +41,12 @@ export default function GitHubSettings() {
   const handleSync = async () => {
     const settings = await getSettings();
     if (!settings.githubToken) {
-      setStatus({ message: "请先填写 GitHub Token", type: "error" });
+      setStatus({ message: t("options.github.tokenRequired"), type: "error" });
       return;
     }
 
     setIsSyncing(true);
-    setStatus({ message: "正在从 GitHub 获取仓库列表...", type: "info" });
+    setStatus({ message: t("options.github.syncingStars"), type: "info" });
 
     try {
       const result = await browser.runtime.sendMessage({
@@ -53,7 +55,7 @@ export default function GitHubSettings() {
 
       if (result.success) {
         setStatus({
-          message: `✓ 同步成功！已将 ${result.total} 个仓库加入索引队列`,
+          message: t("options.github.syncSuccess", { total: result.total }),
           type: "success",
         });
         setLastSync(new Date().toLocaleString());
@@ -70,7 +72,7 @@ export default function GitHubSettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>🐙 GitHub Stars 语义化索引</CardTitle>
+        <CardTitle>{t("options.github.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Input
@@ -79,13 +81,13 @@ export default function GitHubSettings() {
           placeholder="ghp_..."
           value={githubToken()}
           onInput={(e) => setGithubToken(e.currentTarget.value)}
-          hint="同步 GitHub Stars 需要读取 starred repos；若启用下方 Gist 书签同步，还需额外包含 gist 权限。"
+          hint={t("options.github.tokenHint")}
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
-          <Button onClick={handleSave}>💾 保存 GitHub 设置</Button>
+          <Button onClick={handleSave}>{t("options.github.saveSettings")}</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
-            {isSyncing() ? "正在获取 Stars..." : "🔄 立即同步 Stars"}
+            {isSyncing() ? t("options.github.syncingStars") : t("options.github.syncStars")}
           </Button>
         </div>
 
@@ -99,7 +101,7 @@ export default function GitHubSettings() {
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">
-            上次同步: {lastSync()}
+            {t("common.lastSync")}: {lastSync()}
           </p>
         )}
       </CardContent>

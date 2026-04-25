@@ -9,8 +9,10 @@ import { Input } from "../../../src/components/ui/input";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 
 export default function GistSyncSettings() {
+  const { t } = useI18n();
   const [gistId, setGistId] = createSignal("");
   const [linkGistId, setLinkGistId] = createSignal("");
   const [syncEnabled, setSyncEnabled] = createSignal(false);
@@ -41,7 +43,7 @@ export default function GistSyncSettings() {
     }
     // 友好提示 Gist 大小超限
     if (msg.includes("过大") || msg.includes("GistSizeError")) {
-      msg += " 可尝试在 Chrome 书签管理器中清理无用书签后再同步，或使用「⬆️ 上传覆盖」创建一份全新的 Gist。";
+      msg += " " + t("options.gist.sizeError");
     }
     return msg;
   };
@@ -75,7 +77,7 @@ export default function GistSyncSettings() {
 
   const handleCreate = async () => {
     setIsCreating(true);
-    setStatus({ message: "正在创建 Gist 并上传书签...", type: "info" });
+    setStatus({ message: t("options.gist.creating"), type: "info" });
     try {
       const result = await browser.runtime.sendMessage({ type: "GIST_CREATE" });
       if (result.success) {
@@ -84,7 +86,7 @@ export default function GistSyncSettings() {
         setLastSync(new Date().toLocaleString());
         await saveSettings({ gistId: result.gistId, gistSyncEnabled: true });
         setStatus({
-          message: `✓ Gist 创建成功！ID: ${result.gistId}`,
+          message: t("options.gist.createSuccess", { gistId: result.gistId }),
           type: "success",
         });
       } else {
@@ -100,11 +102,11 @@ export default function GistSyncSettings() {
   const handleLink = async () => {
     const id = linkGistId().trim();
     if (!id) {
-      setStatus({ message: "请输入 Gist ID", type: "error" });
+      setStatus({ message: t("options.gist.gistIdRequired"), type: "error" });
       return;
     }
     setIsSyncing(true);
-    setStatus({ message: "正在验证并关联 Gist...", type: "info" });
+    setStatus({ message: t("options.gist.linking"), type: "info" });
     try {
       const result = await browser.runtime.sendMessage({
         type: "GIST_LINK",
@@ -116,7 +118,7 @@ export default function GistSyncSettings() {
         setLinkGistId("");
         await saveSettings({ gistId: id, gistSyncEnabled: false });
         setStatus({
-          message: `✓ 关联成功！Gist ID: ${result.gistId}。如需同步请手动点击「🔄 立即同步」。`,
+          message: t("options.gist.linkSuccess", { gistId: result.gistId }),
           type: "success",
         });
       } else {
@@ -131,13 +133,13 @@ export default function GistSyncSettings() {
 
   const handleSync = async () => {
     setIsSyncing(true);
-    setStatus({ message: "正在同步书签到 Gist...", type: "info" });
+    setStatus({ message: t("options.gist.syncInfo"), type: "info" });
     try {
       const result = await browser.runtime.sendMessage({ type: "GIST_SYNC" });
       if (result.success) {
         setLastSync(new Date().toLocaleString());
         setStatus({
-          message: `✓ 同步完成！+${result.added} 新增, -${result.removed} 删除, ${result.uploaded} 总计`,
+          message: t("options.gist.syncSuccess", { added: result.added, removed: result.removed, uploaded: result.uploaded }),
           type: "success",
         });
       } else {
@@ -153,18 +155,18 @@ export default function GistSyncSettings() {
   const handleUpload = () => {
     setPendingAction({
       type: "upload",
-      title: "⬆️ 确认上传覆盖",
+      title: t("options.gist.confirmUploadTitle"),
       message:
-        "将用本地书签全量替换 Gist 中的内容。远程独有的书签将会丢失，此操作不可撤销。",
+        t("options.gist.confirmUploadBody"),
     });
   };
 
   const handleDownload = () => {
     setPendingAction({
       type: "download",
-      title: "⬇️ 确认下载覆盖",
+      title: t("options.gist.confirmDownloadTitle"),
       message:
-        "将用 Gist 内容全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
+        t("options.gist.confirmDownloadBody"),
     });
   };
 
@@ -175,13 +177,13 @@ export default function GistSyncSettings() {
 
     if (action.type === "upload") {
       setIsUploading(true);
-      setStatus({ message: "正在上传本地书签覆盖 Gist...", type: "info" });
+      setStatus({ message: t("options.gist.uploadInfo"), type: "info" });
       try {
         const result = await browser.runtime.sendMessage({ type: "GIST_UPLOAD" });
         if (result.success) {
           setLastSync(new Date().toLocaleString());
           setStatus({
-            message: `✓ 上传覆盖完成！${result.uploaded} 个书签已覆盖到 Gist`,
+            message: t("options.gist.uploadSuccess", { uploaded: result.uploaded }),
             type: "success",
           });
         } else {
@@ -197,13 +199,13 @@ export default function GistSyncSettings() {
 
     if (action.type === "download") {
       setIsDownloading(true);
-      setStatus({ message: "正在从 Gist 下载覆盖本地书签...", type: "info" });
+      setStatus({ message: t("options.gist.downloadInfo"), type: "info" });
       try {
         const result = await browser.runtime.sendMessage({ type: "GIST_DOWNLOAD" });
         if (result.success) {
           setLastSync(new Date().toLocaleString());
           setStatus({
-            message: `✓ 下载覆盖完成！+${result.added} 个书签已恢复，${result.removed} 个本地项目已清空`,
+            message: t("options.gist.downloadSuccess", { added: result.added, removed: result.removed }),
             type: "success",
           });
         } else {
@@ -222,7 +224,7 @@ export default function GistSyncSettings() {
     setSyncEnabled(newValue);
     await saveSettings({ gistSyncEnabled: newValue });
     setStatus({
-      message: newValue ? "✓ 自动同步已启用" : "自动同步已关闭",
+      message: newValue ? t("options.gist.autoSyncEnabled") : t("options.gist.autoSyncDisabled"),
       type: newValue ? "success" : "info",
     });
   };
@@ -230,28 +232,27 @@ export default function GistSyncSettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>☁️ 书签 Gist 同步</CardTitle>
+        <CardTitle>{t("options.gist.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <p class="text-sm text-muted-foreground mb-4">
-          通过 GitHub Gist 在多设备间同步浏览器书签。需要先在上方配置 GitHub
-          Token（需包含 <code>gist</code> 权限）。
+          {t("options.gist.description")}
         </p>
 
         <Show when={!gistId()}>
           {/* 尚未关联 Gist */}
           <div class="space-y-4">
             <Button onClick={handleCreate} disabled={isCreating()}>
-              {isCreating() ? "正在创建..." : "📤 创建新 Gist（上传本地书签）"}
+              {isCreating() ? t("common.creating") : t("options.gist.createGist")}
             </Button>
 
             <div class="flex items-end gap-2">
               <Input
-                label="关联已有 Gist ID"
-                placeholder="输入 Gist ID（32 位十六进制）"
+                label={t("options.gist.linkGist")}
+                placeholder={t("options.gist.gistIdPlaceholder")}
                 value={linkGistId()}
                 onInput={(e) => setLinkGistId(e.currentTarget.value)}
-                hint="从其他设备获取 Gist ID 后在此关联"
+                hint={t("options.gist.gistIdHint")}
               />
               <Button
                 variant="outline"
@@ -259,7 +260,7 @@ export default function GistSyncSettings() {
                 disabled={isSyncing()}
                 class="shrink-0 mb-6 ml-5"
               >
-                {isSyncing() ? "关联中..." : "🔗 关联"}
+                {isSyncing() ? t("common.linking") : t("common.link")}
               </Button>
             </div>
           </div>
@@ -274,7 +275,7 @@ export default function GistSyncSettings() {
                 {gistId()}
               </code>
               <span class="text-xs text-muted-foreground ml-auto">
-                本地书签: {bookmarkCount()} 个
+                {t("options.gist.localBookmarks", { count: bookmarkCount() })}
               </span>
             </div>
 
@@ -286,27 +287,27 @@ export default function GistSyncSettings() {
                   onChange={handleToggle}
                   class="w-4 h-4 rounded"
                 />
-                <span class="text-sm">自动同步（书签变更后 5 秒自动上传）</span>
+                <span class="text-sm">{t("options.gist.autoSync")}</span>
               </label>
             </div>
 
             <div class="flex gap-3 flex-wrap">
               <Button onClick={handleSync} disabled={isSyncing()}>
-                {isSyncing() ? "同步中..." : "🔄 立即同步"}
+                {isSyncing() ? t("common.syncing") : t("common.sync")}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleUpload}
                 disabled={isUploading()}
               >
-                {isUploading() ? "上传中..." : "⬆️ 上传覆盖"}
+                {isUploading() ? t("common.uploading") : t("common.upload")}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleDownload}
                 disabled={isDownloading()}
               >
-                {isDownloading() ? "下载中..." : "⬇️ 下载覆盖"}
+                {isDownloading() ? t("common.downloading") : t("common.download")}
               </Button>
             </div>
           </div>
@@ -326,7 +327,7 @@ export default function GistSyncSettings() {
                 onClick={executePendingAction}
                 disabled={isUploading() || isDownloading()}
               >
-                确认执行
+                {t("common.confirm")}
               </Button>
               <Button
                 size="sm"
@@ -334,7 +335,7 @@ export default function GistSyncSettings() {
                 onClick={() => setPendingAction(null)}
                 disabled={isUploading() || isDownloading()}
               >
-                取消
+                {t("common.cancel")}
               </Button>
             </div>
           </div>
@@ -350,7 +351,7 @@ export default function GistSyncSettings() {
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">
-            上次同步: {lastSync()}
+            {t("common.lastSync")}: {lastSync()}
           </p>
         )}
       </CardContent>

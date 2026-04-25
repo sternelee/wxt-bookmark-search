@@ -10,8 +10,10 @@ import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 
 export default function HistorySettings() {
+  const { t } = useI18n();
   const [syncEnabled, setSyncEnabled] = createSignal(false);
   const [historyDays, setHistoryDays] = createSignal(30);
   const [lastSync, setLastSync] = createSignal<string | null>(null);
@@ -33,7 +35,7 @@ export default function HistorySettings() {
         historySyncEnabled: syncEnabled(),
         historyDays: historyDays(),
       });
-      setStatus({ message: "✓ 历史同步设置已保存", type: "success" });
+      setStatus({ message: t("options.history.saved"), type: "success" });
     } catch (error) {
       setStatus({ message: `保存失败: ${error}`, type: "error" });
     }
@@ -41,7 +43,7 @@ export default function HistorySettings() {
 
   const handleSync = async () => {
     setIsSyncing(true);
-    setStatus({ message: "正在获取浏览历史...", type: "info" });
+    setStatus({ message: t("common.syncing"), type: "info" });
 
     try {
       const result = await browser.runtime.sendMessage({
@@ -50,8 +52,8 @@ export default function HistorySettings() {
 
       if (result.success) {
         const msg = result.error
-          ? `同步出错: ${result.error}`
-          : `✓ 同步完成！新增 ${result.added} 条，跳过 ${result.skipped} 条`;
+          ? `${t("options.history.syncError")}: ${result.error}`
+          : t("options.history.syncSuccess", { added: result.added, skipped: result.skipped });
         setStatus({
           message: msg,
           type: result.error ? "error" : "success",
@@ -70,21 +72,21 @@ export default function HistorySettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>📜 浏览历史语义化索引</CardTitle>
+        <CardTitle>{t("options.history.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <p class="text-xs text-muted-foreground mb-3">
-          将浏览器访问历史纳入语义搜索。仅索引 http/https 页面，跳过已存在的书签/GitHub/Twitter 记录。
+          {t("options.history.description")}
         </p>
 
         <Checkbox
-          label="启用浏览历史同步"
+          label={t("options.history.enableSync")}
           checked={syncEnabled()}
           onChange={(e) => setSyncEnabled(e.currentTarget.checked)}
         />
 
         <Input
-          label="同步最近 N 天"
+          label={t("options.history.syncDays")}
           type="number"
           placeholder="30"
           value={String(historyDays())}
@@ -92,13 +94,13 @@ export default function HistorySettings() {
             const v = parseInt(e.currentTarget.value, 10);
             if (!isNaN(v) && v >= 1 && v <= 365) setHistoryDays(v);
           }}
-          hint="范围 1-365 天，默认 30 天。天数越多首次同步越慢。"
+          hint={t("options.history.syncDaysHint")}
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
-          <Button onClick={handleSave}>💾 保存设置</Button>
+          <Button onClick={handleSave}>{t("options.history.saveSettings")}</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
-            {isSyncing() ? "正在同步..." : "🔄 立即同步历史"}
+            {isSyncing() ? t("common.syncing") : t("options.history.syncNow")}
           </Button>
         </div>
 
@@ -112,7 +114,7 @@ export default function HistorySettings() {
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">
-            上次同步: {lastSync()}
+            {t("common.lastSync")}: {lastSync()}
           </p>
         )}
       </CardContent>

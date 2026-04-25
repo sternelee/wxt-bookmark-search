@@ -5,8 +5,10 @@ import { Slider } from "../../../src/components/ui/slider";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { useI18n } from "../../../src/i18n";
 
 export default function SearchSettings() {
+  const { t } = useI18n();
   const [searchMode, setSearchMode] = createSignal<"hybrid" | "vector" | "keyword">("hybrid");
   const [vectorWeight, setVectorWeight] = createSignal(40);
   const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" } | null>(null);
@@ -23,7 +25,7 @@ export default function SearchSettings() {
         searchMode: searchMode(),
         vectorWeight: vectorWeight() / 100,
       });
-      setStatus({ message: "✓ 搜索设置已应用", type: "success" });
+      setStatus({ message: t("options.search.applied"), type: "success" });
     } catch (error) {
       setStatus({ message: `应用失败: ${error}`, type: "error" });
     }
@@ -32,33 +34,33 @@ export default function SearchSettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>🔍 检索策略</CardTitle>
+        <CardTitle>{t("options.search.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Select
-          label="搜索模式"
+          label={t("options.search.mode")}
           value={searchMode()}
           onChange={(e) => setSearchMode(e.currentTarget.value as any)}
           options={[
-            { value: "hybrid", label: "混合检索 (Hybrid - 推荐)" },
-            { value: "vector", label: "纯向量检索 (Semantic Only)" },
-            { value: "keyword", label: "纯关键词匹配 (Classic)" },
+            { value: "hybrid", label: t("options.search.modeHybrid") },
+            { value: "vector", label: t("options.search.modeVector") },
+            { value: "keyword", label: t("options.search.modeKeyword") },
           ]}
-          hint="混合检索结合了关键词的精准度和 AI 向量的语义理解"
+          hint={t("options.search.modeHint")}
         />
 
         <Slider
-          label="向量检索权重 (Vector Weight)"
+          label={t("options.search.vectorWeight")}
           min="0"
           max="100"
           value={vectorWeight()}
           onInput={(e) => setVectorWeight(Number(e.currentTarget.value))}
           valueDisplay={`${vectorWeight()}%`}
-          hint="调高此值将让搜索结果更偏向意思相近，调低则更偏向字面匹配"
+          hint={t("options.search.vectorWeightHint")}
           disabled={searchMode() !== "hybrid"}
         />
 
-        <Button onClick={handleApply}>✨ 应用检索策略</Button>
+        <Button onClick={handleApply}>{t("common.apply")}</Button>
 
         <Alert
           variant={status()?.type}

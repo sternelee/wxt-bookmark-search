@@ -30,6 +30,7 @@ import {
   syncTwitterBookmarks,
 } from "../src/indexer";
 import { syncHistoryBookmarks } from "../src/history";
+import { t } from "../src/i18n";
 import {
   fullGistSync,
   ensureDeviceId,
@@ -504,8 +505,8 @@ export default defineBackground(() => {
   // Omnibox 交互
   browser.omnibox.onInputStarted.addListener(() => {
     const defaultDesc = IS_FIREFOX
-      ? "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 (/github /twitter /folder:名称)"
-      : "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 <dim>(/github /twitter /folder:名称)</dim>";
+      ? t("background.omniboxDefault")
+      : t("background.omniboxDefault");
     browser.omnibox.setDefaultSuggestion({
       description: defaultDesc,
     });
@@ -521,26 +522,26 @@ export default defineBackground(() => {
         {
           content: "/github ",
           description: IS_FIREFOX
-            ? "🔮 /github 关键词 — 搜索 GitHub Stars"
-            : "🔮 <match>/github</match><dim>关键词</dim> — 搜索 GitHub Stars",
+            ? t("background.cmdGithub")
+            : t("background.cmdGithub"),
         },
         {
           content: "/twitter ",
           description: IS_FIREFOX
-            ? "🐦 /twitter 关键词 — 搜索 Twitter 书签"
-            : "🐦 <match>/twitter</match><dim>关键词</dim> — 搜索 Twitter 书签",
+            ? t("background.cmdTwitter")
+            : t("background.cmdTwitter"),
         },
         {
           content: "/history ",
           description: IS_FIREFOX
-            ? "📜 /history 关键词 — 搜索浏览历史"
-            : "📜 <match>/history</match><dim>关键词</dim> — 搜索浏览历史",
+            ? t("background.cmdHistory")
+            : t("background.cmdHistory"),
         },
         {
           content: "/folder:",
           description: IS_FIREFOX
-            ? "📁 /folder:名称 关键词 — 限定在特定文件夹中搜索"
-            : "📁 <match>/folder:</match><dim>名称 关键词</dim> — 限定在特定文件夹中搜索",
+            ? t("background.cmdFolder")
+            : t("background.cmdFolder"),
         },
       ]);
       return;
@@ -559,8 +560,8 @@ export default defineBackground(() => {
       const folderSuggestions = folders.slice(0, 8).map((f) => ({
         content: `/folder:${f.title} `,
         description: IS_FIREFOX
-          ? `📁 搜索文件夹: ${f.title}`
-          : `📁 搜索文件夹: <match>${escapeXml(f.title)}</match>`,
+          ? t("background.folderSearch", { name: f.title })
+          : t("background.folderSearch", { name: escapeXml(f.title) }),
       }));
       if (folderSuggestions.length > 0) {
         suggest(folderSuggestions);
@@ -703,8 +704,8 @@ export default defineBackground(() => {
     if (debounceMs > 0) {
       browser.omnibox.setDefaultSuggestion({
         description: IS_FIREFOX
-          ? "🔍 正在语义搜索..."
-          : "🔍 <dim>正在语义搜索...</dim>",
+          ? t("background.searching")
+          : t("background.searching"),
       });
     }
 
@@ -862,7 +863,7 @@ export default defineBackground(() => {
             const { Octokit } = await import("octokit");
             const settings = await getSettings();
             if (!settings.githubToken) {
-              return { success: false, error: "GitHub Token 未配置" };
+              return { success: false, error: t("options.gist.tokenRequired") };
             }
             const octokit = new Octokit({ auth: settings.githubToken });
             const deviceId = await ensureDeviceId(settings.gistDeviceId);
@@ -890,12 +891,12 @@ export default defineBackground(() => {
             const { fetchGistData } = await import("../src/gist-sync");
             const linkSettings = await getSettings();
             if (!linkSettings.githubToken) {
-              return { success: false, error: "GitHub Token 未配置" };
+              return { success: false, error: t("options.gist.tokenRequired") };
             }
             const octokit = new Octokit({ auth: linkSettings.githubToken });
             const remoteData = await fetchGistData(octokit, message.gistId);
             if (!remoteData) {
-              return { success: false, error: "Gist 不存在或不包含书签数据" };
+              return { success: false, error: t("options.gist.gistNotFound") };
             }
             await saveSettings({
               gistId: message.gistId,
@@ -906,10 +907,10 @@ export default defineBackground(() => {
           case "GIST_UPLOAD": {
             const uploadSettings = await getSettings();
             if (!uploadSettings.githubToken) {
-              return { success: false, error: "GitHub Token 未配置" };
+              return { success: false, error: t("options.gist.tokenRequired") };
             }
             if (!uploadSettings.gistId) {
-              return { success: false, error: "未关联 Gist，请先创建或关联" };
+              return { success: false, error: t("options.gist.noGistLinked") };
             }
             const tree = await browser.bookmarks.getTree();
             const deviceId = await ensureDeviceId(uploadSettings.gistDeviceId);
@@ -928,10 +929,10 @@ export default defineBackground(() => {
           case "GIST_DOWNLOAD": {
             const downloadSettings = await getSettings();
             if (!downloadSettings.githubToken) {
-              return { success: false, error: "GitHub Token 未配置" };
+              return { success: false, error: t("options.gist.tokenRequired") };
             }
             if (!downloadSettings.gistId) {
-              return { success: false, error: "未关联 Gist，请先创建或关联" };
+              return { success: false, error: t("options.gist.noGistLinked") };
             }
             const localTree = await browser.bookmarks.getTree();
             const downloadResult = await downloadFromGist(
