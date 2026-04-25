@@ -23,6 +23,7 @@ export default function GistSyncSettings() {
   const [isCreating, setIsCreating] = createSignal(false);
   const [isUploading, setIsUploading] = createSignal(false);
   const [isDownloading, setIsDownloading] = createSignal(false);
+  const [bookmarkCount, setBookmarkCount] = createSignal(0);
 
   /** 内联确认对话框状态 */
   const [pendingAction, setPendingAction] = createSignal<
@@ -32,10 +33,27 @@ export default function GistSyncSettings() {
   >(null);
 
   const formatError = (error: unknown): string => {
+    let msg: string;
     if (error instanceof Error) {
-      return error.message;
+      msg = error.message;
+    } else {
+      msg = String(error);
     }
-    return String(error);
+    // 友好提示 Gist 大小超限
+    if (msg.includes("过大") || msg.includes("GistSizeError")) {
+      msg += " 可尝试在 Chrome 书签管理器中清理无用书签后再同步，或使用「⬆️ 上传覆盖」创建一份全新的 Gist。";
+    }
+    return msg;
+  };
+
+  /** 统计浏览器书签总数 */
+  const countBookmarks = (nodes: Array<{ url?: string; children?: any[] }>): number => {
+    let count = 0;
+    for (const node of nodes) {
+      if (node.url) count++;
+      if (node.children) count += countBookmarks(node.children);
+    }
+    return count;
   };
 
   // 初始化
@@ -45,6 +63,13 @@ export default function GistSyncSettings() {
     setSyncEnabled(settings.gistSyncEnabled || false);
     if (settings.lastGistSync) {
       setLastSync(new Date(settings.lastGistSync).toLocaleString());
+    }
+    // 统计本地书签数量
+    try {
+      const tree = await browser.bookmarks.getTree();
+      setBookmarkCount(countBookmarks(tree));
+    } catch {
+      // 忽略统计失败
     }
   });
 
@@ -249,6 +274,9 @@ export default function GistSyncSettings() {
               <code class="text-xs bg-background px-2 py-1 rounded border">
                 {gistId()}
               </code>
+              <span class="text-xs text-muted-foreground ml-auto">
+                本地书签: {bookmarkCount()} 个
+              </span>
             </div>
 
             <div class="flex items-center gap-3">

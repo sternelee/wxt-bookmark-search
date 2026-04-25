@@ -11,6 +11,25 @@ export const GIST_FILENAME = "flow-search-bookmarks.json";
 const DELETED_BOOKMARKS_KEY = "gist_deleted_bookmarks";
 const DELETION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
 
+/** Gist 单文件大小软限制（字节）。GitHub 实际限制约 1MB，留 10% 安全余量。 */
+export const MAX_GIST_SIZE = 900 * 1024; // ~900 KB
+
+/** 超出 Gist 大小限制时抛出的错误 */
+export class GistSizeError extends Error {
+  public readonly currentSize: number;
+  public readonly limit: number;
+
+  constructor(currentSize: number, limit: number) {
+    super(
+      `书签数据过大（${(currentSize / 1024).toFixed(0)}KB），超过 Gist 单文件限制 ${(limit / 1024).toFixed(0)}KB。` +
+      `建议清理无用书签后再同步。`
+    );
+    this.currentSize = currentSize;
+    this.limit = limit;
+    this.name = "GistSizeError";
+  }
+}
+
 // === 删除记录管理 ===
 
 /** 获取本地删除记录 */
@@ -57,35 +76,43 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-/** 创建新 Gist */
+/** 创建新 Gist（含大小保护） */
 export async function createGist(
   octokit: InstanceType<typeof Octokit>,
   data: GistBookmarkData,
 ): Promise<string> {
+  const content = JSON.stringify(data, null, 2);
+  const size = new TextEncoder().encode(content).length;
+  if (size > MAX_GIST_SIZE) {
+    throw new GistSizeError(size, MAX_GIST_SIZE);
+  }
+
   const response = await octokit.rest.gists.create({
     description: "Flow Search - Bookmark Sync",
     public: false,
     files: {
-      [GIST_FILENAME]: {
-        content: JSON.stringify(data, null, 2),
-      },
+      [GIST_FILENAME]: { content },
     },
   });
   return response.data.id!;
 }
 
-/** 更新已有 Gist */
+/** 更新已有 Gist（含大小保护） */
 export async function updateGist(
   octokit: InstanceType<typeof Octokit>,
   gistId: string,
   data: GistBookmarkData,
 ): Promise<void> {
+  const content = JSON.stringify(data, null, 2);
+  const size = new TextEncoder().encode(content).length;
+  if (size > MAX_GIST_SIZE) {
+    throw new GistSizeError(size, MAX_GIST_SIZE);
+  }
+
   await octokit.rest.gists.update({
     gist_id: gistId,
     files: {
-      [GIST_FILENAME]: {
-        content: JSON.stringify(data, null, 2),
-      },
+      [GIST_FILENAME]: { content },
     },
   });
 }
