@@ -445,6 +445,156 @@ function countUrls(nodes: GistBookmarkNode[]): number {
   return count;
 }
 
+// === 全量覆盖辅助函数 ===
+
+/** 递归收集 Gist 树中的所有叶子书签节点及其路径 */
+function collectLeafNodes(
+  nodes: GistBookmarkNode[],
+  folderPath: string[] = [],
+  result: Array<{ node: GistBookmarkNode; folderPath: string[] }> = [],
+): Array<{ node: GistBookmarkNode; folderPath: string[] }> {
+  for (const node of nodes) {
+    if (node.url) {
+      result.push({ node, folderPath: normalizeFolderPath(folderPath) });
+      continue;
+    }
+    if (node.children && node.children.length > 0) {
+      const nextPath = node.title ? [...folderPath, node.title] : folderPath;
+      collectLeafNodes(node.children, nextPath, result);
+    }
+  }
+  return result;
+}
+
+/** 清空本地可写根目录下的内容（保留根目录文件夹本身） */
+async function clearLocalBookmarks(
+  localTree: BrowserBookmarkNode[],
+  removeTree: (id: string) => Promise<void>,
+): Promise<number> {
+  let cleared = 0;
+  // getTree() returns [{ id: "0", children: [...] }]
+  const roots =
+    localTree.length === 1 && !localTree[0].url && localTree[0].children
+      ? localTree[0].children
+      : localTree;
+
+  for (const root of roots) {
+    if (root.children) {
+      for (const child of root.children) {
+        if (child.id) {
+          await removeTree(child.id);
+          cleared++;
+        }
+      }
+    }
+  }
+  return cleared;
+}
+
+// === 全量覆盖入口 ===
+
+/**
+ * 上传覆盖：用本地书签全量覆盖 Gist（忽略远程现有内容）
+ * @param token GitHub PAT
+ * @param gistId 已有的 Gist ID（为空则创建新 Gist）
+ * @param deviceId 设备 ID
+ * @param localTree 浏览器书签树
+ */
+export async function uploadToGist(
+  token: string,
+  gistId: string | undefined,
+  deviceId: string,
+  localTree: BrowserBookmarkNode[],
+): Promise<SyncResult> {
+  const octokit = new Octokit({ auth: token });
+  const localGistTree = exportBookmarkTree(localTree);
+
+  const uploadData: GistBookmarkData = {
+    version: 1,
+    exportedAt: Date.now(),
+    deviceId,
+    bookmarks: localGistTree,
+  };
+
+  let currentGistId = gistId;
+  if (!currentGistId) {
+    currentGistId = await createGist(octokit, uploadData);
+  } else {
+    await updateGist(octokit, currentGistId, uploadData);
+  }
+
+  return {
+    added: 0,
+    removed: 0,
+    uploaded: countUrls(localGistTree),
+    gistId: currentGistId,
+  };
+}
+
+/**
+ * 下载覆盖：用 Gist 内容全量覆盖本地书签（忽略本地现有内容）
+ * @param token GitHub PAT
+ * @param gistId Gist ID
+ * @param localTree 浏览器书签树（用于定位可清空的根目录）
+ * @param removeTree 删除本地书签/文件夹的回调
+ * @param createBookmark 创建本地书签的回调
+ */
+export async function downloadFromGist(
+  token: string,
+  gistId: string,
+  localTree: BrowserBookmarkNode[],
+  removeTree: (id: string) => Promise<void>,
+  createBookmark: (folderPath: string[], node: GistBookmarkNode) => Promise<void>,
+): Promise<SyncResult> {
+  const octokit = new Octokit({ auth: token });
+  const remoteData = await fetchGistData(octokit, gistId);
+  if (!remoteData) {
+    throw new Error("Gist 不存在或无法访问");
+  }
+
+  // 1. 清空本地可写根目录下的内容
+  const cleared = await clearLocalBookmarks(localTree, removeTree);
+
+  // 2. 从远程重建
+  const remoteRoots = getWritableRoot(remoteData.bookmarks);
+  let added = 0;
+
+  for (const root of remoteRoots) {
+    if (root.url) {
+      // 顶层直接是书签（少见）
+      try {
+        await createBookmark([], root);
+        added++;
+      } catch (err) {
+        console.warn("[gist-sync] Failed to create top-level bookmark:", root.url, err);
+      }
+      continue;
+    }
+
+    if (root.children && root.children.length > 0) {
+      const leafNodes = collectLeafNodes(
+        root.children,
+        root.title ? [root.title] : [],
+      );
+      for (const { node, folderPath } of leafNodes) {
+        try {
+          await createBookmark(folderPath, node);
+          added++;
+        } catch (err) {
+          console.warn("[gist-sync] Failed to create bookmark during download:", node.url, err);
+        }
+      }
+    }
+  }
+
+  return {
+    added,
+    removed: cleared,
+    uploaded: 0,
+    gistId,
+  };
+}
+
 /** 获取或生成设备 ID */
 export async function ensureDeviceId(currentId?: string): Promise<string> {
   if (currentId) return currentId;

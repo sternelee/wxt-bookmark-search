@@ -35,6 +35,8 @@ import {
   ensureDeviceId,
   recordBookmarkDeletion,
   buildBookmarkKey,
+  uploadToGist,
+  downloadFromGist,
 } from "../src/gist-sync";
 
 // 搜索防抖状态
@@ -882,6 +884,51 @@ export default defineBackground(() => {
             // 关联后立即同步
             const linkResult = await triggerGistSync();
             return { success: true, ...linkResult };
+          }
+          case "GIST_UPLOAD": {
+            const uploadSettings = await getSettings();
+            if (!uploadSettings.githubToken) {
+              return { success: false, error: "GitHub Token 未配置" };
+            }
+            if (!uploadSettings.gistId) {
+              return { success: false, error: "未关联 Gist，请先创建或关联" };
+            }
+            const tree = await browser.bookmarks.getTree();
+            const deviceId = await ensureDeviceId(uploadSettings.gistDeviceId);
+            if (!uploadSettings.gistDeviceId) {
+              await saveSettings({ gistDeviceId: deviceId });
+            }
+            const result = await uploadToGist(
+              uploadSettings.githubToken,
+              uploadSettings.gistId,
+              deviceId,
+              tree,
+            );
+            await saveSettings({ lastGistSync: Date.now() });
+            return { success: true, ...result };
+          }
+          case "GIST_DOWNLOAD": {
+            const downloadSettings = await getSettings();
+            if (!downloadSettings.githubToken) {
+              return { success: false, error: "GitHub Token 未配置" };
+            }
+            if (!downloadSettings.gistId) {
+              return { success: false, error: "未关联 Gist，请先创建或关联" };
+            }
+            const localTree = await browser.bookmarks.getTree();
+            const downloadResult = await downloadFromGist(
+              downloadSettings.githubToken,
+              downloadSettings.gistId,
+              localTree,
+              async (id) => {
+                await browser.bookmarks.removeTree(id);
+              },
+              async (folderPath, node) => {
+                await createBookmarkFromGistPath(folderPath, node);
+              },
+            );
+            await saveSettings({ lastGistSync: Date.now() });
+            return { success: true, ...downloadResult };
           }
           default:
             return { success: false, error: "Unknown message type" };

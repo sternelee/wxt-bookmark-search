@@ -21,6 +21,8 @@ export default function GistSyncSettings() {
   } | null>(null);
   const [isSyncing, setIsSyncing] = createSignal(false);
   const [isCreating, setIsCreating] = createSignal(false);
+  const [isUploading, setIsUploading] = createSignal(false);
+  const [isDownloading, setIsDownloading] = createSignal(false);
 
   const formatError = (error: unknown): string => {
     if (error instanceof Error) {
@@ -117,6 +119,58 @@ export default function GistSyncSettings() {
     }
   };
 
+  const handleUpload = async () => {
+    const confirmed = window.confirm(
+      "⚠️ 上传覆盖将用本地书签全量替换 Gist 中的内容，远程独有的书签将丢失。\n\n确定继续？"
+    );
+    if (!confirmed) return;
+
+    setIsUploading(true);
+    setStatus({ message: "正在上传本地书签覆盖 Gist...", type: "info" });
+    try {
+      const result = await browser.runtime.sendMessage({ type: "GIST_UPLOAD" });
+      if (result.success) {
+        setLastSync(new Date().toLocaleString());
+        setStatus({
+          message: `✓ 上传覆盖完成！${result.uploaded} 个书签已覆盖到 Gist`,
+          type: "success",
+        });
+      } else {
+        setStatus({ message: `上传失败: ${result.error}`, type: "error" });
+      }
+    } catch (error) {
+      setStatus({ message: `上传失败: ${formatError(error)}`, type: "error" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    const confirmed = window.confirm(
+      "⚠️ 下载覆盖将用 Gist 内容全量替换本地书签，本地独有的书签将被删除。\n\n确定继续？"
+    );
+    if (!confirmed) return;
+
+    setIsDownloading(true);
+    setStatus({ message: "正在从 Gist 下载覆盖本地书签...", type: "info" });
+    try {
+      const result = await browser.runtime.sendMessage({ type: "GIST_DOWNLOAD" });
+      if (result.success) {
+        setLastSync(new Date().toLocaleString());
+        setStatus({
+          message: `✓ 下载覆盖完成！+${result.added} 个书签已恢复，${result.removed} 个本地项目已清空`,
+          type: "success",
+        });
+      } else {
+        setStatus({ message: `下载失败: ${result.error}`, type: "error" });
+      }
+    } catch (error) {
+      setStatus({ message: `下载失败: ${formatError(error)}`, type: "error" });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleToggle = async () => {
     const newValue = !syncEnabled();
     setSyncEnabled(newValue);
@@ -190,6 +244,20 @@ export default function GistSyncSettings() {
             <div class="flex gap-3 flex-wrap">
               <Button onClick={handleSync} disabled={isSyncing()}>
                 {isSyncing() ? "同步中..." : "🔄 立即同步"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleUpload}
+                disabled={isUploading()}
+              >
+                {isUploading() ? "上传中..." : "⬆️ 上传覆盖"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDownload}
+                disabled={isDownloading()}
+              >
+                {isDownloading() ? "下载中..." : "⬇️ 下载覆盖"}
               </Button>
             </div>
           </div>
