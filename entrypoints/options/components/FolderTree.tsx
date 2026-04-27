@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, Show } from "solid-js";
+import { createSignal, onMount, onCleanup, For, Show } from "solid-js";
 import { Checkbox } from "../../../src/components/ui/checkbox";
 
 interface Folder {
@@ -77,7 +77,23 @@ export default function FolderTree(props: FolderTreeProps) {
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [expandedIds, setExpandedIds] = createSignal<Set<string>>(new Set());
 
-  onMount(async () => {
+  const collectFolderIds = (items: Folder[]): Set<string> => {
+    const ids = new Set<string>();
+
+    const visit = (nodes: Folder[]) => {
+      nodes.forEach((node) => {
+        ids.add(node.id);
+        if (node.children) {
+          visit(node.children);
+        }
+      });
+    };
+
+    visit(items);
+    return ids;
+  };
+
+  const loadFolders = async () => {
     try {
       const response = await browser.runtime.sendMessage({
         type: "GET_BOOKMARK_FOLDERS",
@@ -87,12 +103,56 @@ export default function FolderTree(props: FolderTreeProps) {
         error?: string;
       };
 
-      if (response.success && response.folders) {
-        setFolders(response.folders);
+      if (!response.success || !response.folders) {
+        return;
+      }
+
+      setFolders(response.folders);
+
+      const validFolderIds = collectFolderIds(response.folders);
+      const nextExpandedIds = new Set(
+        [...expandedIds()].filter((id) => validFolderIds.has(id)),
+      );
+      setExpandedIds(nextExpandedIds);
+
+      const nextSelectedIds = props.selectedIds.filter((id) => validFolderIds.has(id));
+      if (nextSelectedIds.length !== props.selectedIds.length) {
+        props.onChange(nextSelectedIds);
+        await saveSettings({ selectedFolderIds: nextSelectedIds });
       }
     } catch (error) {
       console.error("Failed to load folders:", error);
     }
+  };
+
+  onMount(async () => {
+    await loadFolders();
+
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) {
+        clearTimeout(reloadTimer);
+      }
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null;
+        loadFolders();
+      }, 200);
+    };
+
+    browser.bookmarks.onCreated.addListener(scheduleReload);
+    browser.bookmarks.onRemoved.addListener(scheduleReload);
+    browser.bookmarks.onMoved.addListener(scheduleReload);
+    browser.bookmarks.onChanged.addListener(scheduleReload);
+
+    onCleanup(() => {
+      if (reloadTimer) {
+        clearTimeout(reloadTimer);
+      }
+      browser.bookmarks.onCreated.removeListener(scheduleReload);
+      browser.bookmarks.onRemoved.removeListener(scheduleReload);
+      browser.bookmarks.onMoved.removeListener(scheduleReload);
+      browser.bookmarks.onChanged.removeListener(scheduleReload);
+    });
   });
 
   const toggleExpand = (id: string) => {
