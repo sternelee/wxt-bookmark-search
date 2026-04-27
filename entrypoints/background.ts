@@ -39,6 +39,10 @@ import {
   uploadToGist,
   downloadFromGist,
 } from "../src/gist-sync";
+import {
+  getPreferredBookmarkRoot,
+  resolveBookmarkRootFolder,
+} from "../src/bookmarkRoots";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -306,15 +310,9 @@ export default defineBackground(() => {
 
   async function getDefaultWritableBookmarkParentId(): Promise<string> {
     const rootChildren = await getBrowserRootChildren();
-    const preferred = rootChildren.find(
-      (item) => !item.url && /bookmark|书签|toolbar|bar/i.test(item.title || ""),
-    );
+    const preferred = getPreferredBookmarkRoot(rootChildren);
     if (preferred) {
       return preferred.id;
-    }
-    const firstFolder = rootChildren.find((item) => !item.url);
-    if (firstFolder) {
-      return firstFolder.id;
     }
     throw new Error("No writable bookmark root folder found");
   }
@@ -329,9 +327,7 @@ export default defineBackground(() => {
     let startIndex = 0;
 
     if (folderPath.length > 0) {
-      const topLevelFolder = rootChildren.find(
-        (item) => !item.url && item.title === folderPath[0],
-      );
+      const topLevelFolder = resolveBookmarkRootFolder(rootChildren, folderPath[0]);
       if (topLevelFolder) {
         currentParentId = topLevelFolder.id;
         startIndex = 1;
