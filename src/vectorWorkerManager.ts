@@ -3,7 +3,7 @@
  * 提供 Promise-based API 来调用 Worker
  */
 
-import type { BookmarkRecord } from './types';
+import type { BookmarkRecord } from "./types";
 
 // Worker 代码作为字符串内联
 const workerCode = `
@@ -125,12 +125,15 @@ self.onmessage = (event) => {
 /** Worker 实例 (懒加载) */
 let worker: Worker | null = null;
 let messageId = 0;
-const pendingMessages = new Map<number, { resolve: Function; reject: Function }>();
+const pendingMessages = new Map<
+  number,
+  { resolve: Function; reject: Function }
+>();
 
 /** 获取或创建 Worker */
 function getWorker(): Worker {
   if (!worker) {
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const blob = new Blob([workerCode], { type: "application/javascript" });
     const url = URL.createObjectURL(blob);
     worker = new Worker(url);
 
@@ -139,7 +142,7 @@ function getWorker(): Worker {
       const pending = pendingMessages.get(id);
       if (pending) {
         pendingMessages.delete(id);
-        if (type === 'result') {
+        if (type === "result") {
           pending.resolve(payload);
         } else {
           pending.reject(new Error(payload));
@@ -148,7 +151,7 @@ function getWorker(): Worker {
     };
 
     worker.onerror = (error) => {
-      console.error('[VectorWorker] Error:', error);
+      console.error("[VectorWorker] Error:", error);
     };
   }
   return worker;
@@ -180,9 +183,9 @@ interface VectorSearchResult {
 
 /** 在 Worker 中执行向量搜索 */
 export async function vectorSearchInWorker(
-  params: VectorSearchParams
+  params: VectorSearchParams,
 ): Promise<VectorSearchResult[]> {
-  return sendMessage<VectorSearchResult[]>('vectorSearch', params);
+  return sendMessage<VectorSearchResult[]>("vectorSearch", params);
 }
 
 /** 混合搜索参数 */
@@ -202,9 +205,9 @@ interface HybridSearchResult {
 
 /** 在 Worker 中执行混合搜索 */
 export async function hybridSearchInWorker(
-  params: HybridSearchParams
+  params: HybridSearchParams,
 ): Promise<HybridSearchResult[]> {
-  return sendMessage<HybridSearchResult[]>('hybridSearch', params);
+  return sendMessage<HybridSearchResult[]>("hybridSearch", params);
 }
 
 /** 终止 Worker (释放资源) */
@@ -218,5 +221,5 @@ export function terminateWorker(): void {
 
 /** 检查 Worker 是否可用 */
 export function isWorkerAvailable(): boolean {
-  return typeof Worker !== 'undefined';
+  return typeof Worker !== "undefined";
 }

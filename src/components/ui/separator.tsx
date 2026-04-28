@@ -8,7 +8,11 @@ export interface SeparatorProps extends JSX.HTMLAttributes<HTMLDivElement> {
 }
 
 export function Separator(props: SeparatorProps) {
-  const [local, others] = splitProps(props, ["class", "orientation", "decorative"]);
+  const [local, others] = splitProps(props, [
+    "class",
+    "orientation",
+    "decorative",
+  ]);
 
   return (
     <div
@@ -17,7 +21,7 @@ export function Separator(props: SeparatorProps) {
       class={cn(
         "shrink-0 bg-border",
         local.orientation === "vertical" ? "h-full w-[1px]" : "h-[1px] w-full",
-        local.class
+        local.class,
       )}
       {...others}
     />

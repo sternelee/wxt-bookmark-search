@@ -89,19 +89,14 @@ export async function syncHistoryBookmarks(): Promise<{
     const existingUrls = new Set<string>();
     for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
       const batch = allUrls.slice(i, i + BATCH_SIZE);
-      const existing = await db.bookmarks
-        .where("url")
-        .anyOf(batch)
-        .toArray();
+      const existing = await db.bookmarks.where("url").anyOf(batch).toArray();
       for (const r of existing) {
         existingUrls.add(r.url);
       }
     }
 
     // 过滤已存在的 URL
-    const newItems = validItems.filter(
-      (item) => !existingUrls.has(item.url!),
-    );
+    const newItems = validItems.filter((item) => !existingUrls.has(item.url!));
 
     if (newItems.length === 0) {
       return { added: 0, skipped: validItems.length };

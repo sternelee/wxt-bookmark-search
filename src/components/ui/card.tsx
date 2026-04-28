@@ -10,7 +10,7 @@ export function Card(props: CardProps) {
     <div
       class={cn(
         "rounded-lg border bg-card text-card-foreground shadow-sm",
-        local.class
+        local.class,
       )}
       {...others}
     />
@@ -34,7 +34,7 @@ export function CardTitle(props: CardTitleProps) {
     <h3
       class={cn(
         "text-2xl font-semibold leading-none tracking-tight",
-        local.class
+        local.class,
       )}
       {...others}
     />

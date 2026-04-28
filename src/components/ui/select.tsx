@@ -9,7 +9,12 @@ export interface SelectProps extends JSX.SelectHTMLAttributes<HTMLSelectElement>
 }
 
 export function Select(props: SelectProps) {
-  const [local, others] = splitProps(props, ["class", "label", "hint", "options"]);
+  const [local, others] = splitProps(props, [
+    "class",
+    "label",
+    "hint",
+    "options",
+  ]);
 
   return (
     <div class="mb-5">
@@ -23,14 +28,12 @@ export function Select(props: SelectProps) {
           "w-full px-4 py-3 border border-border rounded-lg text-sm bg-background text-foreground",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
           "disabled:opacity-50 disabled:cursor-not-allowed",
-          local.class
+          local.class,
         )}
         {...others}
       >
         <For each={local.options}>
-          {(option) => (
-            <option value={option.value}>{option.label}</option>
-          )}
+          {(option) => <option value={option.value}>{option.label}</option>}
         </For>
       </select>
       {local.hint && (

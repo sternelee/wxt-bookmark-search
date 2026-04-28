@@ -60,7 +60,8 @@ export default {
 
     api: {
       title: "🔑 API Configuration",
-      apiKeyHint: "Supports OpenAI, SiliconFlow, Azure OpenAI and compatible APIs",
+      apiKeyHint:
+        "Supports OpenAI, SiliconFlow, Azure OpenAI and compatible APIs",
       baseURL: "API Base URL",
       baseURLHint: "API base URL, default: https://api.openai.com/v1",
       embeddingModel: "Embedding Model",
@@ -68,7 +69,8 @@ export default {
       llmModel: "LLM Model",
       llmModelHint: "Default: gpt-4o-mini (for summaries and tags)",
       enableLLM: "Enable LLM Content Enrichment",
-      enableLLMHint: "Use LLM to generate summaries and tags, improving search quality",
+      enableLLMHint:
+        "Use LLM to generate summaries and tags, improving search quality",
       advanced: "Advanced Settings",
       apiKeyRequired: "Please enter API Key",
       saved: "✓ Settings saved",
@@ -79,18 +81,21 @@ export default {
     search: {
       title: "🔍 Search Strategy",
       mode: "Search Mode",
-      modeHint: "Hybrid search combines keyword precision with AI semantic understanding",
+      modeHint:
+        "Hybrid search combines keyword precision with AI semantic understanding",
       modeHybrid: "Hybrid Search (Recommended)",
       modeVector: "Semantic Search Only",
       modeKeyword: "Keyword Match (Classic)",
       vectorWeight: "Vector Search Weight",
-      vectorWeightHint: "Higher value makes results more semantically similar; lower value favors literal matching",
+      vectorWeightHint:
+        "Higher value makes results more semantically similar; lower value favors literal matching",
       applied: "✓ Search settings applied",
     },
 
     github: {
       title: "🐙 GitHub Stars Semantic Index",
-      tokenHint: "Syncing GitHub Stars requires reading starred repos; if Gist bookmark sync is enabled below, also needs gist permission.",
+      tokenHint:
+        "Syncing GitHub Stars requires reading starred repos; if Gist bookmark sync is enabled below, also needs gist permission.",
       saveSettings: "Save GitHub Settings",
       syncStars: "Sync Stars Now",
       syncingStars: "Fetching Stars...",
@@ -101,7 +106,8 @@ export default {
 
     twitter: {
       title: "🐦 Twitter/X Bookmark Semantic Index",
-      description: "You need to be logged into Twitter/X in the browser. The extension will automatically extract cookies for syncing — no developer account needed.",
+      description:
+        "You need to be logged into Twitter/X in the browser. The extension will automatically extract cookies for syncing — no developer account needed.",
       enableSync: "Enable Twitter Bookmark Sync",
       csrfToken: "CSRF Token (ct0) - Optional",
       csrfPlaceholder: "Manual input when auto-extraction fails",
@@ -118,10 +124,12 @@ export default {
 
     history: {
       title: "📜 Browser History Semantic Index",
-      description: "Include browser visit history in semantic search. Only indexes http/https pages, skipping existing bookmarks/GitHub/Twitter records.",
+      description:
+        "Include browser visit history in semantic search. Only indexes http/https pages, skipping existing bookmarks/GitHub/Twitter records.",
       enableSync: "Enable Browser History Sync",
       syncDays: "Sync Last N Days",
-      syncDaysHint: "Range 1-365 days, default 30. More days means slower first sync.",
+      syncDaysHint:
+        "Range 1-365 days, default 30. More days means slower first sync.",
       saveSettings: "Save Settings",
       syncNow: "Sync History Now",
       syncingNow: "Syncing...",
@@ -132,7 +140,8 @@ export default {
 
     gist: {
       title: "☁️ Bookmark Gist Sync",
-      description: "Sync browser bookmarks across devices via GitHub Gist. Requires GitHub Token with gist permission configured above.",
+      description:
+        "Sync browser bookmarks across devices via GitHub Gist. Requires GitHub Token with gist permission configured above.",
       createGist: "Create New Gist (Upload Local Bookmarks)",
       linkGist: "Link Existing Gist ID",
       gistIdPlaceholder: "Enter Gist ID (32-char hex)",
@@ -144,33 +153,41 @@ export default {
       downloadOverwrite: "Download Overwrite",
       lastSync: "Last Sync",
       confirmUploadTitle: "⬆️ Confirm Upload Overwrite",
-      confirmUploadBody: "This will replace Gist content with local bookmarks. Remote-only bookmarks will be lost. This action cannot be undone.",
+      confirmUploadBody:
+        "This will replace Gist content with local bookmarks. Remote-only bookmarks will be lost. This action cannot be undone.",
       confirmDownloadTitle: "⬇️ Confirm Download Overwrite",
-      confirmDownloadBody: "This will replace local bookmarks with Gist content. Local-only bookmarks will be deleted. This action cannot be undone.",
+      confirmDownloadBody:
+        "This will replace local bookmarks with Gist content. Local-only bookmarks will be deleted. This action cannot be undone.",
       creating: "Creating Gist and uploading bookmarks...",
       createSuccess: "✓ Gist created! ID: {{gistId}}",
       linking: "Verifying and linking Gist...",
-      linkSuccess: "✓ Linked successfully! Gist ID: {{gistId}}. Click Sync Now to start syncing.",
+      linkSuccess:
+        "✓ Linked successfully! Gist ID: {{gistId}}. Click Sync Now to start syncing.",
       syncInfo: "Syncing bookmarks to Gist...",
-      syncSuccess: "✓ Sync complete! +{{added}} added, -{{removed}} removed, {{uploaded}} total",
+      syncSuccess:
+        "✓ Sync complete! +{{added}} added, -{{removed}} removed, {{uploaded}} total",
       uploadInfo: "Uploading local bookmarks to overwrite Gist...",
-      uploadSuccess: "✓ Upload complete! {{uploaded}} bookmarks overwritten to Gist",
+      uploadSuccess:
+        "✓ Upload complete! {{uploaded}} bookmarks overwritten to Gist",
       downloadInfo: "Downloading Gist to overwrite local bookmarks...",
-      downloadSuccess: "✓ Download complete! +{{added}} bookmarks restored, {{removed}} local items cleared",
+      downloadSuccess:
+        "✓ Download complete! +{{added}} bookmarks restored, {{removed}} local items cleared",
       autoSyncEnabled: "✓ Auto-sync enabled",
       autoSyncDisabled: "Auto-sync disabled",
       gistIdRequired: "Please enter Gist ID",
       tokenRequired: "GitHub Token not configured",
       gistNotFound: "Gist does not exist or contains no bookmark data",
       noGistLinked: "No Gist linked. Please create or link one first.",
-      sizeError: "Try cleaning up useless bookmarks in Chrome Bookmark Manager, then sync again, or use Upload Overwrite to create a fresh Gist.",
+      sizeError:
+        "Try cleaning up useless bookmarks in Chrome Bookmark Manager, then sync again, or use Upload Overwrite to create a fresh Gist.",
       inProgress: "Sync is already in progress",
     },
 
     indexManager: {
       title: "⚙️ Index Engine Management",
       scopeLabel: "Index Scope Selection",
-      scopeHint: "If no folders are selected, all bookmarks will be incrementally indexed by default",
+      scopeHint:
+        "If no folders are selected, all bookmarks will be incrementally indexed by default",
       cacheStatus: "🧠 Vector Query Cache:",
       cacheStatusHint: "(Caches recent query results to improve search speed)",
       apiKeyRequired: "Please configure API Key first",
@@ -188,11 +205,13 @@ export default {
 
     failedBookmarks: {
       title: "⚠️ Failed / Broken Bookmark Management",
-      description: "These bookmarks encountered errors during indexing, possibly because the URL is no longer valid. Click the link to test or delete the bookmark directly.",
+      description:
+        "These bookmarks encountered errors during indexing, possibly because the URL is no longer valid. Click the link to test or delete the bookmark directly.",
       noTitle: "No Title",
       visit: "Click to visit",
       errorLabel: "Error",
-      deleteConfirm: "Are you sure you want to permanently delete this bookmark from the browser?",
+      deleteConfirm:
+        "Are you sure you want to permanently delete this bookmark from the browser?",
       deleteFailed: "Delete failed",
     },
 
@@ -210,7 +229,7 @@ export default {
     twitterFilter: "/twitter",
     folderFilter: "/folder:name",
     keyboardHint: "Keyboard: ↑↓ navigate, Enter open, Esc close",
-    noResults: "No bookmarks found for \"{{query}}\"",
+    noResults: 'No bookmarks found for "{{query}}"',
     tryOther: "Try other keywords, or use /github /twitter to filter by source",
     emptyState: "Enter keywords to start searching",
     searchFailed: "Search failed",
@@ -220,7 +239,8 @@ export default {
   },
 
   background: {
-    omniboxDefault: "🔍 Flow Search — Type keywords and press Enter for full-page search, or select a bookmark to jump (/github /twitter /folder:name)",
+    omniboxDefault:
+      "🔍 Flow Search — Type keywords and press Enter for full-page search, or select a bookmark to jump (/github /twitter /folder:name)",
     searching: "🔍 Searching semantically...",
     cmdGithub: "🔮 /github keyword — Search GitHub Stars",
     cmdTwitter: "🐦 /twitter keyword — Search Twitter Bookmarks",

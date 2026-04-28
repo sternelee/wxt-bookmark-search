@@ -8,10 +8,10 @@
 export function cosineSimilarity(
   a: number[],
   b: number[],
-  normB?: number
+  normB?: number,
 ): number {
   if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length');
+    throw new Error("Vectors must have the same length");
   }
 
   let dotProduct = 0;
@@ -33,7 +33,7 @@ export function cosineSimilarity(
 /** 计算欧几里得距离 */
 export function euclideanDistance(a: number[], b: number[]): number {
   if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length');
+    throw new Error("Vectors must have the same length");
   }
 
   let sum = 0;
@@ -55,7 +55,7 @@ export function normalizeVector(vec: number[]): number[] {
 
   if (norm === 0) return vec;
 
-  return vec.map(v => v / norm);
+  return vec.map((v) => v / norm);
 }
 
 /** 批量计算相似度并排序
@@ -64,26 +64,34 @@ export function normalizeVector(vec: number[]): number[] {
  */
 export function rankBySimilarity(
   queryVector: number[],
-  candidates: Array<{ embedding: number[]; _embeddingNorm?: number; [key: string]: any }>,
-  options?: { limit?: number; threshold?: number; signal?: AbortSignal }
+  candidates: Array<{
+    embedding: number[];
+    _embeddingNorm?: number;
+    [key: string]: any;
+  }>,
+  options?: { limit?: number; threshold?: number; signal?: AbortSignal },
 ): Array<{ item: any; similarity: number }> {
   const results: Array<{ item: any; similarity: number }> = [];
 
   for (let i = 0; i < candidates.length; i++) {
     // 每 256 个检查一次中断信号，避免大数据集阻塞主线程
-    if ((i & 0xFF) === 0 && options?.signal?.aborted) {
+    if ((i & 0xff) === 0 && options?.signal?.aborted) {
       return [];
     }
 
     const item = candidates[i];
-    const sim = cosineSimilarity(queryVector, item.embedding, item._embeddingNorm);
+    const sim = cosineSimilarity(
+      queryVector,
+      item.embedding,
+      item._embeddingNorm,
+    );
     results.push({ item, similarity: sim });
   }
 
   results.sort((a, b) => b.similarity - a.similarity);
 
   if (options?.threshold !== undefined) {
-    const filtered = results.filter(r => r.similarity >= options.threshold!);
+    const filtered = results.filter((r) => r.similarity >= options.threshold!);
     return options.limit ? filtered.slice(0, options.limit) : filtered;
   }
 

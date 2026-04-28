@@ -4,7 +4,11 @@
  */
 
 import { Octokit } from "octokit";
-import type { GistBookmarkData, GistBookmarkNode, DeletedBookmarkEntry } from "./types";
+import type {
+  GistBookmarkData,
+  GistBookmarkNode,
+  DeletedBookmarkEntry,
+} from "./types";
 
 /** Gist 文件名 */
 export const GIST_FILENAME = "flow-search-bookmarks.json";
@@ -22,7 +26,7 @@ export class GistSizeError extends Error {
   constructor(currentSize: number, limit: number) {
     super(
       `书签数据过大（${(currentSize / 1024).toFixed(0)}KB），超过 Gist 单文件限制 ${(limit / 1024).toFixed(0)}KB。` +
-      `建议清理无用书签后再同步。`
+        `建议清理无用书签后再同步。`,
     );
     this.currentSize = currentSize;
     this.limit = limit;
@@ -38,7 +42,7 @@ export async function getDeletedBookmarks(): Promise<DeletedBookmarkEntry[]> {
   const entries = (data[DELETED_BOOKMARKS_KEY] as DeletedBookmarkEntry[]) || [];
   // 自动清理超过 30 天的记录
   const now = Date.now();
-  return entries.filter(e => now - e.deletedAt < DELETION_TTL_MS);
+  return entries.filter((e) => now - e.deletedAt < DELETION_TTL_MS);
 }
 
 /** 记录一条书签删除 */
@@ -158,7 +162,7 @@ export function exportBookmarkTree(
 ): GistBookmarkNode[] {
   // 去掉浏览器合成根节点，只导出用户实际的书签内容
   const roots = getWritableRoot(tree);
-  return roots.map(node => {
+  return roots.map((node) => {
     const gistNode: GistBookmarkNode = {
       id: node.id,
       title: node.title || "",
@@ -233,7 +237,9 @@ function collectUrls(
  * Chrome: getTree() 返回 [{ id: "0", children: [toolbar, other] }]
  * Firefox: getTree() 返回 [{ id: "root________", children: [menu, toolbar, unfiled, mobile] }]
  */
-function getWritableRoot<T extends { url?: string; children?: T[] }>(nodes: T[]): T[] {
+function getWritableRoot<T extends { url?: string; children?: T[] }>(
+  nodes: T[],
+): T[] {
   if (nodes.length === 1 && !nodes[0].url && nodes[0].children) {
     return nodes[0].children;
   }
@@ -267,11 +273,15 @@ function appendBookmarkAtPath(
 
   const normalizedPath = normalizeFolderPath(folderPath);
 
-  if (!current.some((item) => {
-    if (!item.url || !node.url) return false;
-    return buildBookmarkKey(item.url, item.title, normalizedPath) ===
-      buildBookmarkKey(node.url, node.title, normalizedPath);
-  })) {
+  if (
+    !current.some((item) => {
+      if (!item.url || !node.url) return false;
+      return (
+        buildBookmarkKey(item.url, item.title, normalizedPath) ===
+        buildBookmarkKey(node.url, node.title, normalizedPath)
+      );
+    })
+  ) {
     current.push({
       id: node.id,
       title: node.title,
@@ -341,8 +351,8 @@ function cloneTreeExcluding(
   excludeUrls: Set<string>,
 ): GistBookmarkNode[] {
   return nodes
-    .filter(node => !node.url || !excludeUrls.has(node.url))
-    .map(node => ({
+    .filter((node) => !node.url || !excludeUrls.has(node.url))
+    .map((node) => ({
       ...node,
       children: node.children
         ? cloneTreeExcluding(node.children, excludeUrls)
@@ -388,8 +398,8 @@ function generateDeviceId(): string {
 
 /** 同步结果 */
 export interface SyncResult {
-  added: number;    // 从远程添加到本地的数量
-  removed: number;  // 从远程删除的数量
+  added: number; // 从远程添加到本地的数量
+  removed: number; // 从远程删除的数量
   uploaded: number; // 上传到 Gist 的总书签数
   gistId: string;
 }
@@ -407,7 +417,10 @@ export async function fullGistSync(
   gistId: string | undefined,
   deviceId: string,
   localTree: BrowserBookmarkNode[],
-  createBookmark: (folderPath: string[], node: GistBookmarkNode) => Promise<void>,
+  createBookmark: (
+    folderPath: string[],
+    node: GistBookmarkNode,
+  ) => Promise<void>,
 ): Promise<SyncResult> {
   const octokit = new Octokit({ auth: token });
   const localGistTree = exportBookmarkTree(localTree);
@@ -418,7 +431,9 @@ export async function fullGistSync(
   if (gistId) {
     remoteData = await fetchGistData(octokit, gistId);
     if (!remoteData) {
-      console.warn("[gist-sync] Existing gist is unavailable, creating a new gist on next upload");
+      console.warn(
+        "[gist-sync] Existing gist is unavailable, creating a new gist on next upload",
+      );
       currentGistId = undefined;
     }
   }
@@ -427,14 +442,22 @@ export async function fullGistSync(
   let removed = 0;
 
   if (remoteData && currentGistId) {
-    const result = mergeBookmarks(localGistTree, remoteData.bookmarks, deletedEntries);
+    const result = mergeBookmarks(
+      localGistTree,
+      remoteData.bookmarks,
+      deletedEntries,
+    );
 
     for (const entry of result.toAddLocal) {
       try {
         await createBookmark(entry.folderPath, entry.node);
         added++;
       } catch (err) {
-        console.warn("[gist-sync] Failed to create local bookmark:", entry.node.url, err);
+        console.warn(
+          "[gist-sync] Failed to create local bookmark:",
+          entry.node.url,
+          err,
+        );
       }
     }
 
@@ -451,7 +474,12 @@ export async function fullGistSync(
     };
     await updateGist(octokit, currentGistId, uploadData);
 
-    return { added, removed, uploaded: countUrls(result.merged), gistId: currentGistId };
+    return {
+      added,
+      removed,
+      uploaded: countUrls(result.merged),
+      gistId: currentGistId,
+    };
   } else {
     const uploadData: GistBookmarkData = {
       version: 1,
@@ -464,7 +492,12 @@ export async function fullGistSync(
       ? (await updateGist(octokit, currentGistId, uploadData), currentGistId)
       : await createGist(octokit, uploadData);
 
-    return { added: 0, removed: 0, uploaded: countUrls(localGistTree), gistId: newGistId };
+    return {
+      added: 0,
+      removed: 0,
+      uploaded: countUrls(localGistTree),
+      gistId: newGistId,
+    };
   }
 }
 
@@ -574,7 +607,10 @@ export async function downloadFromGist(
   gistId: string,
   localTree: BrowserBookmarkNode[],
   removeTree: (id: string) => Promise<void>,
-  createBookmark: (folderPath: string[], node: GistBookmarkNode) => Promise<void>,
+  createBookmark: (
+    folderPath: string[],
+    node: GistBookmarkNode,
+  ) => Promise<void>,
 ): Promise<SyncResult> {
   const octokit = new Octokit({ auth: token });
   const remoteData = await fetchGistData(octokit, gistId);
@@ -596,7 +632,11 @@ export async function downloadFromGist(
         await createBookmark([], root);
         added++;
       } catch (err) {
-        console.warn("[gist-sync] Failed to create top-level bookmark:", root.url, err);
+        console.warn(
+          "[gist-sync] Failed to create top-level bookmark:",
+          root.url,
+          err,
+        );
       }
       continue;
     }
@@ -611,7 +651,11 @@ export async function downloadFromGist(
           await createBookmark(folderPath, node);
           added++;
         } catch (err) {
-          console.warn("[gist-sync] Failed to create bookmark during download:", node.url, err);
+          console.warn(
+            "[gist-sync] Failed to create bookmark during download:",
+            node.url,
+            err,
+          );
         }
       }
     }

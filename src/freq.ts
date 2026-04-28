@@ -107,7 +107,9 @@ export function getFreqCache(): Record<string, number> {
 /**
  * Get the top-N most frequent bookmarks for the empty-query default suggestion.
  */
-export function getRecentBookmarks(n = 8): Array<{ url: string; freq: number }> {
+export function getRecentBookmarks(
+  n = 8,
+): Array<{ url: string; freq: number }> {
   return Object.entries(buildWeightedCache())
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)

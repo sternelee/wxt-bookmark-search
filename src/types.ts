@@ -12,18 +12,18 @@ export interface OmniboxSuggestion {
 
 /** 向量化书签记录 */
 export interface BookmarkRecord {
-  id: string;              // bookmark id
+  id: string; // bookmark id
   url: string;
   title: string;
-  summary: string;         // AI 提取的摘要
-  tags?: string[];         // LLM 生成的标签
-  embedding?: number[];    // 向量 (1024 维)
-  vectorId?: number;       // EdgeVec 向量 ID
-  status: 'pending' | 'indexed' | 'failed';
-  indexedAt?: number;      // 索引时间戳
-  error?: string;          // 失败原因
+  summary: string; // AI 提取的摘要
+  tags?: string[]; // LLM 生成的标签
+  embedding?: number[]; // 向量 (1024 维)
+  vectorId?: number; // EdgeVec 向量 ID
+  status: "pending" | "indexed" | "failed";
+  indexedAt?: number; // 索引时间戳
+  error?: string; // 失败原因
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
-  llmEnhanced?: boolean;   // 是否经过 LLM 增强
+  llmEnhanced?: boolean; // 是否经过 LLM 增强
 
   /** 预计算的 embedding 向量模长（内存缓存专用，不持久化到 DB） */
   _embeddingNorm?: number;
@@ -59,12 +59,12 @@ export interface SearchResult {
 }
 
 /** 搜索模式 */
-export type SearchMode = 'keyword' | 'vector' | 'hybrid';
+export type SearchMode = "keyword" | "vector" | "hybrid";
 
 /** 搜索选项 */
 export interface SearchOptions {
   mode?: SearchMode;
-  vectorWeight?: number;   // 混合搜索时向量权重 (默认 0.4)
+  vectorWeight?: number; // 混合搜索时向量权重 (默认 0.4)
   limit?: number;
 }
 
@@ -72,21 +72,21 @@ export interface SearchOptions {
 export interface GistBookmarkNode {
   id: string;
   title: string;
-  url?: string;               // 文件夹无 url
+  url?: string; // 文件夹无 url
   dateAdded?: number;
   children?: GistBookmarkNode[];
 }
 
 export interface GistBookmarkData {
   version: 1;
-  exportedAt: number;         // 导出时间戳
-  deviceId: string;           // 设备标识
+  exportedAt: number; // 导出时间戳
+  deviceId: string; // 设备标识
   bookmarks: GistBookmarkNode[];
 }
 
 /** 本地删除记录 — 用于合并时区分 "远程新增" vs "本地删除" */
 export interface DeletedBookmarkEntry {
-  key: string;                 // 书签唯一键: url + title + folderPath
+  key: string; // 书签唯一键: url + title + folderPath
   url: string;
   title: string;
   folderPath: string[];
@@ -96,37 +96,38 @@ export interface DeletedBookmarkEntry {
 /** 设置存储结构 */
 export interface Settings {
   openaiApiKey?: string;
-  baseURL?: string;             // API 基础地址 (默认: https://api.siliconflow.cn)
+  baseURL?: string; // API 基础地址 (默认: https://api.siliconflow.cn)
   searchMode: SearchMode;
   vectorWeight: number;
   selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID
-  githubToken?: string;         // GitHub PAT
-  githubSyncEnabled?: boolean;  // 是否启用 GitHub 同步
-  lastGithubSync?: number;      // 上次同步时间
+  githubToken?: string; // GitHub PAT
+  githubSyncEnabled?: boolean; // 是否启用 GitHub 同步
+  lastGithubSync?: number; // 上次同步时间
   twitterSyncEnabled?: boolean; // 是否启用 Twitter 同步
-  lastTwitterSync?: number;     // 上次 Twitter 同步时间
-  twitterCookies?: {            // Twitter cookies (手动输入)
+  lastTwitterSync?: number; // 上次 Twitter 同步时间
+  twitterCookies?: {
+    // Twitter cookies (手动输入)
     ct0: string;
     authToken: string;
   };
   enableLLMEnrichment?: boolean; // 是否启用 LLM 内容增强
 
   // 模型配置
-  embeddingModel?: string;       // Embedding 模型名称
-  llmModel?: string;             // LLM 模型名称
+  embeddingModel?: string; // Embedding 模型名称
+  llmModel?: string; // LLM 模型名称
 
   // Gist 同步配置
-  gistSyncEnabled?: boolean;    // 是否启用 Gist 书签同步
-  gistId?: string;              // Gist ID
-  gistDeviceId?: string;        // 本设备 UUID
-  lastGistSync?: number;        // 上次同步时间戳
+  gistSyncEnabled?: boolean; // 是否启用 Gist 书签同步
+  gistId?: string; // Gist ID
+  gistDeviceId?: string; // 本设备 UUID
+  lastGistSync?: number; // 上次同步时间戳
 
   // 浏览历史同步配置
   historySyncEnabled?: boolean; // 是否启用历史同步
-  historyDays?: number;         // 同步最近 N 天，默认 30
+  historyDays?: number; // 同步最近 N 天，默认 30
 
   // 语言设置
-  language?: string;            // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
+  language?: string; // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */

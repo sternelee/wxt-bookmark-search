@@ -5,9 +5,9 @@
  * 向量搜索使用纯 JS 余弦相似度（基于内存缓存），无需 WASM 或额外 IDB
  */
 
-import type { BookmarkRecord, SearchOptions } from './types';
-import { rankBySimilarity } from './vector';
-import { getFreqCache } from './freq';
+import type { BookmarkRecord, SearchOptions } from "./types";
+import { rankBySimilarity } from "./vector";
+import { getFreqCache } from "./freq";
 
 /** RRF 常数 K (通常取 60) */
 const RRF_K = 60;
@@ -55,14 +55,14 @@ function safeNormalize(values: number[]): number[] {
   const max = Math.max(...values);
   const range = max - min;
   if (range === 0) return values.map(() => 0.5);
-  return values.map(v => (v - min) / range);
+  return values.map((v) => (v - min) / range);
 }
 
 /**
  * 计算关键词搜索得分 (RRF: 1 / (K + rank))
  */
 function scoreKeywordResults(
-  keywordResults: BookmarkInput[]
+  keywordResults: BookmarkInput[],
 ): Map<string, KeywordResult> {
   const scores = new Map<string, KeywordResult>();
 
@@ -87,12 +87,9 @@ export async function hybridSearch(
   allRecords: BookmarkRecord[],
   queryVector: number[],
   options: SearchOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<BookmarkRecord[]> {
-  const {
-    vectorWeight = 0.4,
-    limit = 9,
-  } = options;
+  const { vectorWeight = 0.4, limit = 9 } = options;
 
   const keywordWeight = 1 - vectorWeight;
   const keywordScores = scoreKeywordResults(keywordResults);
@@ -105,22 +102,30 @@ export async function hybridSearch(
   let vectorResults: VectorSearchResult[] = [];
   try {
     // 直接对内存缓存中的书签做余弦相似度，无需 WASM/IDB
-    const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
-    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, { limit: limit * 3, signal })
-      .map(r => ({ url: r.item.url as string, score: r.similarity }));
+    const withEmbedding = allRecords.filter(
+      (r) => r.embedding && r.embedding.length > 0,
+    );
+    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, {
+      limit: limit * 3,
+      signal,
+    }).map((r) => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
-    console.warn('[hybrid] Vector search failed:', error);
+    console.warn("[hybrid] Vector search failed:", error);
   }
 
   if (signal?.aborted) return [];
 
   // 对关键词和向量分数分别进行 Min-Max 归一化
   const kwUrls = [...keywordScores.keys()];
-  const kwNorm = safeNormalize(kwUrls.map(url => keywordScores.get(url)!.score));
+  const kwNorm = safeNormalize(
+    kwUrls.map((url) => keywordScores.get(url)!.score),
+  );
   const kwScoreNorm = new Map(kwUrls.map((url, i) => [url, kwNorm[i]]));
 
-  const vecNorm = safeNormalize(vectorResults.map(r => r.score));
-  const vecScoreNorm = new Map(vectorResults.map((r, i) => [r.url, vecNorm[i]]));
+  const vecNorm = safeNormalize(vectorResults.map((r) => r.score));
+  const vecScoreNorm = new Map(
+    vectorResults.map((r, i) => [r.url, vecNorm[i]]),
+  );
 
   // 合并所有候选 URL（向量命中 + 关键词命中）
   const allUrls = new Set([...kwScoreNorm.keys(), ...vecScoreNorm.keys()]);
@@ -133,7 +138,12 @@ export async function hybridSearch(
 
     const record = recordMap.get(url);
     if (record) {
-      merged.set(url, { record, keywordScore: kwScore, vectorScore: vecScore, finalScore });
+      merged.set(url, {
+        record,
+        keywordScore: kwScore,
+        vectorScore: vecScore,
+        finalScore,
+      });
     } else {
       // 关键词命中但尚未索引 — 以基础记录形式加入（无 AI 前缀）
       const kwEntry = keywordScores.get(url);
@@ -143,8 +153,8 @@ export async function hybridSearch(
             id: kwEntry.bookmark.id,
             url: kwEntry.bookmark.url!,
             title: kwEntry.bookmark.title,
-            summary: '',
-            status: 'pending',
+            summary: "",
+            status: "pending",
           },
           keywordScore: kwScore,
           vectorScore: 0,
@@ -158,14 +168,14 @@ export async function hybridSearch(
   const freqCache = getFreqCache();
   const maxFreq = Math.max(1, ...Object.values(freqCache));
 
-  const withFreq = [...merged.values()].map(m => {
+  const withFreq = [...merged.values()].map((m) => {
     const freq = freqCache[m.record.url] ?? 0;
     const freqBoost = (freq / maxFreq) * FREQ_BOOST_MAX;
     return { ...m, finalScore: m.finalScore + freqBoost };
   });
 
   const sorted = withFreq.sort((a, b) => b.finalScore - a.finalScore);
-  return sorted.slice(0, limit).map(m => m.record);
+  return sorted.slice(0, limit).map((m) => m.record);
 }
 
 /**
@@ -175,7 +185,7 @@ export async function vectorSearch(
   allRecords: BookmarkRecord[],
   queryVector: number[],
   options: SearchOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<BookmarkRecord[]> {
   const { limit = 9 } = options;
 
@@ -187,11 +197,15 @@ export async function vectorSearch(
   let results: VectorSearchResult[] = [];
   try {
     // 直接对内存缓存中的书签做余弦相似度
-    const withEmbedding = allRecords.filter(r => r.embedding && r.embedding.length > 0);
-    results = rankBySimilarity(queryVector, withEmbedding as any, { limit, signal })
-      .map(r => ({ url: r.item.url as string, score: r.similarity }));
+    const withEmbedding = allRecords.filter(
+      (r) => r.embedding && r.embedding.length > 0,
+    );
+    results = rankBySimilarity(queryVector, withEmbedding as any, {
+      limit,
+      signal,
+    }).map((r) => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
-    console.warn('[vectorSearch] Vector search failed:', error);
+    console.warn("[vectorSearch] Vector search failed:", error);
   }
 
   if (signal?.aborted) return [];
@@ -201,7 +215,7 @@ export async function vectorSearch(
   const maxFreq = Math.max(1, ...Object.values(freqCache));
 
   const boosted = results
-    .map(r => {
+    .map((r) => {
       const record = recordMap.get(r.url);
       if (!record) return null;
       const freq = freqCache[record.url] ?? 0;
@@ -211,5 +225,5 @@ export async function vectorSearch(
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
   boosted.sort((a, b) => b.score - a.score);
-  return boosted.map(b => b.record);
+  return boosted.map((b) => b.record);
 }

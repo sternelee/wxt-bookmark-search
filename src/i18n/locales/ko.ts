@@ -84,28 +84,33 @@ export default {
       modeVector: "벡터 검색만",
       modeKeyword: "키워드 일치 (클래식)",
       vectorWeight: "벡터 검색 가중치",
-      vectorWeightHint: "값을 높이면 의미적 유사성이 선호됩니다. 낮추면 문자열 일치가 선호됩니다",
+      vectorWeightHint:
+        "값을 높이면 의미적 유사성이 선호됩니다. 낮추면 문자열 일치가 선호됩니다",
       applied: "✓ 검색 설정이 적용되었습니다",
     },
 
     github: {
       title: "🐙 GitHub Stars 의미 색인",
-      tokenHint: "GitHub Stars 동기화에는 starred repos 읽기가 필요합니다. 아래 Gist 북마크 동기화를 활성화하면 gist 권한도 필요합니다.",
+      tokenHint:
+        "GitHub Stars 동기화에는 starred repos 읽기가 필요합니다. 아래 Gist 북마크 동기화를 활성화하면 gist 권한도 필요합니다.",
       saveSettings: "GitHub 설정 저장",
       syncStars: "Stars 지금 동기화",
       syncingStars: "Stars 가져오는 중...",
-      syncSuccess: "✓ 동기화 성공! {{total}}개 리포지토리를 색인 대기열에 추가했습니다",
+      syncSuccess:
+        "✓ 동기화 성공! {{total}}개 리포지토리를 색인 대기열에 추가했습니다",
       saved: "✓ GitHub 설정이 저장되었습니다",
       tokenRequired: "먼저 GitHub Token을 입력하세요",
     },
 
     twitter: {
       title: "🐦 Twitter/X 북마크 의미 색인",
-      description: "브라우저에서 Twitter/X에 로그인해야 합니다. 확장 프로그램이 자동으로 쿠키를 추출하여 동기화합니다. 개발자 계정이 필요 없습니다.",
+      description:
+        "브라우저에서 Twitter/X에 로그인해야 합니다. 확장 프로그램이 자동으로 쿠키를 추출하여 동기화합니다. 개발자 계정이 필요 없습니다.",
       enableSync: "Twitter 북마크 동기화 활성화",
       csrfToken: "CSRF Token (ct0) - 선택사항",
       csrfPlaceholder: "자동 추출 실패 시 수동 입력",
-      csrfHint: "자동 추출에 실패하면 브라우저 개발자 도구에서 복사할 수 있습니다",
+      csrfHint:
+        "자동 추출에 실패하면 브라우저 개발자 도구에서 복사할 수 있습니다",
       authToken: "Auth Token - 선택사항",
       authPlaceholder: "자동 추출 실패 시 수동 입력",
       saveSettings: "Twitter 설정 저장",
@@ -118,10 +123,12 @@ export default {
 
     history: {
       title: "📜 브라우징 기록 의미 색인",
-      description: "브라우저 방문 기록을 의미 검색에 포함합니다. http/https 페이지만 색인하고 기존 북마크/GitHub/Twitter 기록은 건 넘깁니다.",
+      description:
+        "브라우저 방문 기록을 의미 검색에 포함합니다. http/https 페이지만 색인하고 기존 북마크/GitHub/Twitter 기록은 건 넘깁니다.",
       enableSync: "브라우징 기록 동기화 활성화",
       syncDays: "최근 N일 동기화",
-      syncDaysHint: "범위 1-365일, 기본값 30일. 일수가 많을수록 첫 동기화가 느려집니다.",
+      syncDaysHint:
+        "범위 1-365일, 기본값 30일. 일수가 많을수록 첫 동기화가 느려집니다.",
       saveSettings: "설정 저장",
       syncNow: "기록 지금 동기화",
       syncingNow: "동기화 중...",
@@ -132,7 +139,8 @@ export default {
 
     gist: {
       title: "☁️ 북마크 Gist 동기화",
-      description: "GitHub Gist를 통해 여러 기기 간 북마크를 동기화합니다. 위에서 gist 권한이 있는 GitHub Token을 설정해야 합니다.",
+      description:
+        "GitHub Gist를 통해 여러 기기 간 북마크를 동기화합니다. 위에서 gist 권한이 있는 GitHub Token을 설정해야 합니다.",
       createGist: "새 Gist 만들기 (로컬 북마크 업로드)",
       linkGist: "기존 Gist ID 연결",
       gistIdPlaceholder: "Gist ID 입력 (32자리 16진수)",
@@ -144,40 +152,50 @@ export default {
       downloadOverwrite: "다운로드로 덮어쓰기",
       lastSync: "마지막 동기화",
       confirmUploadTitle: "⬆️ 업로드 덮어쓰기 확인",
-      confirmUploadBody: "로컬 북마크로 Gist 내용을 전체 교체합니다. 원격에만 있는 북마크는 손실됩니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmUploadBody:
+        "로컬 북마크로 Gist 내용을 전체 교체합니다. 원격에만 있는 북마크는 손실됩니다. 이 작업은 되돌릴 수 없습니다.",
       confirmDownloadTitle: "⬇️ 다운로드 덮어쓰기 확인",
-      confirmDownloadBody: "Gist 내용으로 로컬 북마크를 전체 교체합니다. 로컬에만 있는 북마크는 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmDownloadBody:
+        "Gist 내용으로 로컬 북마크를 전체 교체합니다. 로컬에만 있는 북마크는 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
       creating: "Gist를 만들고 북마크를 업로드하는 중...",
       createSuccess: "✓ Gist 만들기 성공! ID: {{gistId}}",
       linking: "Gist를 검증하고 연결하는 중...",
-      linkSuccess: "✓ 연결 성공! Gist ID: {{gistId}}. 동기화를 시작하려면 '지금 동기화'를 클릭하세요.",
+      linkSuccess:
+        "✓ 연결 성공! Gist ID: {{gistId}}. 동기화를 시작하려면 '지금 동기화'를 클릭하세요.",
       syncInfo: "북마크를 Gist에 동기화하는 중...",
-      syncSuccess: "✓ 동기화 완료! +{{added}} 추가, -{{removed}} 삭제, {{uploaded}} 전체",
+      syncSuccess:
+        "✓ 동기화 완료! +{{added}} 추가, -{{removed}} 삭제, {{uploaded}} 전체",
       uploadInfo: "로컬 북마크를 Gist에 업로드하여 덮어쓰는 중...",
-      uploadSuccess: "✓ 업로드 완료! {{uploaded}}개 북마크를 Gist에 덮어썼습니다",
+      uploadSuccess:
+        "✓ 업로드 완료! {{uploaded}}개 북마크를 Gist에 덮어썼습니다",
       downloadInfo: "Gist를 다운로드하여 로컬 북마크를 덮어쓰는 중...",
-      downloadSuccess: "✓ 다운로드 완료! +{{added}}개 북마크 복원, {{removed}}개 로컬 항목 삭제",
+      downloadSuccess:
+        "✓ 다운로드 완료! +{{added}}개 북마크 복원, {{removed}}개 로컬 항목 삭제",
       autoSyncEnabled: "✓ 자동 동기화가 활성화되었습니다",
       autoSyncDisabled: "자동 동기화가 비활성화되었습니다",
       gistIdRequired: "Gist ID를 입력하세요",
       tokenRequired: "GitHub Token이 설정되지 않았습니다",
-      gistNotFound: "Gist가 존재하지 않거나 북마크 데이터가 포함되어 있지 않습니다",
+      gistNotFound:
+        "Gist가 존재하지 않거나 북마크 데이터가 포함되어 있지 않습니다",
       noGistLinked: "Gist가 연결되지 않았습니다. 먼저 만들거나 연결하세요.",
-      sizeError: "Chrome 북마크 관리자에서 불필요한 북마크를 정리한 후 다시 동기화하거나, '업로드로 덮어쓰기'를 사용하여 새 Gist를 만드세요.",
+      sizeError:
+        "Chrome 북마크 관리자에서 불필요한 북마크를 정리한 후 다시 동기화하거나, '업로드로 덮어쓰기'를 사용하여 새 Gist를 만드세요.",
       inProgress: "동기화가 이미 진행 중입니다",
     },
 
     indexManager: {
       title: "⚙️ 색인 엔진 관리",
       scopeLabel: "색인 범위 선택",
-      scopeHint: "폴더를 선택하지 않으면 기본적으로 모든 북마크를 증분 색인합니다",
+      scopeHint:
+        "폴더를 선택하지 않으면 기본적으로 모든 북마크를 증분 색인합니다",
       cacheStatus: "🧠 벡터 쿼리 캐시:",
       cacheStatusHint: "(최근 쿼리 결과를 캐시하여 검색 속도 향상)",
       apiKeyRequired: "먼저 API 키를 설정하세요",
       indexing: "색인 중 {{processed}}/{{total}}",
       paused: "색인 일시정지 ({{processed}}/{{total}})",
       completed: "✓ 색인 완료! {{count}}개 북마크 처리했습니다",
-      folderSynced: "✓ 선택한 폴더 ({{total}}개 북마크)를 완전히 동기화했습니다",
+      folderSynced:
+        "✓ 선택한 폴더 ({{total}}개 북마크)를 완전히 동기화했습니다",
       retryStarted: "✓ 재시도 작업을 시작했습니다",
       cacheCleared: "✓ 쿼리 캐시를 지웠습니다",
       cacheClearFailed: "캐시 지우기에 실패했습니다",
@@ -188,7 +206,8 @@ export default {
 
     failedBookmarks: {
       title: "⚠️ 실패 / 무효 북마크 관리",
-      description: "이 북마크들은 색인 처리 중 오류가 발생했습니다. URL이 더 이상 유효하지 않을 수 있습니다. 링크를 클릭하여 테스트하거나 북마크를 직접 삭제하세요.",
+      description:
+        "이 북마크들은 색인 처리 중 오류가 발생했습니다. URL이 더 이상 유효하지 않을 수 있습니다. 링크를 클릭하여 테스트하거나 북마크를 직접 삭제하세요.",
       noTitle: "제목 없음",
       visit: "클릭하여 방문",
       errorLabel: "오류",
@@ -220,7 +239,8 @@ export default {
   },
 
   background: {
-    omniboxDefault: "🔍 Flow Search — 키워드를 입력하고 Enter를 눌러 전체 페이지 검색을 열거나, 북마크를 선택하여 이동 (/github /twitter /folder:이름)",
+    omniboxDefault:
+      "🔍 Flow Search — 키워드를 입력하고 Enter를 눌러 전체 페이지 검색을 열거나, 북마크를 선택하여 이동 (/github /twitter /folder:이름)",
     searching: "🔍 의미 검색 중...",
     cmdGithub: "🔮 /github 키워드 — GitHub Stars 검색",
     cmdTwitter: "🐦 /twitter 키워드 — Twitter 북마크 검색",

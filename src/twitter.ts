@@ -5,9 +5,11 @@
 
 import type { BookmarkRecord } from "./types";
 
-const CHROME_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
+const CHROME_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
 
-const X_PUBLIC_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+const X_PUBLIC_BEARER =
+  "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
 const BOOKMARKS_QUERY_ID = "Z9GWmP0kP2dajyckAaDUBw";
 const BOOKMARKS_OPERATION = "Bookmarks";
@@ -82,7 +84,10 @@ function buildUrl(cursor?: string): string {
 /**
  * 构建请求头
  */
-function buildHeaders(csrfToken: string, authToken: string): Record<string, string> {
+function buildHeaders(
+  csrfToken: string,
+  authToken: string,
+): Record<string, string> {
   return {
     authorization: `Bearer ${X_PUBLIC_BEARER}`,
     "x-csrf-token": csrfToken,
@@ -171,14 +176,27 @@ function parseTweetData(tweetResult: any): TwitterBookmark | null {
     authorHandle,
     authorName,
     authorProfileImageUrl,
-    postedAt: typeof legacy.created_at === "string" ? legacy.created_at : undefined,
+    postedAt:
+      typeof legacy.created_at === "string" ? legacy.created_at : undefined,
     engagement: {
-      likeCount: typeof legacy.favorite_count === "number" ? legacy.favorite_count : undefined,
-      repostCount: typeof legacy.retweet_count === "number" ? legacy.retweet_count : undefined,
-      replyCount: typeof legacy.reply_count === "number" ? legacy.reply_count : undefined,
-      quoteCount: typeof legacy.quote_count === "number" ? legacy.quote_count : undefined,
-      bookmarkCount: typeof legacy.bookmark_count === "number" ? legacy.bookmark_count : undefined,
-      viewCount: tweet?.views?.count != null ? Number(tweet.views.count) : undefined,
+      likeCount:
+        typeof legacy.favorite_count === "number"
+          ? legacy.favorite_count
+          : undefined,
+      repostCount:
+        typeof legacy.retweet_count === "number"
+          ? legacy.retweet_count
+          : undefined,
+      replyCount:
+        typeof legacy.reply_count === "number" ? legacy.reply_count : undefined,
+      quoteCount:
+        typeof legacy.quote_count === "number" ? legacy.quote_count : undefined,
+      bookmarkCount:
+        typeof legacy.bookmark_count === "number"
+          ? legacy.bookmark_count
+          : undefined,
+      viewCount:
+        tweet?.views?.count != null ? Number(tweet.views.count) : undefined,
     },
     media,
     quotedTweetId,
@@ -195,11 +213,15 @@ function parseBookmarksResponse(response: any): {
   cursor?: string;
   hasMore: boolean;
 } {
-  const instructions = response?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
+  const instructions =
+    response?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
   const entries: any[] = [];
 
   for (const instruction of instructions) {
-    if (instruction.type === "TimelineAddEntries" && Array.isArray(instruction.entries)) {
+    if (
+      instruction.type === "TimelineAddEntries" &&
+      Array.isArray(instruction.entries)
+    ) {
       entries.push(...instruction.entries);
     }
   }
@@ -236,7 +258,7 @@ function parseBookmarksResponse(response: any): {
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 4
+  maxRetries = 4,
 ): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const response = await fetch(url, options);
@@ -267,15 +289,21 @@ async function fetchWithRetry(
  * 获取 Twitter 书签
  */
 export async function fetchTwitterBookmarks(
-  options: TwitterSyncOptions
-): Promise<{ bookmarks: TwitterBookmark[]; cursor?: string; hasMore: boolean }> {
+  options: TwitterSyncOptions,
+): Promise<{
+  bookmarks: TwitterBookmark[];
+  cursor?: string;
+  hasMore: boolean;
+}> {
   const url = buildUrl(options.cursor);
   const headers = buildHeaders(options.csrfToken, options.authToken);
 
   const response = await fetchWithRetry(url, { headers });
 
   if (!response.ok) {
-    throw new Error(`Twitter API 错误: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Twitter API 错误: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data = await response.json();
@@ -287,7 +315,7 @@ export async function fetchTwitterBookmarks(
  */
 export function convertToBookmarkRecord(
   bookmark: TwitterBookmark,
-  embedding?: number[]
+  embedding?: number[],
 ): BookmarkRecord {
   return {
     id: `tw-${bookmark.tweetId}`,

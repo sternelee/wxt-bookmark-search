@@ -61,7 +61,7 @@ export function detectBookmarkRootRole(
 ): BookmarkRootRole | undefined {
   const id = typeof input === "string" ? "" : (input.id || "").toLowerCase();
   const title = normalizeBookmarkRootLabel(
-    typeof input === "string" ? input : (input.title || ""),
+    typeof input === "string" ? input : input.title || "",
   );
 
   if (id.includes("toolbar")) return "toolbar";
@@ -124,7 +124,5 @@ export function resolveBookmarkRootFolder<T extends BookmarkRootCandidate>(
     }
   }
 
-  return rootChildren.find(
-    (item) => !item.url && item.title === rootLabel,
-  );
+  return rootChildren.find((item) => !item.url && item.title === rootLabel);
 }

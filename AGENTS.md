@@ -7,7 +7,7 @@ Guidance for AI coding agents operating in this repository.
 **Flow Search** is a Manifest V3 Chrome extension for AI-powered bookmark search.
 Trigger: type `bi <keyword>` in Chrome's omnibox.
 
-Stack: **WXT** · **TypeScript** · **Solid.js** (popup/options UI) · **Dexie.js** (IndexedDB) · **EdgeVec** (HNSW vector index) · **SiliconFlow BGE-M3** (embeddings)
+Stack: **WXT** · **TypeScript** · **Solid.js** (popup/options UI) · **Dexie.js** (IndexedDB) · **SiliconFlow BGE-M3** (embeddings, cosine similarity search)
 
 ---
 
@@ -42,7 +42,8 @@ pnpm compile
 | `entrypoints/` | Browser entry points wired to `src/` logic |
 | `entrypoints/background.ts` | Service worker (omnibox handlers, message passing) |
 | `entrypoints/popup/` | Solid.js popup UI (`.tsx`) |
-| `entrypoints/options/` | Vanilla TS settings page |
+| `entrypoints/options/` | Solid.js settings page (API keys, indexing controls, folder filters) |
+| `entrypoints/search/` | Solid.js full-text search page (standalone, outside popup) |
 | `entrypoints/content.ts` | Content script (page-level extraction) |
 
 **Rule:** Core logic stays in `src/`. Entry points only wire up browser APIs and call `src/` functions. Never import `browser.*` globals directly inside `src/` files.
@@ -54,7 +55,7 @@ pnpm compile
 | `types.ts` | All shared TypeScript interfaces (`BookmarkRecord`, `Settings`, `SearchMode`, etc.) |
 | `db.ts` | Dexie.js IndexedDB wrapper + `browser.storage.local` settings |
 | `embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache |
-| `hybrid.ts` | RRF hybrid search (keyword + vector fusion) using EdgeVec HNSW |
+| `hybrid.ts` | RRF hybrid search (keyword + vector fusion) with min-max normalization |
 | `search.ts` | Keyword-only search + Levenshtein fuzzy reranking |
 | `freq.ts` | Visit frequency cache (persisted to `browser.storage.local`) |
 | `highlight.ts` | XML escaping for omnibox `<match>/<dim>/<url>` tags |
@@ -66,6 +67,11 @@ pnpm compile
 | `twitter-cookies.ts` | Auto-extraction of Twitter cookies from browser |
 | `llm.ts` | SiliconFlow Chat API for summaries/tags |
 | `vectorWorkerManager.ts` | Legacy Worker code (deprecated, unused) |
+| `bookmarkRoots.ts` | Cross-browser bookmark root role mapping (Chrome ↔ Firefox root normalization) |
+| `gist-sync.ts` | GitHub Gist multi-device bookmark sync (union merge strategy, 900 KB size guard) |
+| `history.ts` | Browser history sync — converts `browser.history` items to `BookmarkRecord` |
+| `polyfills.ts` | Cross-browser polyfills (AbortSignal.timeout for Firefox <124); import once in background |
+| `i18n/index.ts` | Type-safe i18n system; supported locales: `zh-CN`, `en`, `ja`, `ko`; use `t('key')` |
 | `lib/utils.ts` | `cn()` utility for Tailwind class merging |
 | `components/ui/` | Reusable UI components (Button, Card, Badge, Progress, Input, Select, etc.) |
 
@@ -163,6 +169,26 @@ import './App.css';
 - Use `createSignal`, `onMount`, `For`, `Show` from `solid-js`
 - JSX uses `class` (not `className`); event handlers use `onClick`, `onChange`, etc.
 - No server-side concerns — pure CSP-compliant browser UI
+- Tailwind v3 with HSL CSS variables + dark mode support (`tailwind.config.js`)
+
+---
+
+## API Dependencies
+
+- **SiliconFlow API Key** — required for BGE-M3 embeddings and LLM summaries/tags (configured in options page)
+- **Jina AI Reader** (`https://r.jina.ai/*`) — free, no key needed; used for content extraction
+- **GitHub PAT** — optional, for syncing starred repos
+- **Twitter/X cookies** — optional, auto-extracted via `browser.cookies` API; manual fallback also supported
+
+---
+
+## Key Runtime Patterns
+
+- **In-memory cache hot path:** `ensureCachedIndexedBookmarks()` loads all indexed bookmarks into RAM on SW startup — omnibox queries avoid IndexedDB round trips. Cache invalidates on SW restart.
+- **Omnibox debounce:** 150ms debounce + `AbortController` in `background.ts` `onInputChanged` handler; cancel previous in-flight embedding request on each keystroke.
+- **Content extraction order:** Active Tab (fastest) → Local Readability → Jina Reader (network fallback). Jina requires `https://r.jina.ai/*` host permission.
+- **Indexer recovery:** `indexQueue` (Dexie v4) persists pending work; on SW restart the queue is reloaded, so bookmarks survive service-worker lifecycle termination.
+- **Gist sync lock:** `gistSyncLock` flag in `background.ts` prevents recursive bookmark-change events while gist sync is writing locally. If a local change arrives during sync, `pendingGistSync` queues a follow-up sync.
 
 ---
 

@@ -84,13 +84,15 @@ export default {
       modeVector: "纯向量检索 (Semantic Only)",
       modeKeyword: "纯关键词匹配 (Classic)",
       vectorWeight: "向量检索权重 (Vector Weight)",
-      vectorWeightHint: "调高此值将让搜索结果更偏向意思相近，调低则更偏向字面匹配",
+      vectorWeightHint:
+        "调高此值将让搜索结果更偏向意思相近，调低则更偏向字面匹配",
       applied: "✓ 搜索设置已应用",
     },
 
     github: {
       title: "🐙 GitHub Stars 语义化索引",
-      tokenHint: "同步 GitHub Stars 需要读取 starred repos；若启用下方 Gist 书签同步，还需额外包含 gist 权限。",
+      tokenHint:
+        "同步 GitHub Stars 需要读取 starred repos；若启用下方 Gist 书签同步，还需额外包含 gist 权限。",
       saveSettings: "保存 GitHub 设置",
       syncStars: "立即同步 Stars",
       syncingStars: "正在获取 Stars...",
@@ -101,7 +103,8 @@ export default {
 
     twitter: {
       title: "🐦 Twitter/X 书签语义化索引",
-      description: "需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie 进行同步，无需开发者账号。",
+      description:
+        "需要在浏览器中登录 Twitter/X。扩展将自动提取 Cookie 进行同步，无需开发者账号。",
       enableSync: "启用 Twitter 书签同步",
       csrfToken: "CSRF Token (ct0) - 可选",
       csrfPlaceholder: "自动提取失败时手动输入",
@@ -118,7 +121,8 @@ export default {
 
     history: {
       title: "📜 浏览历史语义化索引",
-      description: "将浏览器访问历史纳入语义搜索。仅索引 http/https 页面，跳过已存在的书签/GitHub/Twitter 记录。",
+      description:
+        "将浏览器访问历史纳入语义搜索。仅索引 http/https 页面，跳过已存在的书签/GitHub/Twitter 记录。",
       enableSync: "启用浏览历史同步",
       syncDays: "同步最近 N 天",
       syncDaysHint: "范围 1-365 天，默认 30 天。天数越多首次同步越慢。",
@@ -132,7 +136,8 @@ export default {
 
     gist: {
       title: "☁️ 书签 Gist 同步",
-      description: "通过 GitHub Gist 在多设备间同步浏览器书签。需要先在上方配置 GitHub Token（需包含 gist 权限）。",
+      description:
+        "通过 GitHub Gist 在多设备间同步浏览器书签。需要先在上方配置 GitHub Token（需包含 gist 权限）。",
       createGist: "创建新 Gist（上传本地书签）",
       linkGist: "关联已有 Gist ID",
       gistIdPlaceholder: "输入 Gist ID（32 位十六进制）",
@@ -144,26 +149,32 @@ export default {
       downloadOverwrite: "下载覆盖",
       lastSync: "上次同步",
       confirmUploadTitle: "⬆️ 确认上传覆盖",
-      confirmUploadBody: "将用本地书签全量替换 Gist 中的内容。远程独有的书签将会丢失，此操作不可撤销。",
+      confirmUploadBody:
+        "将用本地书签全量替换 Gist 中的内容。远程独有的书签将会丢失，此操作不可撤销。",
       confirmDownloadTitle: "⬇️ 确认下载覆盖",
-      confirmDownloadBody: "将用 Gist 内容全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
+      confirmDownloadBody:
+        "将用 Gist 内容全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
       creating: "正在创建 Gist 并上传书签...",
       createSuccess: "✓ Gist 创建成功！ID: {{gistId}}",
       linking: "正在验证并关联 Gist...",
-      linkSuccess: "✓ 关联成功！Gist ID: {{gistId}}。如需同步请手动点击「立即同步」。",
+      linkSuccess:
+        "✓ 关联成功！Gist ID: {{gistId}}。如需同步请手动点击「立即同步」。",
       syncInfo: "正在同步书签到 Gist...",
-      syncSuccess: "✓ 同步完成！+{{added}} 新增, -{{removed}} 删除, {{uploaded}} 总计",
+      syncSuccess:
+        "✓ 同步完成！+{{added}} 新增, -{{removed}} 删除, {{uploaded}} 总计",
       uploadInfo: "正在上传本地书签覆盖 Gist...",
       uploadSuccess: "✓ 上传覆盖完成！{{uploaded}} 个书签已覆盖到 Gist",
       downloadInfo: "正在从 Gist 下载覆盖本地书签...",
-      downloadSuccess: "✓ 下载覆盖完成！+{{added}} 个书签已恢复，{{removed}} 个本地项目已清空",
+      downloadSuccess:
+        "✓ 下载覆盖完成！+{{added}} 个书签已恢复，{{removed}} 个本地项目已清空",
       autoSyncEnabled: "✓ 自动同步已启用",
       autoSyncDisabled: "自动同步已关闭",
       gistIdRequired: "请输入 Gist ID",
       tokenRequired: "GitHub Token 未配置",
       gistNotFound: "Gist 不存在或不包含书签数据",
       noGistLinked: "未关联 Gist，请先创建或关联",
-      sizeError: "可尝试在 Chrome 书签管理器中清理无用书签后再同步，或使用「上传覆盖」创建一份全新的 Gist。",
+      sizeError:
+        "可尝试在 Chrome 书签管理器中清理无用书签后再同步，或使用「上传覆盖」创建一份全新的 Gist。",
       inProgress: "同步正在进行中",
     },
 
@@ -188,7 +199,8 @@ export default {
 
     failedBookmarks: {
       title: "⚠️ 失效 / 索引失败管理",
-      description: "以下书签在索引过程中遇到错误，可能是网址已失效。你可以点击链接测试或直接删除书签。",
+      description:
+        "以下书签在索引过程中遇到错误，可能是网址已失效。你可以点击链接测试或直接删除书签。",
       noTitle: "无标题",
       visit: "点击访问",
       errorLabel: "错误",
@@ -220,7 +232,8 @@ export default {
   },
 
   background: {
-    omniboxDefault: "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 (/github /twitter /folder:名称)",
+    omniboxDefault:
+      "🔍 Flow Search — 输入关键词后按 Enter 打开全页搜索，或选择书签直接跳转 (/github /twitter /folder:名称)",
     searching: "🔍 正在语义搜索...",
     cmdGithub: "🔮 /github 关键词 — 搜索 GitHub Stars",
     cmdTwitter: "🐦 /twitter 关键词 — 搜索 Twitter 书签",

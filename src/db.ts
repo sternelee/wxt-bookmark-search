@@ -3,10 +3,10 @@
  * 存储书签向量索引数据
  */
 
-import Dexie, { Table } from 'dexie';
-import type { BookmarkRecord, IndexQueueRecord, Settings } from './types';
+import Dexie, { Table } from "dexie";
+import type { BookmarkRecord, IndexQueueRecord, Settings } from "./types";
 
-const SETTINGS_KEY = 'settings';
+const SETTINGS_KEY = "settings";
 
 // === 已索引书签内存缓存 ===
 let _indexedCache: BookmarkRecord[] | null = null;
@@ -15,10 +15,17 @@ let _cacheLoadingPromise: Promise<BookmarkRecord[]> | null = null;
 
 /** 从 DB 加载已索引书签到缓存，并预计算 embedding 模长 */
 async function loadIndexedCache(): Promise<BookmarkRecord[]> {
-  const records = await db.bookmarks.where('status').equals('indexed').toArray();
+  const records = await db.bookmarks
+    .where("status")
+    .equals("indexed")
+    .toArray();
   // 预计算 embedding 模长，加速后续余弦相似度计算
   for (const r of records) {
-    if (r.embedding && r.embedding.length > 0 && r._embeddingNorm === undefined) {
+    if (
+      r.embedding &&
+      r.embedding.length > 0 &&
+      r._embeddingNorm === undefined
+    ) {
       let norm = 0;
       for (let i = 0; i < r.embedding.length; i++) {
         norm += r.embedding[i] * r.embedding[i];
@@ -31,7 +38,9 @@ async function loadIndexedCache(): Promise<BookmarkRecord[]> {
 }
 
 /** 获取已索引书签（优先使用缓存，并发安全） */
-export async function ensureCachedIndexedBookmarks(): Promise<BookmarkRecord[]> {
+export async function ensureCachedIndexedBookmarks(): Promise<
+  BookmarkRecord[]
+> {
   if (_indexedCache !== null) return _indexedCache;
   if (_cacheLoadingPromise) return _cacheLoadingPromise;
   _cacheLoadingPromise = loadIndexedCache().finally(() => {
@@ -49,8 +58,8 @@ export function invalidateIndexedCache(): void {
 function syncCacheRecord(record: BookmarkRecord): void {
   if (_indexedCache === null) return;
 
-  const idx = _indexedCache.findIndex(r => r.id === record.id);
-  if (record.status === 'indexed') {
+  const idx = _indexedCache.findIndex((r) => r.id === record.id);
+  if (record.status === "indexed") {
     if (idx >= 0) {
       _indexedCache[idx] = record;
     } else {
@@ -66,7 +75,7 @@ function syncCacheRecord(record: BookmarkRecord): void {
 /** 内部：从缓存中移除记录 */
 function removeCacheRecord(id: string): void {
   if (_indexedCache === null) return;
-  const idx = _indexedCache.findIndex(r => r.id === id);
+  const idx = _indexedCache.findIndex((r) => r.id === id);
   if (idx >= 0) {
     _indexedCache.splice(idx, 1);
   }
@@ -77,23 +86,23 @@ class BookmarkDB extends Dexie {
   indexQueue!: Table<IndexQueueRecord, string>;
 
   constructor() {
-    super('FlowSearch');
+    super("FlowSearch");
     // v1: original schema (Dexie 3 installs stored IDB version as-is)
     this.version(1).stores({
-      bookmarks: 'id, url, status, indexedAt'
+      bookmarks: "id, url, status, indexedAt",
     });
     // v2: added vectorId index (Dexie 4 stores IDB version as version*10)
     this.version(2).stores({
-      bookmarks: 'id, url, status, indexedAt, vectorId'
+      bookmarks: "id, url, status, indexedAt, vectorId",
     });
     // v3: remove unused vectorId index (EdgeVec removed; pure cosine similarity)
     this.version(3).stores({
-      bookmarks: 'id, url, status, indexedAt'
+      bookmarks: "id, url, status, indexedAt",
     });
     // v4: add indexQueue for persistent indexing queue
     this.version(4).stores({
-      bookmarks: 'id, url, status, indexedAt',
-      indexQueue: 'bookmarkId, url, enqueuedAt',
+      bookmarks: "id, url, status, indexedAt",
+      indexQueue: "bookmarkId, url, enqueuedAt",
     });
   }
 }
@@ -102,17 +111,19 @@ export const db = new BookmarkDB();
 
 /** 获取所有待索引的书签 */
 export async function getPendingBookmarks(): Promise<BookmarkRecord[]> {
-  return db.bookmarks.where('status').equals('pending').toArray();
+  return db.bookmarks.where("status").equals("pending").toArray();
 }
 
 /** 获取所有已索引的书签 */
 export async function getIndexedBookmarks(): Promise<BookmarkRecord[]> {
-  return db.bookmarks.where('status').equals('indexed').toArray();
+  return db.bookmarks.where("status").equals("indexed").toArray();
 }
 
 /** 根据 URL 查找记录 */
-export async function getBookmarkByUrl(url: string): Promise<BookmarkRecord | undefined> {
-  return db.bookmarks.where('url').equals(url).first();
+export async function getBookmarkByUrl(
+  url: string,
+): Promise<BookmarkRecord | undefined> {
+  return db.bookmarks.where("url").equals(url).first();
 }
 
 /** 批量查询 URL 是否已索引 (返回已索引的 URL Set) */
@@ -124,9 +135,9 @@ export async function getIndexedUrls(urls: string[]): Promise<Set<string>> {
   for (let i = 0; i < urls.length; i += BATCH_SIZE) {
     const batch = urls.slice(i, i + BATCH_SIZE);
     const records = await db.bookmarks
-      .where('url')
+      .where("url")
       .anyOf(batch)
-      .filter(r => r.status === 'indexed')
+      .filter((r) => r.status === "indexed")
       .toArray();
 
     for (const r of records) {
@@ -138,7 +149,9 @@ export async function getIndexedUrls(urls: string[]): Promise<Set<string>> {
 }
 
 /** 批量插入或更新书签记录 */
-export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> {
+export async function upsertBookmarks(
+  records: BookmarkRecord[],
+): Promise<void> {
   await db.bookmarks.bulkPut(records);
   // 同步缓存
   for (const record of records) {
@@ -147,20 +160,27 @@ export async function upsertBookmarks(records: BookmarkRecord[]): Promise<void> 
 }
 
 /** 更新单条记录 */
-export async function updateBookmark(id: string, updates: Partial<BookmarkRecord>): Promise<void> {
+export async function updateBookmark(
+  id: string,
+  updates: Partial<BookmarkRecord>,
+): Promise<void> {
   await db.bookmarks.update(id, updates);
 
   // 同步缓存
   if (_indexedCache !== null) {
-    const idx = _indexedCache.findIndex(r => r.id === id);
+    const idx = _indexedCache.findIndex((r) => r.id === id);
     const newStatus = updates.status as string | undefined;
-    if (newStatus === 'indexed') {
+    if (newStatus === "indexed") {
       if (idx >= 0) {
         _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
       } else {
         const fullRecord = await db.bookmarks.get(id);
         if (fullRecord) {
-          if (fullRecord.embedding && fullRecord.embedding.length > 0 && fullRecord._embeddingNorm === undefined) {
+          if (
+            fullRecord.embedding &&
+            fullRecord.embedding.length > 0 &&
+            fullRecord._embeddingNorm === undefined
+          ) {
             let norm = 0;
             for (let i = 0; i < fullRecord.embedding.length; i++) {
               norm += fullRecord.embedding[i] * fullRecord.embedding[i];
@@ -170,7 +190,7 @@ export async function updateBookmark(id: string, updates: Partial<BookmarkRecord
           _indexedCache.push(fullRecord);
         }
       }
-    } else if (newStatus && newStatus !== 'indexed') {
+    } else if (newStatus && newStatus !== "indexed") {
       if (idx >= 0) _indexedCache.splice(idx, 1);
     } else if (idx >= 0) {
       _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
@@ -193,9 +213,9 @@ export async function getIndexStats(): Promise<{
 }> {
   const [total, indexed, pending, failed] = await Promise.all([
     db.bookmarks.count(),
-    db.bookmarks.where('status').equals('indexed').count(),
-    db.bookmarks.where('status').equals('pending').count(),
-    db.bookmarks.where('status').equals('failed').count(),
+    db.bookmarks.where("status").equals("indexed").count(),
+    db.bookmarks.where("status").equals("pending").count(),
+    db.bookmarks.where("status").equals("failed").count(),
   ]);
   return { total, indexed, pending, failed };
 }
@@ -208,30 +228,30 @@ export async function clearAll(): Promise<void> {
 
 /** 获取所有失败的书签 */
 export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
-  return db.bookmarks.where('status').equals('failed').toArray();
+  return db.bookmarks.where("status").equals("failed").toArray();
 }
 
 // === 设置管理 ===
 
 const defaultSettings: Settings = {
   openaiApiKey: undefined,
-  baseURL: 'https://api.openai.com/v1',
-  searchMode: 'hybrid',
+  baseURL: "https://api.openai.com/v1",
+  searchMode: "hybrid",
   vectorWeight: 0.4,
   selectedFolderIds: [],
   githubToken: undefined,
   githubSyncEnabled: false,
   twitterSyncEnabled: false,
   enableLLMEnrichment: true, // 默认启用 LLM 增强
-  embeddingModel: 'text-embedding-3-small', // 默认 embedding 模型
-  llmModel: 'gpt-4o-mini', // 默认 LLM 模型
+  embeddingModel: "text-embedding-3-small", // 默认 embedding 模型
+  llmModel: "gpt-4o-mini", // 默认 LLM 模型
   gistSyncEnabled: false,
   gistId: undefined,
   gistDeviceId: undefined,
   lastGistSync: undefined,
   historySyncEnabled: false,
   historyDays: 30,
-  language: 'en',
+  language: "en",
 };
 
 /** 获取设置 */
@@ -244,7 +264,7 @@ export async function getSettings(): Promise<Settings> {
 export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   const current = await getSettings();
   await browser.storage.local.set({
-    [SETTINGS_KEY]: { ...current, ...settings }
+    [SETTINGS_KEY]: { ...current, ...settings },
   });
 }
 

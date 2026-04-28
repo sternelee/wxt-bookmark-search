@@ -9,7 +9,12 @@ export interface SliderProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Slider(props: SliderProps) {
-  const [local, others] = splitProps(props, ["class", "label", "hint", "valueDisplay"]);
+  const [local, others] = splitProps(props, [
+    "class",
+    "label",
+    "hint",
+    "valueDisplay",
+  ]);
 
   return (
     <div class="mb-5">
@@ -24,7 +29,7 @@ export function Slider(props: SliderProps) {
           class={cn(
             "flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer",
             "accent-primary",
-            local.class
+            local.class,
           )}
           {...others}
         />

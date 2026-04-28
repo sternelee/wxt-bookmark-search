@@ -48,15 +48,20 @@ export async function extractTwitterCookies(): Promise<TwitterCookies | null> {
 /**
  * 验证 cookies 是否有效（通过测试 API 调用）
  */
-export async function testTwitterCookies(cookies: TwitterCookies): Promise<boolean> {
+export async function testTwitterCookies(
+  cookies: TwitterCookies,
+): Promise<boolean> {
   try {
-    const response = await fetch("https://x.com/i/api/1.1/account/verify_credentials.json", {
-      headers: {
-        authorization: `Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA`,
-        "x-csrf-token": cookies.ct0,
-        cookie: `ct0=${cookies.ct0}; auth_token=${cookies.authToken}`,
+    const response = await fetch(
+      "https://x.com/i/api/1.1/account/verify_credentials.json",
+      {
+        headers: {
+          authorization: `Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA`,
+          "x-csrf-token": cookies.ct0,
+          cookie: `ct0=${cookies.ct0}; auth_token=${cookies.authToken}`,
+        },
       },
-    });
+    );
 
     return response.ok || response.status === 429; // 429 表示 cookies 有效但被限流
   } catch (error) {

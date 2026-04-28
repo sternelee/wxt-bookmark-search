@@ -13,7 +13,7 @@ export function Progress(props: ProgressProps) {
     <div
       class={cn(
         "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
-        local.class
+        local.class,
       )}
       {...others}
     >

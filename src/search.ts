@@ -158,11 +158,16 @@ export function rerankBookmarks(
       if (tl.length < qLen) continue;
 
       // Limit title length to avoid pathological cases
-      const searchTitle = tl.length > MAX_TITLE_LEN ? tl.slice(0, MAX_TITLE_LEN) : tl;
+      const searchTitle =
+        tl.length > MAX_TITLE_LEN ? tl.slice(0, MAX_TITLE_LEN) : tl;
 
       // Slide windows of size qLen to qLen+2 across the title
       let matched = false;
-      for (let windowSize = qLen; windowSize <= qLen + 2 && !matched; windowSize++) {
+      for (
+        let windowSize = qLen;
+        windowSize <= qLen + 2 && !matched;
+        windowSize++
+      ) {
         for (let start = 0; start + windowSize <= searchTitle.length; start++) {
           const window = searchTitle.slice(start, start + windowSize);
           const dist = levenshtein(ql, window);
@@ -195,10 +200,6 @@ export function rerankBookmarks(
 
   return scored.map((entry) => ({
     content: entry.bookmark.url!,
-    description: fmt(
-      entry.bookmark.title,
-      query,
-      entry.bookmark.url!,
-    ),
+    description: fmt(entry.bookmark.title, query, entry.bookmark.url!),
   }));
 }
