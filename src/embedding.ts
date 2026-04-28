@@ -33,12 +33,20 @@ class EmbeddingCache {
   }
 
   /** 生成缓存 key，加入 context 和 model 前缀避免混用 */
-  private hash(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): string {
+  private hash(
+    text: string,
+    context: "query" | "doc" = "doc",
+    model: string = DEFAULT_MODEL,
+  ): string {
     return `${model}:${context}:${text.trim().toLowerCase()}`;
   }
 
   /** 获取缓存 */
-  get(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): number[] | null {
+  get(
+    text: string,
+    context: "query" | "doc" = "doc",
+    model: string = DEFAULT_MODEL,
+  ): number[] | null {
     const key = this.hash(text, context, model);
     const entry = this.cache.get(key);
 
@@ -100,7 +108,11 @@ class EmbeddingCache {
   }
 
   /** 检查 key 是否存在且未过期 */
-  has(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): boolean {
+  has(
+    text: string,
+    context: "query" | "doc" = "doc",
+    model: string = DEFAULT_MODEL,
+  ): boolean {
     const key = this.hash(text, context, model);
     const entry = this.cache.get(key);
     if (!entry) return false;
@@ -176,8 +188,10 @@ export async function getEmbedding(
   });
 
   if (!response.ok) {
-    const error = (await response.json()) as EmbeddingError;
-    throw new Error(error.error?.message || error.message || `API error: ${response.status}`);
+    const error = (await response.json().catch(() => ({}))) as EmbeddingError;
+    throw new Error(
+      error.error?.message || error.message || `API error: ${response.status}`,
+    );
   }
 
   const data = (await response.json()) as EmbeddingResponse;
@@ -265,8 +279,12 @@ export async function batchEmbedTexts(
     });
 
     if (!response.ok) {
-      const error = (await response.json()) as EmbeddingError;
-      throw new Error(error.error?.message || error.message || `API error: ${response.status}`);
+      const error = (await response.json().catch(() => ({}))) as EmbeddingError;
+      throw new Error(
+        error.error?.message ||
+          error.message ||
+          `API error: ${response.status}`,
+      );
     }
 
     const data = (await response.json()) as EmbeddingResponse;
@@ -325,6 +343,9 @@ export function getCacheStats(): { size: number; maxSize: number } {
 }
 
 /** 检查查询向量是否已缓存 */
-export function hasCachedQuery(query: string, model: string = DEFAULT_MODEL): boolean {
+export function hasCachedQuery(
+  query: string,
+  model: string = DEFAULT_MODEL,
+): boolean {
   return embeddingCache.has(query, "query", model);
 }

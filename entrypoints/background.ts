@@ -208,6 +208,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
       settings.openaiApiKey,
       undefined,
       settings.embeddingModel,
+      settings.baseURL,
     );
     const mode = settings.searchMode || "hybrid";
     let results: BookmarkRecord[];
@@ -744,6 +745,7 @@ export default defineBackground(() => {
           apiKey,
           signal,
           settings.embeddingModel,
+          settings.baseURL,
         );
 
         // 如果已中止，直接返回

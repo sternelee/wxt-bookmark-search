@@ -235,7 +235,7 @@ export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
 
 const defaultSettings: Settings = {
   openaiApiKey: undefined,
-  baseURL: "https://api.openai.com/v1",
+  baseURL: "https://api.openai.com",
   searchMode: "hybrid",
   vectorWeight: 0.4,
   selectedFolderIds: [],
