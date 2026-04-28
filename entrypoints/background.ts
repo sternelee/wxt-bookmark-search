@@ -6,15 +6,28 @@ import {
   getFreqCache,
 } from "../src/freq";
 import { rerankBookmarks } from "../src/search";
-import { highlightBookmark, highlightBookmarkPlain, escapeXml } from "../src/highlight";
+import {
+  highlightBookmark,
+  highlightBookmarkPlain,
+  escapeXml,
+} from "../src/highlight";
 import {
   getSettings,
   ensureCachedIndexedBookmarks,
   hasApiKey,
   saveSettings,
 } from "../src/db";
-import type { BookmarkRecord, SearchResult, GistBookmarkNode } from "../src/types";
-import { getQueryEmbedding, getCacheStats, clearEmbeddingCache, hasCachedQuery } from "../src/embedding";
+import type {
+  BookmarkRecord,
+  SearchResult,
+  GistBookmarkNode,
+} from "../src/types";
+import {
+  getQueryEmbedding,
+  getCacheStats,
+  clearEmbeddingCache,
+  hasCachedQuery,
+} from "../src/embedding";
 import { hybridSearch, vectorSearch } from "../src/hybrid";
 import {
   initIndexer,
@@ -152,7 +165,10 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     if (folderIds.length > 0) {
       allowedUrls = await getAllUrlsInFolders(folderIds);
     }
-  } else if (settings.selectedFolderIds && settings.selectedFolderIds.length > 0) {
+  } else if (
+    settings.selectedFolderIds &&
+    settings.selectedFolderIds.length > 0
+  ) {
     allowedUrls = await getAllUrlsInFolders(settings.selectedFolderIds);
   }
 
@@ -224,9 +240,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
 /**
  * 递归获取文件夹及其子文件夹下所有的书签 URL
  */
-async function getAllUrlsInFolders(
-  folderIds: string[],
-): Promise<Set<string>> {
+async function getAllUrlsInFolders(folderIds: string[]): Promise<Set<string>> {
   const urls = new Set<string>();
   for (const id of folderIds) {
     try {
@@ -327,7 +341,10 @@ export default defineBackground(() => {
     let startIndex = 0;
 
     if (folderPath.length > 0) {
-      const topLevelFolder = resolveBookmarkRootFolder(rootChildren, folderPath[0]);
+      const topLevelFolder = resolveBookmarkRootFolder(
+        rootChildren,
+        folderPath[0],
+      );
       if (topLevelFolder) {
         currentParentId = topLevelFolder.id;
         startIndex = 1;
@@ -355,11 +372,14 @@ export default defineBackground(() => {
 
     if (!node.url) return;
 
-    const existingChildren = await browser.bookmarks.getChildren(currentParentId);
+    const existingChildren =
+      await browser.bookmarks.getChildren(currentParentId);
     const targetKey = buildBookmarkKey(node.url, node.title, folderPath);
     const existsInTargetFolder = existingChildren.some((item) => {
       if (!item.url) return false;
-      return buildBookmarkKey(item.url, item.title || "", folderPath) === targetKey;
+      return (
+        buildBookmarkKey(item.url, item.title || "", folderPath) === targetKey
+      );
     });
     if (existsInTargetFolder) {
       return;
@@ -465,15 +485,21 @@ export default defineBackground(() => {
         folderPath: string[] = [],
       ): Array<{ url: string; title: string; folderPath: string[] }> => {
         if (node.url) {
-          return [{
-            url: node.url,
-            title: node.title || "",
-            folderPath,
-          }];
+          return [
+            {
+              url: node.url,
+              title: node.title || "",
+              folderPath,
+            },
+          ];
         }
 
         const nextPath = node.title ? [...folderPath, node.title] : folderPath;
-        const results: Array<{ url: string; title: string; folderPath: string[] }> = [];
+        const results: Array<{
+          url: string;
+          title: string;
+          folderPath: string[];
+        }> = [];
         if (node.children) {
           for (const child of node.children) {
             results.push(...collectRemovedBookmarks(child, nextPath));
@@ -567,26 +593,26 @@ export default defineBackground(() => {
 
     let query = rawInput;
     let explicitFolderNames: string[] = [];
-    let sourceFilter: 'github' | 'twitter' | 'history' | null = null;
+    let sourceFilter: "github" | "twitter" | "history" | null = null;
 
     // 解析 /github 语法
     const githubMatch = query.match(/^\/github\s+(.*)$/i);
     if (githubMatch) {
-      sourceFilter = 'github';
+      sourceFilter = "github";
       query = githubMatch[1].trim();
     }
 
     // 解析 /twitter 语法
     const twitterMatch = query.match(/^\/twitter\s+(.*)$/i);
     if (twitterMatch) {
-      sourceFilter = 'twitter';
+      sourceFilter = "twitter";
       query = twitterMatch[1].trim();
     }
 
     // 解析 /history 语法
     const historyMatch = query.match(/^\/history\s+(.*)$/i);
     if (historyMatch) {
-      sourceFilter = 'history';
+      sourceFilter = "history";
       query = historyMatch[1].trim();
     }
 
@@ -603,12 +629,16 @@ export default defineBackground(() => {
       // 空查询 — 显示最近访问书签，并按来源过滤
       const recent = getRecentBookmarks(8);
       let filtered: Array<{ url: string }> = recent;
-      if (sourceFilter === 'github') {
-        filtered = recent.filter(({ url }) => url.includes('github.com'));
-      } else if (sourceFilter === 'twitter') {
-        filtered = recent.filter(({ url }) => url.includes('x.com') || url.includes('twitter.com'));
-      } else if (sourceFilter === 'history') {
-        filtered = recent.filter(({ url }) => !url.startsWith('chrome') && !url.startsWith('about'));
+      if (sourceFilter === "github") {
+        filtered = recent.filter(({ url }) => url.includes("github.com"));
+      } else if (sourceFilter === "twitter") {
+        filtered = recent.filter(
+          ({ url }) => url.includes("x.com") || url.includes("twitter.com"),
+        );
+      } else if (sourceFilter === "history") {
+        filtered = recent.filter(
+          ({ url }) => !url.startsWith("chrome") && !url.startsWith("about"),
+        );
       }
       suggest(
         filtered.slice(0, 8).map(({ url }) => ({
@@ -625,27 +655,27 @@ export default defineBackground(() => {
     const settings = await getSettings();
     let allowedUrls: Set<string> | null = null;
 
-    if (sourceFilter === 'github') {
+    if (sourceFilter === "github") {
       // GitHub: 从 DB 获取所有 gh- 开头的书签
       const { db } = await import("../src/db");
       const ghBookmarks = await db.bookmarks
-        .filter(r => r.id.startsWith('gh-'))
+        .filter((r) => r.id.startsWith("gh-"))
         .toArray();
-      allowedUrls = new Set(ghBookmarks.map(r => r.url));
-    } else if (sourceFilter === 'twitter') {
+      allowedUrls = new Set(ghBookmarks.map((r) => r.url));
+    } else if (sourceFilter === "twitter") {
       // Twitter: 从 DB 获取所有 tw- 开头的书签
       const { db } = await import("../src/db");
       const twBookmarks = await db.bookmarks
-        .filter(r => r.id.startsWith('tw-'))
+        .filter((r) => r.id.startsWith("tw-"))
         .toArray();
-      allowedUrls = new Set(twBookmarks.map(r => r.url));
-    } else if (sourceFilter === 'history') {
+      allowedUrls = new Set(twBookmarks.map((r) => r.url));
+    } else if (sourceFilter === "history") {
       // History: 从 DB 获取所有 hi- 开头的书签
       const { db } = await import("../src/db");
       const hiBookmarks = await db.bookmarks
-        .filter(r => r.id.startsWith('hi-'))
+        .filter((r) => r.id.startsWith("hi-"))
         .toArray();
-      allowedUrls = new Set(hiBookmarks.map(r => r.url));
+      allowedUrls = new Set(hiBookmarks.map((r) => r.url));
     } else if (explicitFolderNames.length > 0) {
       // 如果使用了 /folder: 语法，优先级最高，精准定位文件夹
       const folders = await browser.bookmarks.search({
@@ -695,7 +725,7 @@ export default defineBackground(() => {
     const signal = searchAbortController.signal;
 
     // 查询向量已缓存时跳过 debounce 直接搜索
-    const debounceMs = hasCachedQuery(query) ? 0 : 300;
+    const debounceMs = hasCachedQuery(query, settings.embeddingModel) ? 0 : 300;
 
     if (debounceMs > 0) {
       browser.omnibox.setDefaultSuggestion({
@@ -713,7 +743,7 @@ export default defineBackground(() => {
           query,
           apiKey,
           signal,
-          settings.embeddingModel
+          settings.embeddingModel,
         );
 
         // 如果已中止，直接返回
@@ -724,15 +754,26 @@ export default defineBackground(() => {
         const mode = settings.searchMode || "hybrid";
 
         if (mode === "vector") {
-          results = await vectorSearch(filteredIndexed, queryVector, {
-            limit: 9,
-          }, signal);
+          results = await vectorSearch(
+            filteredIndexed,
+            queryVector,
+            {
+              limit: 9,
+            },
+            signal,
+          );
         } else {
-          results = await hybridSearch(valid, filteredIndexed, queryVector, {
-            mode,
-            vectorWeight: settings.vectorWeight || 0.4,
-            limit: 9,
-          }, signal);
+          results = await hybridSearch(
+            valid,
+            filteredIndexed,
+            queryVector,
+            {
+              mode,
+              vectorWeight: settings.vectorWeight || 0.4,
+              limit: 9,
+            },
+            signal,
+          );
         }
 
         suggest(
@@ -867,7 +908,8 @@ export default defineBackground(() => {
               await saveSettings({ gistDeviceId: deviceId });
             }
             const tree = await browser.bookmarks.getTree();
-            const { exportBookmarkTree, createGist } = await import("../src/gist-sync");
+            const { exportBookmarkTree, createGist } =
+              await import("../src/gist-sync");
             const localTree = exportBookmarkTree(tree);
             const gistId = await createGist(octokit, {
               version: 1,
@@ -968,7 +1010,7 @@ function formatSuggestion(
   _query: string,
   showAi: boolean,
 ): string {
-  const aiActive = showAi && record.status === 'indexed';
+  const aiActive = showAi && record.status === "indexed";
   const prefix = aiActive ? "🤖 " : "";
   const title = record.title || record.url;
   const summary = record.summary?.slice(0, 50) || "";
@@ -979,4 +1021,3 @@ function formatSuggestion(
 
   return `${prefix}<match>${escapeXml(title)}</match> <dim>${escapeXml(summary)}...</dim> <url>${escapeXml(record.url)}</url>`;
 }
-

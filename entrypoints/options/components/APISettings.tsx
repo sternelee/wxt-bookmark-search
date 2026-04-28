@@ -11,6 +11,7 @@ import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { testApiKey } from "../../../src/embedding";
+import { testLlmModel } from "../../../src/llm";
 import { useI18n } from "../../../src/i18n";
 
 export default function APISettings() {
@@ -68,14 +69,14 @@ export default function APISettings() {
 
     setIsTesting(true);
     try {
-      const valid = await testApiKey(apiKey(), undefined, baseURL());
-      if (valid) {
-        setStatus({ message: t("options.api.testSuccess"), type: "success" });
-      } else {
-        setStatus({ message: t("options.api.testFail"), type: "error" });
+      await testApiKey(apiKey(), embeddingModel() || undefined, baseURL());
+      if (enableLLMEnrichment()) {
+        await testLlmModel(apiKey(), llmModel() || undefined, baseURL());
       }
+      setStatus({ message: t("options.api.testSuccess"), type: "success" });
     } catch (error) {
-      setStatus({ message: `测试失败: ${error}`, type: "error" });
+      const msg = error instanceof Error ? error.message : String(error);
+      setStatus({ message: msg, type: "error" });
     } finally {
       setIsTesting(false);
     }

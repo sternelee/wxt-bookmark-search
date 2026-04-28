@@ -3,16 +3,16 @@
  * 包含查询向量缓存
  */
 
-import type { Settings } from './types';
+import type { Settings } from "./types";
 
-export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-export const DEFAULT_MODEL = 'text-embedding-3-small';
+export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_MODEL = "text-embedding-3-small";
 const MAX_INPUT_LENGTH = 8000; // 字符数限制
 
 /** 缓存配置 */
 const CACHE_CONFIG = {
-  maxSize: 100,           // 最大缓存条目数
-  ttlMs: 30 * 60 * 1000,  // 缓存过期时间 30 分钟
+  maxSize: 100, // 最大缓存条目数
+  ttlMs: 30 * 60 * 1000, // 缓存过期时间 30 分钟
 };
 
 /** 缓存条目 */
@@ -32,14 +32,14 @@ class EmbeddingCache {
     this.ttlMs = ttlMs;
   }
 
-  /** 生成缓存 key，加入 context 前缀避免查询/文档混用 */
-  private hash(text: string, context: 'query' | 'doc' = 'doc'): string {
-    return `${context}:${text.trim().toLowerCase()}`;
+  /** 生成缓存 key，加入 context 和 model 前缀避免混用 */
+  private hash(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): string {
+    return `${model}:${context}:${text.trim().toLowerCase()}`;
   }
 
   /** 获取缓存 */
-  get(text: string, context: 'query' | 'doc' = 'doc'): number[] | null {
-    const key = this.hash(text, context);
+  get(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): number[] | null {
+    const key = this.hash(text, context, model);
     const entry = this.cache.get(key);
 
     if (!entry) return null;
@@ -58,8 +58,13 @@ class EmbeddingCache {
   }
 
   /** 设置缓存 */
-  set(text: string, embedding: number[], context: 'query' | 'doc' = 'doc'): void {
-    const key = this.hash(text, context);
+  set(
+    text: string,
+    embedding: number[],
+    context: "query" | "doc" = "doc",
+    model: string = DEFAULT_MODEL,
+  ): void {
+    const key = this.hash(text, context, model);
 
     // 如果已存在，先删除
     if (this.cache.has(key)) {
@@ -95,8 +100,8 @@ class EmbeddingCache {
   }
 
   /** 检查 key 是否存在且未过期 */
-  has(text: string, context: 'query' | 'doc' = 'doc'): boolean {
-    const key = this.hash(text, context);
+  has(text: string, context: "query" | "doc" = "doc", model: string = DEFAULT_MODEL): boolean {
+    const key = this.hash(text, context, model);
     const entry = this.cache.get(key);
     if (!entry) return false;
     if (Date.now() - entry.timestamp > this.ttlMs) {
@@ -108,7 +113,10 @@ class EmbeddingCache {
 }
 
 /** 全局缓存实例 */
-const embeddingCache = new EmbeddingCache(CACHE_CONFIG.maxSize, CACHE_CONFIG.ttlMs);
+const embeddingCache = new EmbeddingCache(
+  CACHE_CONFIG.maxSize,
+  CACHE_CONFIG.ttlMs,
+);
 
 export interface EmbeddingResponse {
   object: string;
@@ -125,11 +133,14 @@ export interface EmbeddingResponse {
 }
 
 export interface EmbeddingError {
-  error: {
+  error?: {
     message: string;
     type: string;
     code: string;
   };
+  // SiliconFlow / compatible APIs use top-level message
+  message?: string;
+  code?: number;
 }
 
 /** 调用 SiliconFlow Embedding API (带缓存) */
@@ -139,10 +150,10 @@ export async function getEmbedding(
   signal?: AbortSignal,
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
-  context: 'query' | 'doc' = 'doc'
+  context: "query" | "doc" = "doc",
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
-  const cached = embeddingCache.get(text, context);
+  const cached = embeddingCache.get(text, context, model);
   if (cached) {
     return { embedding: cached, tokens: 0, cached: true };
   }
@@ -151,29 +162,29 @@ export async function getEmbedding(
   const endpoint = `${baseURL}/v1/embeddings`;
 
   const response = await fetch(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
       input: truncatedText,
-      encoding_format: 'float',
+      encoding_format: "float",
     }),
     signal,
   });
 
   if (!response.ok) {
-    const error = await response.json() as EmbeddingError;
-    throw new Error(error.error?.message || `API error: ${response.status}`);
+    const error = (await response.json()) as EmbeddingError;
+    throw new Error(error.error?.message || error.message || `API error: ${response.status}`);
   }
 
-  const data = await response.json() as EmbeddingResponse;
+  const data = (await response.json()) as EmbeddingResponse;
   const embedding = data.data[0].embedding;
 
   // 存入缓存
-  embeddingCache.set(text, embedding, context);
+  embeddingCache.set(text, embedding, context, model);
 
   return {
     embedding,
@@ -190,7 +201,7 @@ export async function batchEmbedTexts(
   texts: string[],
   apiKey: string,
   model: string = DEFAULT_MODEL,
-  baseURL: string = DEFAULT_BASE_URL
+  baseURL: string = DEFAULT_BASE_URL,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
@@ -200,7 +211,7 @@ export async function batchEmbedTexts(
 
   // 1. 检查缓存
   texts.forEach((text, i) => {
-    const cached = embeddingCache.get(text, 'doc');
+    const cached = embeddingCache.get(text, "doc", model);
     if (cached) {
       results[i] = cached;
     } else {
@@ -214,21 +225,36 @@ export async function batchEmbedTexts(
     return results;
   }
 
-  console.log(`[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length}`);
+  console.log(
+    `[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length}`,
+  );
 
   const truncated = uncachedTexts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
   const endpoint = `${baseURL}/v1/embeddings`;
 
   // 3. 分批请求，避免超过 API 单次 token/item 限制
-  for (let chunkStart = 0; chunkStart < truncated.length; chunkStart += MAX_BATCH_CHUNK) {
-    const chunkTexts = truncated.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
-    const chunkOriginals = uncachedTexts.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
-    const chunkIndices = uncachedIndices.slice(chunkStart, chunkStart + MAX_BATCH_CHUNK);
+  for (
+    let chunkStart = 0;
+    chunkStart < truncated.length;
+    chunkStart += MAX_BATCH_CHUNK
+  ) {
+    const chunkTexts = truncated.slice(
+      chunkStart,
+      chunkStart + MAX_BATCH_CHUNK,
+    );
+    const chunkOriginals = uncachedTexts.slice(
+      chunkStart,
+      chunkStart + MAX_BATCH_CHUNK,
+    );
+    const chunkIndices = uncachedIndices.slice(
+      chunkStart,
+      chunkStart + MAX_BATCH_CHUNK,
+    );
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -239,11 +265,11 @@ export async function batchEmbedTexts(
     });
 
     if (!response.ok) {
-      const error = await response.json() as EmbeddingError;
-      throw new Error(error.error?.message || `API error: ${response.status}`);
+      const error = (await response.json()) as EmbeddingError;
+      throw new Error(error.error?.message || error.message || `API error: ${response.status}`);
     }
 
-    const data = await response.json() as EmbeddingResponse;
+    const data = (await response.json()) as EmbeddingResponse;
     const embeddings = data.data
       .sort((a, b) => a.index - b.index)
       .map((d) => d.embedding);
@@ -252,7 +278,7 @@ export async function batchEmbedTexts(
     embeddings.forEach((embedding, i) => {
       const globalIdx = chunkIndices[i];
       results[globalIdx] = embedding;
-      embeddingCache.set(chunkOriginals[i], embedding, 'doc');
+      embeddingCache.set(chunkOriginals[i], embedding, "doc", model);
     });
   }
 
@@ -265,20 +291,27 @@ export async function getQueryEmbedding(
   apiKey: string,
   signal?: AbortSignal,
   model: string = DEFAULT_MODEL,
-  baseURL: string = DEFAULT_BASE_URL
+  baseURL: string = DEFAULT_BASE_URL,
 ): Promise<number[]> {
-  const { embedding } = await getEmbedding(query, apiKey, signal, model, baseURL, 'query');
+  const { embedding } = await getEmbedding(
+    query,
+    apiKey,
+    signal,
+    model,
+    baseURL,
+    "query",
+  );
   return embedding;
 }
 
-/** 测试 API Key 有效性 */
-export async function testApiKey(apiKey: string, model: string = DEFAULT_MODEL, baseURL: string = DEFAULT_BASE_URL): Promise<boolean> {
-  try {
-    await getEmbedding('test', apiKey, undefined, model, baseURL);
-    return true;
-  } catch {
-    return false;
-  }
+/** 测试 API Key 有效性。成功返回 true，失败抛出包含服务端 message 的 Error */
+export async function testApiKey(
+  apiKey: string,
+  model: string = DEFAULT_MODEL,
+  baseURL: string = DEFAULT_BASE_URL,
+): Promise<true> {
+  await getEmbedding("test", apiKey, undefined, model, baseURL);
+  return true;
 }
 
 /** 清空向量缓存 */
@@ -292,6 +325,6 @@ export function getCacheStats(): { size: number; maxSize: number } {
 }
 
 /** 检查查询向量是否已缓存 */
-export function hasCachedQuery(query: string): boolean {
-  return embeddingCache.has(query, 'query');
+export function hasCachedQuery(query: string, model: string = DEFAULT_MODEL): boolean {
+  return embeddingCache.has(query, "query", model);
 }
