@@ -12,5 +12,8 @@ export default defineConfig({
       "https://api.x.com/*"
     ],
     omnibox: { keyword: "bi" },
+    trial_tokens: process.env.CHROME_AI_TRIAL_TOKEN
+      ? [{ token: process.env.CHROME_AI_TRIAL_TOKEN }]
+      : undefined,
   },
 });
