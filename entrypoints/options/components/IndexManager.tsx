@@ -7,6 +7,14 @@ import { getIndexStats, getSettings, saveSettings, clearAll } from "../../../src
 import { useI18n } from "../../../src/i18n";
 import FolderTree from "./FolderTree";
 
+interface ConfirmDialogState {
+  open: boolean;
+  title: string;
+  message: string;
+  variant: "default" | "destructive";
+  onConfirm: () => void;
+}
+
 export default function IndexManager() {
   const { t } = useI18n();
   const [stats, setStats] = createSignal({ total: 0, indexed: 0, pending: 0, failed: 0 });
@@ -16,6 +24,14 @@ export default function IndexManager() {
   const [isPaused, setIsPaused] = createSignal(false);
   const [status, setStatus] = createSignal<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [cacheStats, setCacheStats] = createSignal({ size: 0, maxSize: 100 });
+
+  const [confirmDialog, setConfirmDialog] = createSignal<ConfirmDialogState>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "default",
+    onConfirm: () => {},
+  });
 
   // 加载嵌入缓存状态（从 background 获取真实值）
   const loadCacheStats = async () => {
@@ -177,113 +193,186 @@ export default function IndexManager() {
     }
   };
 
-  // 清空缓存
-  const handleClearCache = async () => {
-    try {
-      await browser.runtime.sendMessage({ type: "CLEAR_EMBEDDING_CACHE" });
-      await loadCacheStats();
-      setStatus({ message: t("options.indexManager.cacheCleared"), type: "success" });
-    } catch (error) {
-      setStatus({ message: `${t("options.indexManager.cacheClearFailed")}: ${error}`, type: "error" });
-    }
+  // 清空查询缓存（内存中的 embedding API 缓存）
+  const handleClearQueryCache = () => {
+    setConfirmDialog({
+      open: true,
+      title: t("common.clearQueryCache"),
+      message: t("options.indexManager.clearQueryCacheConfirm"),
+      variant: "default",
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await browser.runtime.sendMessage({ type: "CLEAR_EMBEDDING_CACHE" });
+          await loadCacheStats();
+          setStatus({ message: t("options.indexManager.clearQueryCacheCleared"), type: "success" });
+        } catch (error) {
+          setStatus({ message: `${t("options.indexManager.cacheClearFailed")}: ${error}`, type: "error" });
+        }
+      },
+    });
+  };
+
+  // 清空数据库（IndexedDB 中的书签向量数据）
+  const handleClearDatabase = () => {
+    setConfirmDialog({
+      open: true,
+      title: t("common.clearDatabase"),
+      message: t("options.indexManager.clearDatabaseConfirm"),
+      variant: "destructive",
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await clearAll();
+          setStatus({ message: t("options.indexManager.databaseCleared"), type: "success" });
+          await loadStats();
+        } catch (error) {
+          setStatus({ message: `${t("options.indexManager.cacheClearFailed")}: ${error}`, type: "error" });
+        }
+      },
+    });
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog((prev) => ({ ...prev, open: false }));
   };
 
   return (
-    <Card class="mb-6">
-      <CardHeader>
-        <CardTitle>{t("options.indexManager.title")}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* 统计网格 */}
-        <div class="grid grid-cols-2 gap-3 mb-6">
-          <div class="text-center bg-muted p-3 rounded-lg border border-border">
-            <div class="text-xl font-extrabold text-primary">{stats().total}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.total")}</div>
-          </div>
-          <div class="text-center bg-muted p-3 rounded-lg border border-border">
-            <div class="text-xl font-extrabold text-primary">{stats().indexed}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.indexed")}</div>
-          </div>
-          <div class="text-center bg-muted p-3 rounded-lg border border-border">
-            <div class="text-xl font-extrabold text-primary">{stats().pending}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.pending")}</div>
-          </div>
-          <div class="text-center bg-muted p-3 rounded-lg border border-border">
-            <div class="text-xl font-extrabold text-primary">{stats().failed}</div>
-            <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.failed")}</div>
-          </div>
-        </div>
-
-        {/* 文件夹选择 */}
-        <div class="mb-5">
-          <label class="block text-sm font-semibold mb-2 text-foreground">{t("options.indexManager.scopeLabel")}</label>
-          <FolderTree
-            selectedIds={selectedFolders()}
-            onChange={setSelectedFolders}
-          />
-          <p class="text-xs text-muted-foreground mt-1.5">
-            {t("options.indexManager.scopeHint")}
-          </p>
-        </div>
-
-        {/* 控制按钮 */}
-        <div class="flex gap-3 flex-wrap">
-          <Button
-            onClick={handleStart}
-            disabled={isIndexing() && !isPaused()}
-          >
-            {selectedFolders().length > 0
-              ? t("common.startFolder", { count: selectedFolders().length })
-              : t("common.start")}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handlePause}
-            disabled={!isIndexing() || isPaused()}
-          >
-            {t("common.pause")}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleResume}
-            disabled={!isPaused()}
-          >
-            {t("common.resume")}
-          </Button>
-          <Button variant="outline" onClick={handleRetry}>
-            {t("common.retry")}
-          </Button>
-          <Button variant="destructive" onClick={handleClearCache}>
-            {t("common.clearCache")}
-          </Button>
-        </div>
-
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
-
-        <Show when={progress()}>
-          <div class="mt-5 bg-muted p-3 rounded-lg">
-            <Progress
-              value={Math.round((progress()!.processed / (progress()!.total || 1)) * 100)}
-              class="h-2"
-            />
-            <div class="text-right text-xs text-muted-foreground mt-1">
-              {Math.round((progress()!.processed / (progress()!.total || 1)) * 100)}% ({progress()!.processed}/{progress()!.total})
+    <>
+      <Card class="mb-6">
+        <CardHeader>
+          <CardTitle>{t("options.indexManager.title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* 统计网格 */}
+          <div class="grid grid-cols-2 gap-3 mb-6">
+            <div class="text-center bg-muted p-3 rounded-lg border border-border">
+              <div class="text-xl font-extrabold text-primary">{stats().total}</div>
+              <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.total")}</div>
+            </div>
+            <div class="text-center bg-muted p-3 rounded-lg border border-border">
+              <div class="text-xl font-extrabold text-primary">{stats().indexed}</div>
+              <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.indexed")}</div>
+            </div>
+            <div class="text-center bg-muted p-3 rounded-lg border border-border">
+              <div class="text-xl font-extrabold text-primary">{stats().pending}</div>
+              <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.pending")}</div>
+            </div>
+            <div class="text-center bg-muted p-3 rounded-lg border border-border">
+              <div class="text-xl font-extrabold text-primary">{stats().failed}</div>
+              <div class="text-[11px] text-muted-foreground font-medium mt-1 uppercase">{t("common.failed")}</div>
             </div>
           </div>
-        </Show>
 
-        <div class="mt-4 text-xs text-muted-foreground border-t border-border pt-3">
-          {t("options.indexManager.cacheStatus")}
-          <span class="font-bold"> {cacheStats().size}/{cacheStats().maxSize}</span>
-          {t("options.indexManager.cacheStatusHint")}
+          {/* 文件夹选择 */}
+          <div class="mb-5">
+            <label class="block text-sm font-semibold mb-2 text-foreground">{t("options.indexManager.scopeLabel")}</label>
+            <FolderTree
+              selectedIds={selectedFolders()}
+              onChange={setSelectedFolders}
+            />
+            <p class="text-xs text-muted-foreground mt-1.5">
+              {t("options.indexManager.scopeHint")}
+            </p>
+          </div>
+
+          {/* 控制按钮 */}
+          <div class="flex gap-3 flex-wrap">
+            <Button
+              onClick={handleStart}
+              disabled={isIndexing() && !isPaused()}
+            >
+              {selectedFolders().length > 0
+                ? t("common.startFolder", { count: selectedFolders().length })
+                : t("common.start")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePause}
+              disabled={!isIndexing() || isPaused()}
+            >
+              {t("common.pause")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResume}
+              disabled={!isPaused()}
+            >
+              {t("common.resume")}
+            </Button>
+            <Button variant="outline" onClick={handleRetry}>
+              {t("common.retry")}
+            </Button>
+            <Button variant="outline" onClick={handleClearQueryCache}>
+              {t("common.clearQueryCache")}
+            </Button>
+            <Button variant="destructive" onClick={handleClearDatabase}>
+              {t("common.clearDatabase")}
+            </Button>
+          </div>
+
+          <Alert
+            variant={status()?.type}
+            visible={status() !== null}
+            class="mt-4"
+          >
+            {status()?.message}
+          </Alert>
+
+          <Show when={progress()}>
+            <div class="mt-5 bg-muted p-3 rounded-lg">
+              <Progress
+                value={Math.round((progress()!.processed / (progress()!.total || 1)) * 100)}
+                class="h-2"
+              />
+              <div class="text-right text-xs text-muted-foreground mt-1">
+                {Math.round((progress()!.processed / (progress()!.total || 1)) * 100)}% ({progress()!.processed}/{progress()!.total})
+              </div>
+            </div>
+          </Show>
+
+          <div class="mt-4 text-xs text-muted-foreground border-t border-border pt-3">
+            {t("options.indexManager.cacheStatus")}
+            <span class="font-bold"> {cacheStats().size}/{cacheStats().maxSize}</span>
+            {t("options.indexManager.cacheStatusHint")}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 确认对话框 */}
+      <Show when={confirmDialog().open}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={closeConfirmDialog}
+        >
+          <Card
+            class="w-full max-w-md mx-4 shadow-xl"
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+          >
+            <CardHeader>
+              <CardTitle class={confirmDialog().variant === "destructive" ? "text-destructive" : ""}>
+                {confirmDialog().title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p class="text-sm text-foreground whitespace-pre-line mb-6">
+                {confirmDialog().message}
+              </p>
+              <div class="flex gap-3 justify-end">
+                <Button variant="outline" onClick={closeConfirmDialog}>
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  variant={confirmDialog().variant}
+                  onClick={() => confirmDialog().onConfirm()}
+                >
+                  {t("common.confirm")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </CardContent>
-    </Card>
+      </Show>
+    </>
   );
 }

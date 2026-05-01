@@ -5,7 +5,7 @@ import {
   getRecentBookmarks,
   getFreqCache,
 } from "../src/freq";
-import { rerankBookmarks } from "../src/search";
+import { rerankBookmarks, getMatchQuality } from "../src/search";
 import {
   highlightBookmark,
   highlightBookmarkPlain,
@@ -187,6 +187,15 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     valid = valid.filter((b) => allowedUrls!.has(b.url!));
   }
 
+  // 多词查询：过滤掉仅部分匹配的低质量结果，减少噪音进入混合搜索
+  if (query.includes(" ")) {
+    const topChromeUrls = new Set(valid.slice(0, 6).map((b) => b.url));
+    valid = valid.filter((b) => {
+      const q = getMatchQuality(query, b.title, b.url ?? "");
+      return q.score >= 2 || topChromeUrls.has(b.url);
+    });
+  }
+
   if (!settings.openaiApiKey) {
     const suggestions = rerankBookmarks(query, valid, IS_FIREFOX);
     return suggestions.slice(0, 20).map((s) => {
@@ -222,13 +231,24 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     let results: BookmarkRecord[];
 
     if (mode === "vector") {
-      results = await vectorSearch(filteredIndexed, queryVector, { limit: 20 });
+      results = await vectorSearch(
+        query,
+        filteredIndexed,
+        queryVector,
+        { limit: 20 },
+      );
     } else {
-      results = await hybridSearch(valid, filteredIndexed, queryVector, {
-        mode,
-        vectorWeight: settings.vectorWeight || 0.4,
-        limit: 20,
-      });
+      results = await hybridSearch(
+        query,
+        valid,
+        filteredIndexed,
+        queryVector,
+        {
+          mode,
+          vectorWeight: settings.vectorWeight || 0.4,
+          limit: 20,
+        },
+      );
     }
 
     return results.map(toSearchResult);
@@ -709,6 +729,15 @@ export default defineBackground(() => {
       valid = valid.filter((b) => allowedUrls!.has(b.url!));
     }
 
+    // 多词查询：过滤掉仅部分匹配的低质量结果，减少噪音进入混合搜索
+    if (query.includes(" ")) {
+      const topChromeUrls = new Set(valid.slice(0, 6).map((b) => b.url));
+      valid = valid.filter((b) => {
+        const q = getMatchQuality(query, b.title, b.url ?? "");
+        return q.score >= 2 || topChromeUrls.has(b.url);
+      });
+    }
+
     // 2. 检查 API Key
     if (!settings.openaiApiKey) {
       suggest(rerankBookmarks(query, valid));
@@ -765,6 +794,7 @@ export default defineBackground(() => {
 
         if (mode === "vector") {
           results = await vectorSearch(
+            query,
             filteredIndexed,
             queryVector,
             {
@@ -774,6 +804,7 @@ export default defineBackground(() => {
           );
         } else {
           results = await hybridSearch(
+            query,
             valid,
             filteredIndexed,
             queryVector,

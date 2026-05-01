@@ -30,6 +30,100 @@ export function queryWordsMatch(
   return words.every((w) => haystack.includes(w));
 }
 
+/** 关键词匹配质量等级 */
+export interface MatchQuality {
+  /** 0=无匹配, 1=部分词, 2=全词匹配, 3=短语精确匹配 */
+  score: number;
+  matchedWordCount: number;
+  totalWordCount: number;
+  hasPhraseMatch: boolean;
+  /** 短语精确匹配次数 */
+  phraseCount: number;
+}
+
+/**
+ * 计算查询与标题+URL+摘要+标签 的关键词匹配质量
+ *
+ * - score = 0: 没有任何词匹配
+ * - score = 1: 部分词匹配（但不是全部）
+ * - score = 2: 所有词都匹配（分散在文本中）
+ * - score = 3: 短语精确匹配（所有词按顺序连续出现）
+ */
+export function getMatchQuality(
+  query: string,
+  title: string,
+  url: string,
+  summary?: string,
+  tags?: string[],
+): MatchQuality {
+  const words = queryWords(query);
+  const haystack = (title + " " + url).toLowerCase();
+  const extraHaystack = [
+    summary?.toLowerCase() ?? "",
+    ...(tags?.map((t) => t.toLowerCase()) ?? []),
+  ].join(" ");
+  const fullHaystack = haystack + " " + extraHaystack;
+
+  if (words.length === 0) {
+    return { score: 0, matchedWordCount: 0, totalWordCount: 0, hasPhraseMatch: false, phraseCount: 0 };
+  }
+
+  if (words.length === 1) {
+    const has = fullHaystack.includes(words[0]);
+    return {
+      score: has ? 2 : 0,
+      matchedWordCount: has ? 1 : 0,
+      totalWordCount: 1,
+      hasPhraseMatch: has,
+      phraseCount: has ? 1 : 0,
+    };
+  }
+
+  const matchedWords = words.filter((w) => fullHaystack.includes(w));
+  const matchedWordCount = matchedWords.length;
+  const totalWordCount = words.length;
+
+  if (matchedWordCount === 0) {
+    return { score: 0, matchedWordCount: 0, totalWordCount, hasPhraseMatch: false, phraseCount: 0 };
+  }
+
+  if (matchedWordCount < totalWordCount) {
+    return {
+      score: 1,
+      matchedWordCount,
+      totalWordCount,
+      hasPhraseMatch: false,
+      phraseCount: 0,
+    };
+  }
+
+  // 所有词都匹配 — 检查是否有短语精确匹配（按顺序连续出现）
+  const queryPhrase = query.toLowerCase().trim();
+  let phraseCount = 0;
+  let hasPhraseMatch = false;
+
+  // 完整短语匹配（含摘要和标签）
+  if (fullHaystack.includes(queryPhrase)) {
+    phraseCount++;
+    hasPhraseMatch = true;
+  }
+
+  // 也检查标题独立匹配（标题中的短语比 URL/摘要 中的更有价值）
+  const titleLower = title.toLowerCase();
+  if (titleLower.includes(queryPhrase)) {
+    if (!hasPhraseMatch) phraseCount++;
+    hasPhraseMatch = true;
+  }
+
+  return {
+    score: hasPhraseMatch ? 3 : 2,
+    matchedWordCount,
+    totalWordCount,
+    hasPhraseMatch,
+    phraseCount,
+  };
+}
+
 /**
  * Standard Levenshtein edit distance between two strings.
  * Returns the minimum number of single-character edits needed to
@@ -61,7 +155,9 @@ export function levenshtein(a: string, b: string): number {
 /** Base scores — lower is better. */
 const SCORE_URL_EXACT = 0;
 const SCORE_TITLE_PREFIX = 1;
-const SCORE_MULTI_WORD = 5;
+const SCORE_PHRASE_EXACT = 2;   // 短语精确匹配（所有词按顺序连续出现）
+const SCORE_MULTI_WORD = 5;     // 所有词都匹配但不连续
+const SCORE_PARTIAL_MATCH = 8;  // 仅部分词匹配
 const SCORE_TITLE_CONTAINS = 10;
 const SCORE_CHROME_FALLBACK = 15;
 const SCORE_LEVENSHTEIN = 20; // applied only when query.length >= 3
@@ -101,12 +197,24 @@ function scoreBookmark(
     return { bookmark, baseScore: SCORE_TITLE_PREFIX, tieBreaker: 0 };
   }
 
-  // 3. Multi-word all-match
-  if (queryWordsMatch(q, title, url) && q.includes(" ")) {
-    return { bookmark, baseScore: SCORE_MULTI_WORD, tieBreaker: 0 };
+  // 3. 短语精确匹配或全词匹配（多词查询）
+  const quality = getMatchQuality(q, title, url);
+  if (q.includes(" ")) {
+    if (quality.score >= 3) {
+      // 短语精确匹配 — 奖励（分数更低 = 更好）
+      return { bookmark, baseScore: SCORE_PHRASE_EXACT, tieBreaker: 0 };
+    }
+    if (quality.score === 2) {
+      // 所有词都匹配但不连续
+      return { bookmark, baseScore: SCORE_MULTI_WORD, tieBreaker: 0 };
+    }
+    if (quality.score === 1) {
+      // 仅部分词匹配 — 惩罚（分数更高 = 更差）
+      return { bookmark, baseScore: SCORE_PARTIAL_MATCH, tieBreaker: 1 };
+    }
   }
 
-  // 4. Title contains (case-insensitive)
+  // 4. Title contains (case-insensitive) — 单字查询或上述未命中
   if (tl.includes(ql)) {
     return { bookmark, baseScore: SCORE_TITLE_CONTAINS, tieBreaker: 0 };
   }

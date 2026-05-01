@@ -475,6 +475,31 @@ export async function syncGithubStars(): Promise<{
   return { total: totalCount, queued: totalQueued };
 }
 
+/** 提取 URL 域名（去掉 www. 前缀） */
+function getUrlDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/** 构造用于 embedding 的结构化文档文本 */
+function buildEmbeddingText(
+  title: string,
+  summary: string,
+  tags: string[],
+  url: string,
+): string {
+  const parts: string[] = [];
+  if (title) parts.push(`Title: ${title}`);
+  if (summary) parts.push(`Summary: ${summary}`);
+  if (tags.length > 0) parts.push(`Tags: ${tags.join(", ")}`);
+  const domain = getUrlDomain(url);
+  if (domain) parts.push(`Source: ${domain}`);
+  return parts.length > 0 ? parts.join("\n") : title;
+}
+
 /**
  * 核心内容提取策略器
  */
@@ -756,8 +781,13 @@ async function processQueue(): Promise<void> {
               );
               summary = llmResult.summary;
               tags = llmResult.tags;
-              // 向量化文本：标题 + 摘要 + 标签
-              text = `${content.title || job.title}\n${summary}\n${tags.join(" ")}`;
+              // 向量化文本：结构化文档文本
+              text = buildEmbeddingText(
+                content.title || job.title,
+                summary,
+                tags,
+                job.url,
+              );
             } catch (llmError) {
               console.warn(
                 `[indexer] LLM enhancement failed for ${job.url}:`,
@@ -765,13 +795,23 @@ async function processQueue(): Promise<void> {
               );
               // 降级：使用原始摘要
               text = content
-                ? `${content.title || job.title}\n${summary}`
-                : job.title;
+                ? buildEmbeddingText(
+                    content.title || job.title,
+                    summary,
+                    [],
+                    job.url,
+                  )
+                : buildEmbeddingText(job.title, "", [], job.url);
             }
           } else {
             text = content
-              ? `${content.title || job.title}\n${summary}`
-              : job.title;
+              ? buildEmbeddingText(
+                  content.title || job.title,
+                  summary,
+                  [],
+                  job.url,
+                )
+              : buildEmbeddingText(job.title, "", [], job.url);
           }
 
           return {

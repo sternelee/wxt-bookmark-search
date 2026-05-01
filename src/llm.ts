@@ -27,13 +27,13 @@ export async function generateDeepContent(
   baseURL: string = DEFAULT_BASE_URL,
 ): Promise<AIResult> {
   const systemPrompt = `You are a helpful bookmark assistant. Analyze the provided web content and return a JSON object containing:
-1. 'summary': A 1-2 sentence concise summary in the original language of the text.
-2. 'tags': 3-5 relevant keywords/tags in the original language of the text.
+1. 'summary': A 2-3 sentence summary in the original language of the text. CRITICAL: preserve key technical terms, product names, framework names, and distinguishing concepts. Do NOT over-generalize. If the text compares "React" and "React Native", the summary must mention BOTH terms, not just "React frameworks".
+2. 'tags': 4-6 specific keywords/tags in the original language of the text. Include the main topic, key technologies mentioned, and any frameworks or libraries.
 
 The output MUST be a valid JSON object. Example:
 {
-  "summary": "This article discusses React performance optimization techniques including useMemo and useCallback.",
-  "tags": ["React", "Frontend", "Performance", "JavaScript"]
+  "summary": "This article compares React and React Native, explaining their differences in rendering (DOM vs native UI), development workflow, and when to choose each for building cross-platform applications.",
+  "tags": ["React", "React Native", "Cross-platform", "Mobile Development", "JavaScript", "Comparison"]
 }`;
 
   const userPrompt = `Content to analyze:\n\n${text.slice(0, 4000)}`; // 截取前 4k 字符避免超长

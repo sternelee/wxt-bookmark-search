@@ -8,12 +8,44 @@
 import type { BookmarkRecord, SearchOptions } from "./types";
 import { rankBySimilarity } from "./vector";
 import { getFreqCache } from "./freq";
+import { getMatchQuality } from "./search";
 
 /** RRF 常数 K (通常取 60) */
 const RRF_K = 60;
 
 /** 频率权重在混合搜索中的最大加分 */
 const FREQ_BOOST_MAX = 0.15;
+
+/** 关键词匹配质量奖励/惩罚 */
+const PHRASE_MATCH_BONUS = 0.25;   // 短语精确匹配
+const FULL_MATCH_BONUS = 0.05;     // 全词匹配
+const PARTIAL_MATCH_PENALTY = 0.25; // 部分匹配惩罚
+const NO_MATCH_PENALTY = 0.35;     // 无关键词匹配惩罚
+
+/** 向量搜索原始余弦相似度阈值 — 低于此值视为不相关 */
+const VECTOR_SIMILARITY_THRESHOLD = 0.18;
+
+/** 检查标题+URL+摘要+标签 是否包含查询中的任意一个词 */
+function hasAnyQueryWord(
+  query: string,
+  title: string,
+  url: string,
+  summary?: string,
+  tags?: string[],
+): boolean {
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return true;
+  const haystack = (
+    title +
+    " " +
+    url +
+    " " +
+    (summary ?? "") +
+    " " +
+    (tags?.join(" ") ?? "")
+  ).toLowerCase();
+  return words.some((w) => haystack.includes(w));
+}
 
 /** 书签类型 (兼容 browser.bookmarks.BookmarkTreeNode) */
 type BookmarkInput = {
@@ -83,6 +115,7 @@ function scoreKeywordResults(
  * 使用纯 JS 余弦相似度进行向量搜索，然后与关键词结果融合
  */
 export async function hybridSearch(
+  query: string,
   keywordResults: BookmarkInput[],
   allRecords: BookmarkRecord[],
   queryVector: number[],
@@ -105,10 +138,25 @@ export async function hybridSearch(
     const withEmbedding = allRecords.filter(
       (r) => r.embedding && r.embedding.length > 0,
     );
-    vectorResults = rankBySimilarity(queryVector, withEmbedding as any, {
-      limit: limit * 3,
+    const rawResults = rankBySimilarity(queryVector, withEmbedding as any, {
+      limit: limit * 4,
+      threshold: VECTOR_SIMILARITY_THRESHOLD,
       signal,
-    }).map((r) => ({ url: r.item.url as string, score: r.similarity }));
+    });
+    // 多词查询：过滤掉完全不包含任何查询词的向量结果（检查 title/url/summary/tags）
+    const isMultiWord = query.trim().includes(" ");
+    vectorResults = rawResults
+      .filter((r) => {
+        if (!isMultiWord) return true;
+        return hasAnyQueryWord(
+          query,
+          r.item.title,
+          r.item.url,
+          r.item.summary,
+          r.item.tags,
+        );
+      })
+      .map((r) => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
     console.warn("[hybrid] Vector search failed:", error);
   }
@@ -168,20 +216,43 @@ export async function hybridSearch(
   const freqCache = getFreqCache();
   const maxFreq = Math.max(1, ...Object.values(freqCache));
 
-  const withFreq = [...merged.values()].map((m) => {
+  // 融入关键词匹配质量奖励/惩罚（检查 title/url/summary/tags）
+  const withKeywordBoost = [...merged.values()].map((m) => {
     const freq = freqCache[m.record.url] ?? 0;
     const freqBoost = (freq / maxFreq) * FREQ_BOOST_MAX;
-    return { ...m, finalScore: m.finalScore + freqBoost };
+
+    // 计算关键词匹配质量并调整得分
+    const quality = getMatchQuality(
+      query,
+      m.record.title,
+      m.record.url,
+      m.record.summary,
+      m.record.tags,
+    );
+    let keywordBoost = 0;
+    if (quality.score >= 3) {
+      keywordBoost = PHRASE_MATCH_BONUS;
+    } else if (quality.score === 2) {
+      keywordBoost = FULL_MATCH_BONUS;
+    } else if (quality.score === 1) {
+      keywordBoost = -PARTIAL_MATCH_PENALTY;
+    } else {
+      keywordBoost = -NO_MATCH_PENALTY;
+    }
+
+    return { ...m, finalScore: m.finalScore + freqBoost + keywordBoost };
   });
 
-  const sorted = withFreq.sort((a, b) => b.finalScore - a.finalScore);
+  const sorted = withKeywordBoost.sort((a, b) => b.finalScore - a.finalScore);
   return sorted.slice(0, limit).map((m) => m.record);
 }
 
 /**
  * 纯向量搜索（余弦相似度）
+ * 融入关键词匹配质量作为辅助排序因子
  */
 export async function vectorSearch(
+  query: string,
   allRecords: BookmarkRecord[],
   queryVector: number[],
   options: SearchOptions = {},
@@ -200,17 +271,32 @@ export async function vectorSearch(
     const withEmbedding = allRecords.filter(
       (r) => r.embedding && r.embedding.length > 0,
     );
-    results = rankBySimilarity(queryVector, withEmbedding as any, {
-      limit,
+    const rawResults = rankBySimilarity(queryVector, withEmbedding as any, {
+      limit: limit * 3, // 取更多候选，供关键词匹配重排
+      threshold: VECTOR_SIMILARITY_THRESHOLD,
       signal,
-    }).map((r) => ({ url: r.item.url as string, score: r.similarity }));
+    });
+    // 多词查询：过滤掉完全不包含任何查询词的向量结果，减少假阳性（检查 title/url/summary/tags）
+    const isMultiWord = query.trim().includes(" ");
+    results = rawResults
+      .filter((r) => {
+        if (!isMultiWord) return true;
+        return hasAnyQueryWord(
+          query,
+          r.item.title,
+          r.item.url,
+          r.item.summary,
+          r.item.tags,
+        );
+      })
+      .map((r) => ({ url: r.item.url as string, score: r.similarity }));
   } catch (error) {
     console.warn("[vectorSearch] Vector search failed:", error);
   }
 
   if (signal?.aborted) return [];
 
-  // 融入访问频率权重
+  // 融入访问频率权重 + 关键词匹配质量
   const freqCache = getFreqCache();
   const maxFreq = Math.max(1, ...Object.values(freqCache));
 
@@ -220,10 +306,30 @@ export async function vectorSearch(
       if (!record) return null;
       const freq = freqCache[record.url] ?? 0;
       const freqBoost = (freq / maxFreq) * FREQ_BOOST_MAX;
-      return { record, score: r.score + freqBoost };
+
+      // 融入关键词匹配质量（检查 title/url/summary/tags）
+      const quality = getMatchQuality(
+        query,
+        record.title,
+        record.url,
+        record.summary,
+        record.tags,
+      );
+      let keywordBoost = 0;
+      if (quality.score >= 3) {
+        keywordBoost = PHRASE_MATCH_BONUS;
+      } else if (quality.score === 2) {
+        keywordBoost = FULL_MATCH_BONUS;
+      } else if (quality.score === 1) {
+        keywordBoost = -PARTIAL_MATCH_PENALTY;
+      } else {
+        keywordBoost = -NO_MATCH_PENALTY;
+      }
+
+      return { record, score: r.score + freqBoost + keywordBoost };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
   boosted.sort((a, b) => b.score - a.score);
-  return boosted.map((b) => b.record);
+  return boosted.slice(0, limit).map((b) => b.record);
 }

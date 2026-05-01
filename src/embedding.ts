@@ -303,6 +303,24 @@ export async function batchEmbedTexts(
   return results;
 }
 
+/**
+ * BGE-M3 等指令型 embedding 模型需要查询前缀才能正确对齐 query-doc 向量空间。
+ * OpenAI text-embedding-3-* 系列不需要，加前缀反而可能降低效果。
+ */
+function getQueryInstructionPrefix(model: string): string {
+  const lower = model.toLowerCase();
+  // BGE-M3 / BGE 系列 / GTE / E5 等指令型模型
+  if (
+    lower.includes("bge") ||
+    lower.includes("gte") ||
+    lower.includes("e5") ||
+    lower.includes("m3")
+  ) {
+    return "Represent this sentence for searching relevant passages: ";
+  }
+  return "";
+}
+
 /** 生成查询向量 (优先使用缓存，使用 query 上下文) */
 export async function getQueryEmbedding(
   query: string,
@@ -311,8 +329,9 @@ export async function getQueryEmbedding(
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
 ): Promise<number[]> {
+  const instruction = getQueryInstructionPrefix(model);
   const { embedding } = await getEmbedding(
-    query,
+    instruction + query,
     apiKey,
     signal,
     model,

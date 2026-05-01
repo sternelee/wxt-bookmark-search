@@ -102,6 +102,18 @@ Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RE
 
 **Message passing:** popup/options ↔ background via `browser.runtime.sendMessage` / `onMessage.addListener` with string-literal action types in a `switch` statement.
 
+### Key patterns
+
+**RRF Fusion:** Hybrid search combines keyword and vector scores using Reciprocal Rank Fusion with min-max normalization for fair weighting.
+
+**Rate Limiting:** `indexer.ts` uses exponential backoff for API calls. Respects SiliconFlow rate limits and gracefully handles 429 responses.
+
+**Frequency Weighting:** `freq.ts` tracks bookmark visit counts with debounced writes to `browser.storage.local`. Integrated into ranking via `db.ts`.
+
+**Twitter Sync:** Auto-extracts cookies via `browser.cookies` API with manual fallback. GraphQL API sync includes retry logic and persisted queue recovery on SW restart.
+
+**Early-Exit Pagination:** GitHub Stars sync uses early-exit when all URLs already indexed to avoid unnecessary pagination.
+
 ## Adding New Features
 
 1. **New core logic** → add to `src/` as a dedicated module
@@ -118,6 +130,14 @@ Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RE
 - **Interfaces vs Types:** Use `interface` for exported object shapes (e.g., `BookmarkRecord`, `Settings`). Use `type` for unions, aliases, and function-scoped shapes (e.g., `SearchMode`).
 - **Type safety:** never `as any` or `@ts-ignore` — use `instanceof Error` for error handling. Explicit `as` casts only for untyped browser APIs.
 - **Imports:** Framework/library imports first, then internal imports. Use `import type` for type-only imports. Path aliases: `@/*` → `./src/*`, `~/*` → `./*` — use `@/` in entrypoints for `src/` imports.
+
+```ts
+// Correct
+import type { BookmarkRecord } from "@/types";
+import { hybridSearch } from "@/hybrid";
+import { createSignal, For } from "solid-js";
+```
+
 - **Functions:** Prefer named `function` declarations for exported top-level functions. Arrow functions for callbacks and event handlers.
 - **JSDoc:** One-line `/** Brief description */` on all exported functions.
 
@@ -130,6 +150,13 @@ Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RE
 - Chinese comments are present in the codebase — match the language of surrounding code
 - Solid.js UI: use `class` (not `className`), `createSignal`/`For`/`Show` from `solid-js`
 - Tailwind v3 with shadcn-style HSL CSS variables (`hsl(var(--primary))`), dark mode via `prefers-color-scheme`
+
+### Error Handling
+
+- All async entry-point logic must be wrapped in `try/catch`
+- Log with prefix: `console.error('[ModuleName] Description:', error)`
+- Use `console.warn` for recoverable failures (rate limits, missing data)
+- Propagate errors up — don't swallow silently in library code (`src/`)
 
 ## Browser Extension Constraints
 
