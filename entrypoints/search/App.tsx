@@ -1,4 +1,5 @@
 import { createSignal, onMount, For, Show, onCleanup } from "solid-js";
+import { HtmlRenderer } from "../../src/components/HtmlRenderer";
 import { incrementFreq } from "../../src/freq";
 import { getSettings } from "../../src/db";
 import { useI18n, setReactiveLocale } from "../../src/i18n";
@@ -185,9 +186,13 @@ function App() {
                     {result.url}
                   </div>
                   <Show when={result.summary}>
-                    <p class="text-sm mt-1.5 line-clamp-2 text-foreground/80 leading-relaxed">
-                      {result.summary}
-                    </p>
+                    <div class="mt-1.5">
+                      <HtmlRenderer
+                        html={result.summary}
+                        source={result.source}
+                        class="line-clamp-3"
+                      />
+                    </div>
                   </Show>
                   <Show when={result.tags && result.tags.length > 0}>
                     <div class="flex flex-wrap gap-1 mt-2">
