@@ -36,6 +36,10 @@ export async function autoCreateLLMProvider(
       const provider = await createChromeLLMProvider();
       if (provider) return provider;
     }
+    // 明确选择了 chrome 但不可用，不降级到远程
+    if (settings.aiProvider === "chrome") {
+      return null;
+    }
   }
 
   // 降级到远程 API（需要 apiKey）
