@@ -3,29 +3,31 @@
  * 用于生成网页摘要和标签
  */
 
+export type { LLMResult } from "./ai-providers/types";
+
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_MODEL = "gpt-4o-mini"; // 默认使用 OpenAI 模型
 
 const MAX_LLM_RETRIES = 2;
 const LLM_RETRY_BASE_MS = 2000;
 
-export interface AIResult {
-  summary: string;
-  tags: string[];
-}
+import type { LLMResult } from "./ai-providers/types";
+
+export type { LLMResult as AIResult } from "./ai-providers/types";
 
 /** 判断 HTTP 状态码是否可重试 (429 限流 / 5xx 服务错误) */
 function isRetryableLlmStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status < 600);
 }
 
+/** @deprecated 使用 src/ai-providers/ 中的 LLMProvider 替代 */
 /** 调用 LLM 生成摘要和标签，含指数退避重试 */
 export async function generateDeepContent(
   text: string,
   apiKey: string,
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
-): Promise<AIResult> {
+): Promise<LLMResult> {
   const systemPrompt = `You are a helpful bookmark assistant. Analyze the provided web content and return a JSON object containing:
 1. 'summary': A 2-3 sentence summary in the original language of the text. CRITICAL: preserve key technical terms, product names, framework names, and distinguishing concepts. Do NOT over-generalize. If the text compares "React" and "React Native", the summary must mention BOTH terms, not just "React frameworks".
 2. 'tags': 4-6 specific keywords/tags in the original language of the text. Include the main topic, key technologies mentioned, and any frameworks or libraries.
@@ -88,7 +90,7 @@ The output MUST be a valid JSON object. Example:
       const content = data.choices[0].message.content;
 
       // 解析 JSON
-      const result = JSON.parse(content) as AIResult;
+      const result = JSON.parse(content) as LLMResult;
 
       // 清理标签：去除引号、空格等
       result.tags = (result.tags || [])
