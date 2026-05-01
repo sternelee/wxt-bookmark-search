@@ -71,7 +71,15 @@ export function createRemoteLLMProvider(
               await new Promise((r) => setTimeout(r, delay));
               continue;
             }
-            throw new Error(`LLM API error: ${response.status}`);
+            const errBody = (await response.json().catch(() => ({}))) as {
+              message?: string;
+              error?: { message?: string };
+            };
+            throw new Error(
+              errBody.error?.message ||
+                errBody.message ||
+                `LLM API error: ${response.status}`,
+            );
           }
 
           const data = await response.json();
@@ -89,7 +97,10 @@ export function createRemoteLLMProvider(
             console.error("[LLM-remote] Failed:", error);
             break;
           }
-          console.warn(`[LLM-remote] Attempt ${attempt + 1} failed:`, (error as Error).message);
+          console.warn(
+            `[LLM-remote] Attempt ${attempt + 1} failed:`,
+            error instanceof Error ? error.message : String(error),
+          );
           await new Promise((r) => setTimeout(r, RETRY_BASE_MS));
         }
       }
