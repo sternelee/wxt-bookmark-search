@@ -20,6 +20,7 @@ import {
 import type {
   BookmarkRecord,
   SearchResult,
+  Settings,
   GistBookmarkNode,
 } from "../src/types";
 import {
@@ -57,6 +58,11 @@ import {
   getPreferredBookmarkRoot,
   resolveBookmarkRootFolder,
 } from "../src/bookmarkRoots";
+import {
+  autoCreateLLMProvider,
+  setLLMProvider,
+  getLLMProvider,
+} from "../src/ai-providers/llm-base";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -307,6 +313,9 @@ export default defineBackground(() => {
     console.log("[FlowSearch] Indexer initialized");
   });
 
+  // 初始化 LLM provider
+  initLLMProvider();
+
   // 预热已索引书签缓存
   ensureCachedIndexedBookmarks().then((cached) => {
     console.log(
@@ -323,6 +332,22 @@ export default defineBackground(() => {
       indexAllBookmarks();
     }
   });
+
+  /** 初始化 LLM provider */
+  async function initLLMProvider(): Promise<void> {
+    try {
+      const settings = await getSettings();
+      const provider = await autoCreateLLMProvider(settings);
+      setLLMProvider(provider);
+      if (provider) {
+        console.log(`[FlowSearch] LLM provider: ${provider.name}`);
+      } else {
+        console.log("[FlowSearch] LLM provider: none available");
+      }
+    } catch (error) {
+      console.error("[FlowSearch] Failed to init LLM provider:", error);
+    }
+  }
 
   // === Gist 同步 ===
 
@@ -867,6 +892,24 @@ export default defineBackground(() => {
     }
 
     console.log("[FlowSearch] onInputEntered:", disposition, "→", targetUrl);
+  });
+
+  // 监听 aiProvider 设置变更，重新创建 provider
+  browser.storage.onChanged.addListener(async (changes, areaName) => {
+    if (areaName !== "local") return;
+    const settingsChange = changes["settings"];
+    if (!settingsChange) return;
+
+    const oldVal = settingsChange.oldValue as Settings | undefined;
+    const newVal = settingsChange.newValue as Settings | undefined;
+
+    if (
+      oldVal?.aiProvider !== newVal?.aiProvider ||
+      oldVal?.openaiApiKey !== newVal?.openaiApiKey
+    ) {
+      const provider = await autoCreateLLMProvider(newVal!);
+      setLLMProvider(provider);
+    }
   });
 
   // 监听来自 Options 页面的消息

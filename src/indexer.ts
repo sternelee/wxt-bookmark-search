@@ -16,7 +16,7 @@ import {
   saveSettings,
 } from "./db";
 import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
-import { generateDeepContent } from "./llm";
+import { getLLMProvider } from "./ai-providers/llm-base";
 
 /** 索引任务状态 */
 interface IndexJob {
@@ -773,21 +773,30 @@ async function processQueue(): Promise<void> {
             content.markdown.length > 100
           ) {
             try {
-              const llmResult = await generateDeepContent(
-                content.markdown.slice(0, 4000),
-                settings.openaiApiKey!,
-                settings.llmModel,
-                settings.baseURL,
-              );
-              summary = llmResult.summary;
-              tags = llmResult.tags;
-              // 向量化文本：结构化文档文本
-              text = buildEmbeddingText(
-                content.title || job.title,
-                summary,
-                tags,
-                job.url,
-              );
+              const provider = getLLMProvider();
+              if (provider) {
+                const llmResult = await provider.generateDeepContent(
+                  content.markdown.slice(0, 4000),
+                );
+                summary = llmResult.summary;
+                tags = llmResult.tags;
+                text = buildEmbeddingText(
+                  content.title || job.title,
+                  summary,
+                  tags,
+                  job.url,
+                );
+              } else {
+                // 无可用 provider，降级到原始摘要
+                text = content
+                  ? buildEmbeddingText(
+                      content.title || job.title,
+                      summary || "",
+                      [],
+                      job.url,
+                    )
+                  : buildEmbeddingText(job.title, "", [], job.url);
+              }
             } catch (llmError) {
               console.warn(
                 `[indexer] LLM enhancement failed for ${job.url}:`,
@@ -797,7 +806,7 @@ async function processQueue(): Promise<void> {
               text = content
                 ? buildEmbeddingText(
                     content.title || job.title,
-                    summary,
+                    summary || "",
                     [],
                     job.url,
                   )
@@ -807,7 +816,7 @@ async function processQueue(): Promise<void> {
             text = content
               ? buildEmbeddingText(
                   content.title || job.title,
-                  summary,
+                  summary || "",
                   [],
                   job.url,
                 )
