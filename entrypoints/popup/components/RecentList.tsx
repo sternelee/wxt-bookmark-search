@@ -34,10 +34,10 @@ export default function RecentList(props: RecentListProps) {
                   <div class="text-[13px] font-semibold truncate mb-1">
                     {item.title || item.url}
                   </div>
-                  <Show when={item.summary && item.source}>
+                  <Show when={item.summary}>
                     <HtmlRenderer
                       html={item.summary!}
-                      source={item.source!}
+                      source={item.source || "bookmark"}
                       class="mb-2"
                     />
                   </Show>

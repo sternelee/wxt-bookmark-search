@@ -51,7 +51,7 @@ function App() {
           url: r.url,
           title: r.title || r.url,
           summary: r.summary,
-          source: (r as any).source,
+          source: r.source,
         }))
       );
     }
