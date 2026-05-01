@@ -17,4 +17,5 @@ export interface LLMProvider {
   ): Promise<LLMResult>;
 }
 
+/** LLM 提供者类型: Chrome 内置 AI | 远程 API | 禁用 */
 export type LLMProviderType = "chrome" | "remote" | "disabled";
