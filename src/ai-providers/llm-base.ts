@@ -1,4 +1,4 @@
-import type { LLMProvider, LLMResult } from "./types";
+import type { LLMProvider } from "./types";
 import type { Settings } from "../types";
 import { detectChromeAI } from "./detect";
 import { createRemoteLLMProvider } from "./llm-remote";
@@ -28,8 +28,8 @@ export async function autoCreateLLMProvider(
     return null;
   }
 
-  // 用户手动选择 "chrome" 或自动检测
-  if (settings.aiProvider === "chrome" || !settings.aiProvider || settings.aiProvider === "remote") {
+  // 用户手动选择 "chrome" 或未设置时自动检测
+  if (settings.aiProvider === "chrome" || !settings.aiProvider) {
     // 尝试 Chrome AI
     const detection = await detectChromeAI();
     if (detection.available) {
