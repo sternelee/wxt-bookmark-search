@@ -64,9 +64,7 @@ export function createRemoteLLMProvider(
 
           if (!response.ok) {
             if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
-              const delay = response.status === 429
-                ? RETRY_BASE_MS * Math.pow(2, attempt)
-                : RETRY_BASE_MS;
+              const delay = RETRY_BASE_MS * Math.pow(2, attempt);
               console.warn(
                 `[LLM-remote] ${response.status} error, retrying in ${delay}ms (${attempt + 1}/${MAX_RETRIES})`,
               );
