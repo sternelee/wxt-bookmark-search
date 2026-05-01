@@ -21,6 +21,7 @@ export default function APISettings() {
   const [embeddingModel, setEmbeddingModel] = createSignal("");
   const [llmModel, setLLMModel] = createSignal("");
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
+  const [aiProvider, setAIProvider] = createSignal<"chrome" | "remote" | "disabled">("remote");
   const [showAdvanced, setShowAdvanced] = createSignal(false);
   const [status, setStatus] = createSignal<{
     message: string;
@@ -36,6 +37,7 @@ export default function APISettings() {
     setEmbeddingModel(settings.embeddingModel || "");
     setLLMModel(settings.llmModel || "");
     setEnableLLMEnrichment(settings.enableLLMEnrichment ?? true);
+    setAIProvider((settings.aiProvider as "chrome" | "remote" | "disabled") || "remote");
   });
 
   const handleSave = async () => {
@@ -52,6 +54,7 @@ export default function APISettings() {
         embeddingModel: embeddingModel() || undefined,
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
+        aiProvider: aiProvider(),
       });
       setStatus({ message: t("options.api.saved"), type: "success" });
     } catch (error) {
@@ -142,6 +145,26 @@ export default function APISettings() {
           hint={t("options.api.enableLLMHint")}
           class="mt-4"
         />
+
+        <div class="mt-4">
+          <label class="text-sm font-medium block mb-1">
+            {t("options.api.aiProvider")}
+          </label>
+          <select
+            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={aiProvider()}
+            onChange={(e) =>
+              setAIProvider(e.currentTarget.value as "chrome" | "remote" | "disabled")
+            }
+          >
+            <option value="chrome">{t("options.api.aiProviderChrome")}</option>
+            <option value="remote">{t("options.api.aiProviderRemote")}</option>
+            <option value="disabled">{t("options.api.aiProviderDisabled")}</option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">
+            {t("options.api.aiProviderHint")}
+          </p>
+        </div>
 
         <div class="flex gap-3 flex-wrap mt-4">
           <Button onClick={handleSave} disabled={isSaving()}>
