@@ -41,6 +41,7 @@ export default {
     unknownError: "不明なエラー",
     close: "閉じる",
     language: "言語設定",
+    dataManagement: "データ管理",
   },
 
   popup: {
@@ -223,6 +224,10 @@ export default {
       deleteConfirm:
         "ブラウザからこのブックマークを完全に削除してもよろしいですか？",
       deleteFailed: "削除に失敗しました",
+    },
+
+    dataManagement: {
+      description: "クエリキャッシュをクリアするか、ローカルデータベースからすべてのインデックスデータを削除します。ブラウザのブックマーク自体は削除されません。",
     },
 
     folderTree: {

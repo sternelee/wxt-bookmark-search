@@ -41,6 +41,7 @@ export default {
     unknownError: "Unknown Error",
     close: "Close",
     language: "Language",
+    dataManagement: "Data Management",
   },
 
   popup: {
@@ -219,6 +220,10 @@ export default {
       deleteConfirm:
         "Are you sure you want to permanently delete this bookmark from the browser?",
       deleteFailed: "Delete failed",
+    },
+
+    dataManagement: {
+      description: "Clear the query cache or delete all indexed data from the local database. Browser bookmarks themselves will not be deleted.",
     },
 
     folderTree: {

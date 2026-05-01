@@ -41,6 +41,7 @@ export default {
     unknownError: "未知错误",
     close: "关闭",
     language: "语言设置",
+    dataManagement: "数据管理",
   },
 
   popup: {
@@ -212,6 +213,10 @@ export default {
       errorLabel: "错误",
       deleteConfirm: "确定要从浏览器中永久删除这个书签吗？",
       deleteFailed: "删除失败",
+    },
+
+    dataManagement: {
+      description: "清空查询缓存或删除本地数据库中的所有索引数据。浏览器书签本身不会被删除。",
     },
 
     folderTree: {

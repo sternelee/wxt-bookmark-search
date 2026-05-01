@@ -41,6 +41,7 @@ export default {
     unknownError: "알 수 없는 오류",
     close: "닫기",
     language: "언어 설정",
+    dataManagement: "데이터 관리",
   },
 
   popup: {
@@ -219,6 +220,10 @@ export default {
       errorLabel: "오류",
       deleteConfirm: "브라우저에서 이 북마크를 영구적으로 삭제하시겠습니까?",
       deleteFailed: "삭제에 실패했습니다",
+    },
+
+    dataManagement: {
+      description: "쿼리 캐시를 지우거나 로컬 데이터베이스에서 모든 인덱스 데이터를 삭제합니다. 브라우저 북마크 자체는 삭제되지 않습니다.",
     },
 
     folderTree: {

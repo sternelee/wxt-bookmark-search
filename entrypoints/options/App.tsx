@@ -10,6 +10,7 @@ import SearchSettings from "./components/SearchSettings";
 import LanguageSettings from "./components/LanguageSettings";
 import IndexManager from "./components/IndexManager";
 import FailedBookmarks from "./components/FailedBookmarks";
+import DataManagement from "./components/DataManagement";
 
 function App() {
   const { t } = useI18n();
@@ -45,6 +46,7 @@ function App() {
         <SearchSettings />
         <GistSyncSettings />
         <FailedBookmarks />
+        <DataManagement />
       </Show>
     </div>
   );
