@@ -37,13 +37,13 @@ function App() {
 
       <Show when={isLoaded()}>
         <APISettings />
-        <LanguageSettings />
+        <IndexManager />
         <GitHubSettings />
         <TwitterSettings />
         <HistorySettings />
-        <GistSyncSettings />
+        <LanguageSettings />
         <SearchSettings />
-        <IndexManager />
+        <GistSyncSettings />
         <FailedBookmarks />
       </Show>
     </div>
