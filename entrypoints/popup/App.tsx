@@ -18,7 +18,7 @@ function App() {
   const [indexed, setIndexed] = createSignal(0);
   const [total, setTotal] = createSignal(0);
   const [recent, setRecent] = createSignal<
-    Array<{ url: string; title: string; summary?: string; tags?: string[] }>
+    Array<{ url: string; title: string; summary?: string; tags?: string[]; source?: "github" | "twitter" | "bookmark" | "history" }>
   >([]);
   const [indexingProgress, setIndexingProgress] = createSignal<{
     processed: number;
@@ -51,6 +51,7 @@ function App() {
           url: r.url,
           title: r.title || r.url,
           summary: r.summary,
+          source: (r as any).source,
         }))
       );
     }
