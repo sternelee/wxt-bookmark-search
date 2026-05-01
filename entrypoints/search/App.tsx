@@ -187,11 +187,20 @@ function App() {
                   </div>
                   <Show when={result.summary}>
                     <div class="mt-1.5">
-                      <HtmlRenderer
-                        html={result.summary}
-                        source={result.source}
-                        class="line-clamp-3"
-                      />
+                      <Show
+                        when={result.source === "github"}
+                        fallback={
+                          <HtmlRenderer
+                            html={result.summary}
+                            source={result.source}
+                            class="line-clamp-3"
+                          />
+                        }
+                      >
+                        <p class="text-sm text-foreground/80 leading-relaxed line-clamp-3">
+                          {result.summary}
+                        </p>
+                      </Show>
                     </div>
                   </Show>
                   <Show when={result.tags && result.tags.length > 0}>

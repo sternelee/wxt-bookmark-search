@@ -19,6 +19,7 @@ pnpm dev:firefox   # Firefox dev server
 pnpm build         # Production build (Chrome MV3)
 pnpm build:firefox # Production build (Firefox MV3)
 pnpm zip           # Package as .zip for distribution
+pnpm zip:firefox   # Package Firefox build as .zip
 pnpm compile       # TypeScript type-check only (tsc --noEmit)
 ```
 
@@ -59,7 +60,11 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `history.ts` | Browser history sync via `browser.history` API |
 | `gist-sync.ts` | GitHub Gist bookmark sync with union merge + deletion tracking |
 | `lib/utils.ts` | `cn()` utility for Tailwind class merging |
+| `lib/sanitize.ts` | HTML sanitization + GitHub README HTML parsing for `HtmlRenderer` |
 | `components/ui/` | Reusable UI components (Button, Card, Badge, Progress, Input, Select, etc.) |
+| `components/HtmlRenderer.tsx` | Structured result cards — renders sanitized HTML for GitHub/twitter/bookmark/history sources |
+| `i18n/` | Type-safe i18n with `useI18n()` hook; locales: zh-CN, en, ja, ko |
+| `polyfills.ts` | Cross-browser polyfills (e.g. `AbortSignal.timeout` for Firefox <124) |
 
 ### Entry points
 
@@ -75,7 +80,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 Synchronous: `GET_INDEXING_STATUS`
 
-Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY`, `GET_CACHE_STATS`, `CLEAR_EMBEDDING_CACHE`, `GIST_SYNC`, `GIST_CREATE`, `GIST_LINK`
+Async: `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY`, `GET_CACHE_STATS`, `CLEAR_EMBEDDING_CACHE`, `GIST_SYNC`, `GIST_CREATE`, `GIST_LINK`, `GIST_UPLOAD`, `GIST_DOWNLOAD`
 
 ### Data flow
 

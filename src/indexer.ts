@@ -137,14 +137,58 @@ function notifyProgress(progress: IndexingProgress): void {
 }
 
 /**
+ * 将 Markdown 转为纯文本，去掉格式符号、HTML 标签、链接语法、代码块等
+ * 保留所有可读性内容，用于 embedding 前的文本净化
+ */
+export function stripMarkdownToPlainText(markdown: string): string {
+  return (
+    markdown
+      // 去掉 HTML 标签（包括被截断的不完整标签）
+      .replace(/<\/?[a-zA-Z][^>]*>?/gi, " ")
+      // 去掉 fenced 代码块（含语言标识）
+      .replace(/```[\s\S]*?```/g, " ")
+      // 去掉行内代码
+      .replace(/`([^`]+)`/g, "$1")
+      // 图片标签完全去掉（必须在链接之前处理）
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+      // 链接 → 纯文本 [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // 标题符号 # ## ### 等
+      .replace(/^#{1,6}\s+/gm, "")
+      // 粗体 **text** __text__
+      .replace(/(\*\*|__)(.*?)\1/g, "$2")
+      // 斜体 *text* _text_
+      .replace(/(\*|_)(.*?)\1/g, "$2")
+      // 引用块 >
+      .replace(/^>\s?/gm, "")
+      // 无序列表符号
+      .replace(/^[-*+]\s+/gm, "")
+      // 有序列表符号
+      .replace(/^\d+\.\s+/gm, "")
+      // 水平分隔线
+      .replace(/^[-=*]{3,}\s*$/gm, "")
+      // 表格分隔符行 |---|---|
+      .replace(/^\|[-| :\s]+\|/gm, "")
+      // 表格竖线 → 空格
+      .replace(/\|/g, " ")
+      // 合并多余空白
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+/**
  * 从 Markdown 提取标题和摘要
- * 跳过代码块、表格分隔符、图片、徽章行，清理 Markdown 格式符号
+ * 先用 linkedom 去掉 HTML 标签，再提取有效文本行
  */
 function extractFromMarkdown(
   markdown: string,
   fallbackTitle: string,
 ): { title: string; summary: string } {
-  const lines = markdown.split("\n");
+  // 用正则去掉 HTML 标签（包括被截断的不完整标签）
+  const plainText = markdown.replace(/<\/?[a-zA-Z][^>]*>?/gi, " ");
+
+  const lines = plainText.split("\n");
 
   let title = fallbackTitle;
   let titleFound = false;
@@ -175,13 +219,10 @@ function extractFromMarkdown(
     if (/^#{1,6}\s/.test(trimmed)) continue;
     // 跳过表格分隔符行 (|---|---|)
     if (/^\|[-| :]+\|/.test(trimmed)) continue;
-    // 跳过图片行
-    if (/^!\[.*?\]\(.*?\)/.test(trimmed)) continue;
-    // 跳过徽章行 (shield.io 等)
-    if (/^\[!\[/.test(trimmed)) continue;
 
-    // 清理 Markdown 格式符号
+    // 清理 Markdown 格式符号（HTML 已由上一步正则去掉）
     const cleaned = trimmed
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // 图片完全去掉（必须在链接之前）
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // 链接 → 纯文本
       .replace(/[*_`~]{1,2}([^*_`~\n]+?)[*_`~]{1,2}/g, "$1") // 粗体/斜体/行内代码
       .replace(/^\s*[-*+]\s+/, "") // 无序列表
@@ -289,7 +330,8 @@ async function processEnrichmentQueue(): Promise<void> {
     try {
       const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
       if (readme && readme.length > 10) {
-        const textToEmbed = `${job.owner}/${job.repo}\n${readme.slice(0, 2000)}`;
+        const plainText = stripMarkdownToPlainText(readme);
+        const textToEmbed = `${job.owner}/${job.repo}\n${plainText.slice(0, 2000)}`;
         const { embedding } = await getEmbedding(
           textToEmbed,
           settings.openaiApiKey!,
@@ -298,7 +340,7 @@ async function processEnrichmentQueue(): Promise<void> {
           settings.baseURL,
         );
         await updateBookmark(job.bookmarkId, {
-          summary: readme.slice(0, 500),
+          summary: plainText.slice(0, 500),
           embedding,
           needsEnrichment: false,
           indexedAt: Date.now(),
@@ -457,10 +499,11 @@ async function fetchPageContent(
             repo,
           );
           if (readme && readme.length > 10) {
+            const plainText = stripMarkdownToPlainText(readme);
             return {
               markdown: readme,
               title: `${owner}/${repo}`,
-              summary: readme.slice(0, 500),
+              summary: plainText.slice(0, 500),
             };
           }
         } catch (ghError) {

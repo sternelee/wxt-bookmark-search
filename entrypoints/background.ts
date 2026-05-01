@@ -41,6 +41,7 @@ import {
   indexFolders,
   syncGithubStars,
   syncTwitterBookmarks,
+  stripMarkdownToPlainText,
 } from "../src/indexer";
 import { syncHistoryBookmarks } from "../src/history";
 import { t } from "../src/i18n";
@@ -91,10 +92,17 @@ function toSearchResult(record: BookmarkRecord): SearchResult {
   else if (record.id.startsWith("tw-")) source = "twitter";
   else if (record.id.startsWith("hi-")) source = "history";
 
+  const rawSummary = record.summary ?? "";
+  const isGithub =
+    source === "github" ||
+    record.source === "github" ||
+    record.url.includes("github.com");
+  const summary = isGithub ? stripMarkdownToPlainText(rawSummary) : rawSummary;
+
   return {
     url: record.url,
     title: record.title,
-    summary: record.summary ?? "",
+    summary,
     tags: record.tags ?? [],
     source,
     indexed: record.status === "indexed",
@@ -1015,7 +1023,14 @@ function formatSuggestion(
   const aiActive = showAi && record.status === "indexed";
   const prefix = aiActive ? "🤖 " : "";
   const title = record.title || record.url;
-  const summary = record.summary?.slice(0, 50) || "";
+  const rawSummary = record.summary || "";
+  const isGithub =
+    record.source === "github" ||
+    record.id.startsWith("gh-") ||
+    record.url.includes("github.com");
+  const summary = isGithub
+    ? stripMarkdownToPlainText(rawSummary).slice(0, 50)
+    : rawSummary.slice(0, 50);
 
   if (IS_FIREFOX) {
     return `${prefix}${title}${summary ? " — " + summary : ""} (${record.url})`;
