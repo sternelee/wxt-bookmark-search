@@ -104,6 +104,19 @@ class BookmarkDB extends Dexie {
       bookmarks: "id, url, status, indexedAt",
       indexQueue: "bookmarkId, url, enqueuedAt",
     });
+    // v5: add aiProvider default to storage.local settings
+    this.version(5).stores({
+      bookmarks: "id, url, status, indexedAt",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+    }).upgrade(async () => {
+      const result = await browser.storage.local.get("settings");
+      const settings = result["settings"] as Record<string, unknown> | undefined;
+      if (settings && settings.aiProvider === undefined) {
+        await browser.storage.local.set({
+          settings: { ...settings, aiProvider: "remote" },
+        });
+      }
+    });
   }
 }
 
@@ -252,6 +265,7 @@ const defaultSettings: Settings = {
   historySyncEnabled: false,
   historyDays: 30,
   language: "en",
+  aiProvider: "remote",
 };
 
 /** 获取设置 */

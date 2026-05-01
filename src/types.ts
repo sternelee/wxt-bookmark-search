@@ -129,6 +129,9 @@ export interface Settings {
 
   // 语言设置
   language?: string; // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
+
+  // AI 摘要提供者
+  aiProvider?: string; // "chrome" | "remote" | "disabled"
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */
