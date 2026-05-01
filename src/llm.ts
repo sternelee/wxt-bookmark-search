@@ -20,8 +20,8 @@ function isRetryableLlmStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status < 600);
 }
 
-/** @deprecated 使用 src/ai-providers/ 中的 LLMProvider 替代 */
-/** 调用 LLM 生成摘要和标签，含指数退避重试 */
+/** 调用 LLM 生成摘要和标签，含指数退避重试
+ * @deprecated 使用 src/ai-providers/ 中的 LLMProvider 替代 */
 export async function generateDeepContent(
   text: string,
   apiKey: string,
