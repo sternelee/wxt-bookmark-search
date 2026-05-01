@@ -78,6 +78,11 @@ export default {
       saved: "✓ 設定を保存しました",
       testSuccess: "✓ API キーは有効です、接続成功",
       testFail: "✗ API キーが無効です",
+      aiProvider: "AI 要約プロバイダー",
+      aiProviderHint: "Chrome ユーザーは内蔵 AI (オフライン) を使用できます",
+      aiProviderChrome: "Chrome 内蔵 AI (オフライン)",
+      aiProviderRemote: "リモート API",
+      aiProviderDisabled: "無効",
     },
 
     search: {

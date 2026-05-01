@@ -77,6 +77,11 @@ export default {
       saved: "✓ 설정이 저장되었습니다",
       testSuccess: "✓ API 키가 유효합니다, 연결 성공",
       testFail: "✗ API 키가 유효하지 않습니다",
+      aiProvider: "AI 요약 제공자",
+      aiProviderHint: "Chrome 사용자는 내장 AI(오프라인)를 사용할 수 있습니다",
+      aiProviderChrome: "Chrome 내장 AI (오프라인)",
+      aiProviderRemote: "원격 API",
+      aiProviderDisabled: "비활성화",
     },
 
     search: {

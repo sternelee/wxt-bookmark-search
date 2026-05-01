@@ -79,6 +79,11 @@ export default {
       saved: "✓ Settings saved",
       testSuccess: "✓ API Key is valid, connection successful",
       testFail: "✗ API Key is invalid",
+      aiProvider: "AI Summary Provider",
+      aiProviderHint: "Chrome users can use built-in AI (offline), others use remote API",
+      aiProviderChrome: "Chrome Built-in AI (Offline)",
+      aiProviderRemote: "Remote API",
+      aiProviderDisabled: "Disabled",
     },
 
     search: {

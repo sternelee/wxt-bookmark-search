@@ -77,6 +77,11 @@ export default {
       saved: "✓ 设置已保存",
       testSuccess: "✓ API Key 有效，连接成功",
       testFail: "✗ API Key 无效",
+      aiProvider: "AI 摘要提供者",
+      aiProviderHint: "Chrome 用户可选内置 AI（离线），其他浏览器使用远程 API",
+      aiProviderChrome: "Chrome 内置 AI (离线)",
+      aiProviderRemote: "远程 API",
+      aiProviderDisabled: "禁用",
     },
 
     search: {
