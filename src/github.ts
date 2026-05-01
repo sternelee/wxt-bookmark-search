@@ -49,12 +49,8 @@ export async function fetchAllStarredRepos(
 
       allRepos.push(...mappedRepos);
 
-      if (onPage) {
-        await onPage(mappedRepos);
-      }
-
-      if (onProgress) onProgress(allRepos.length);
-
+      // 先检查是否满足 early-exit 条件（基于当前 DB 状态），再处理页面
+      // 避免 onPage 插入记录后 shouldStopPagination 误判为全部已索引
       if (shouldStopPagination) {
         const shouldStop = await shouldStopPagination(mappedRepos);
         if (shouldStop) {
@@ -62,6 +58,12 @@ export async function fetchAllStarredRepos(
           break;
         }
       }
+
+      if (onPage) {
+        await onPage(mappedRepos);
+      }
+
+      if (onProgress) onProgress(allRepos.length);
 
       if (allRepos.length >= 5000) break;
     }
