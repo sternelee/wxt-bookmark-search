@@ -109,12 +109,16 @@ class BookmarkDB extends Dexie {
       bookmarks: "id, url, status, indexedAt",
       indexQueue: "bookmarkId, url, enqueuedAt",
     }).upgrade(async () => {
-      const result = await browser.storage.local.get("settings");
-      const settings = result["settings"] as Record<string, unknown> | undefined;
-      if (settings && settings.aiProvider === undefined) {
-        await browser.storage.local.set({
-          settings: { ...settings, aiProvider: "remote" },
-        });
+      try {
+        const result = await browser.storage.local.get(SETTINGS_KEY);
+        const stored = result[SETTINGS_KEY] as Record<string, unknown> | undefined;
+        if (stored && stored.aiProvider === undefined) {
+          await browser.storage.local.set({
+            [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
+          });
+        }
+      } catch (e) {
+        console.warn("[db] v5 migration skipped:", e);
       }
     });
   }
