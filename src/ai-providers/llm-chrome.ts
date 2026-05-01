@@ -7,22 +7,30 @@
  */
 import type { LLMProvider, LLMResult } from "./types";
 
+/**
+ * Chrome AI LanguageModel 类型声明（Origin Trial）。
+ * 类型定义基于 Chrome AI Prompt API 公开文档。
+ */
+interface AILanguageModel {
+  prompt(input: string, options?: { signal?: AbortSignal }): Promise<string>;
+  destroy(): void;
+}
+
+interface AILanguageModelFactory {
+  capabilities(): Promise<{
+    available: "readily" | "after-download" | "no";
+  }>;
+  create(options?: {
+    temperature?: number;
+    topK?: number;
+    signal?: AbortSignal;
+  }): Promise<AILanguageModel>;
+}
+
 declare const chrome:
   | {
       aiOriginTrial: {
-        languageModel: {
-          capabilities(): Promise<{
-            available: "readily" | "after-download" | "no";
-          }>;
-          create(options?: {
-            temperature?: number;
-            topK?: number;
-            signal?: AbortSignal;
-          }): Promise<{
-            prompt(input: string, options?: { signal?: AbortSignal }): Promise<string>;
-            destroy(): void;
-          }>;
-        };
+        languageModel: AILanguageModelFactory;
       };
     }
   | undefined;
@@ -53,7 +61,7 @@ function parseJsonResponse(raw: string, fallbackText: string): LLMResult {
       tags: (parsed.tags || []).map((t: string) => t.trim()).filter(Boolean),
     };
   } catch {
-    return { summary: raw.slice(0, 200).trim() + "...", tags: [] };
+    return { summary: fallbackText.slice(0, 200).trim() + "...", tags: [] };
   }
 }
 
