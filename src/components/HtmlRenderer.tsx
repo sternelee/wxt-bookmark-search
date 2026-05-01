@@ -1,4 +1,4 @@
-import { Show, splitProps } from "solid-js";
+import { Show, splitProps, createMemo } from "solid-js";
 import { sanitizeHtml, parseGitHubHtml } from "../lib/sanitize";
 import { Badge } from "./ui/badge";
 
@@ -22,7 +22,7 @@ export function HtmlRenderer(props: HtmlRendererProps) {
 }
 
 function GitHubCard(props: { html: string; class?: string }) {
-  const parsed = () => parseGitHubHtml(props.html);
+  const parsed = createMemo(() => parseGitHubHtml(props.html));
 
   return (
     <div class={`rounded-md border border-border bg-muted/30 p-3 space-y-2 ${props.class || ""}`}>
