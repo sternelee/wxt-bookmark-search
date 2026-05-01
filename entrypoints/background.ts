@@ -61,7 +61,6 @@ import {
 import {
   autoCreateLLMProvider,
   setLLMProvider,
-  getLLMProvider,
 } from "../src/ai-providers/llm-base";
 
 // 搜索防抖状态
@@ -907,8 +906,12 @@ export default defineBackground(() => {
       oldVal?.aiProvider !== newVal?.aiProvider ||
       oldVal?.openaiApiKey !== newVal?.openaiApiKey
     ) {
-      const provider = await autoCreateLLMProvider(newVal!);
-      setLLMProvider(provider);
+      try {
+        const provider = await autoCreateLLMProvider(newVal!);
+        setLLMProvider(provider);
+      } catch (error) {
+        console.error("[FlowSearch] Failed to recreate LLM provider:", error);
+      }
     }
   });
 
