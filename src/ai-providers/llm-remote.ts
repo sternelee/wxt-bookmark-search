@@ -71,15 +71,16 @@ export function createRemoteLLMProvider(
               await new Promise((r) => setTimeout(r, delay));
               continue;
             }
+            // 非可重试错误：直接降级
             const errBody = (await response.json().catch(() => ({}))) as {
               message?: string;
               error?: { message?: string };
             };
-            throw new Error(
-              errBody.error?.message ||
-                errBody.message ||
-                `LLM API error: ${response.status}`,
+            console.error(
+              `[LLM-remote] Non-retryable error ${response.status}:`,
+              errBody.error?.message || errBody.message || response.status,
             );
+            break;
           }
 
           const data = await response.json();

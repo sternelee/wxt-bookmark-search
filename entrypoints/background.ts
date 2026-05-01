@@ -902,12 +902,14 @@ export default defineBackground(() => {
     const oldVal = settingsChange.oldValue as Settings | undefined;
     const newVal = settingsChange.newValue as Settings | undefined;
 
+    if (!newVal) return;
+
     if (
       oldVal?.aiProvider !== newVal?.aiProvider ||
       oldVal?.openaiApiKey !== newVal?.openaiApiKey
     ) {
       try {
-        const provider = await autoCreateLLMProvider(newVal!);
+        const provider = await autoCreateLLMProvider(newVal);
         setLLMProvider(provider);
       } catch (error) {
         console.error("[FlowSearch] Failed to recreate LLM provider:", error);
