@@ -1,3 +1,5 @@
+import { getBookmarkByUrl } from "./db";
+
 /**
  * Frequency cache — persists visit counts in browser.storage.local.
  * Each URL key maps to { count, lastVisit } with time-decay weighting.
@@ -107,11 +109,33 @@ export function getFreqCache(): Record<string, number> {
 /**
  * Get the top-N most frequent bookmarks for the empty-query default suggestion.
  */
-export function getRecentBookmarks(
+export async function getRecentBookmarks(
   n = 8,
-): Array<{ url: string; freq: number }> {
-  return Object.entries(buildWeightedCache())
+): Promise<
+  Array<{
+    url: string;
+    freq: number;
+    source?: "github" | "twitter" | "bookmark" | "history";
+    summary?: string;
+    title?: string;
+  }>
+> {
+  const entries = Object.entries(buildWeightedCache())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([url, freq]) => ({ url, freq }));
+    .slice(0, n);
+
+  const withMeta = await Promise.all(
+    entries.map(async ([url, freq]) => {
+      const record = await getBookmarkByUrl(url);
+      return {
+        url,
+        freq,
+        source: record?.source,
+        summary: record?.summary,
+        title: record?.title,
+      };
+    })
+  );
+
+  return withMeta;
 }

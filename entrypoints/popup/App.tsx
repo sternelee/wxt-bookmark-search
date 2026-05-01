@@ -44,19 +44,15 @@ function App() {
     await fetchStats();
 
     // 获取最近访问
-    const recentUrls = getRecentBookmarks(3);
-    if (recentUrls.length > 0) {
-      const indexedItems = await getIndexedBookmarks();
-      const recentItems = recentUrls.map((r) => {
-        const item = indexedItems.find((i) => i.url === r.url);
-        return {
+    const recentItems = await getRecentBookmarks(3);
+    if (recentItems.length > 0) {
+      setRecent(
+        recentItems.map((r) => ({
           url: r.url,
-          title: item?.title || r.url,
-          summary: item?.summary,
-          tags: item?.tags,
-        };
-      });
-      setRecent(recentItems);
+          title: r.title || r.url,
+          summary: r.summary,
+        }))
+      );
     }
 
     // 检查当前是否有索引任务在跑

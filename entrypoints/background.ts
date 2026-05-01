@@ -628,7 +628,7 @@ export default defineBackground(() => {
 
     if (!query) {
       // 空查询 — 显示最近访问书签，并按来源过滤
-      const recent = getRecentBookmarks(8);
+      const recent = await getRecentBookmarks(8);
       let filtered: Array<{ url: string }> = recent;
       if (sourceFilter === "github") {
         filtered = recent.filter(({ url }) => url.includes("github.com"));
