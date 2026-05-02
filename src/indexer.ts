@@ -137,6 +137,166 @@ function notifyProgress(progress: IndexingProgress): void {
 }
 
 /**
+ * 对 GitHub README 进行 XML/HTML 噪声裁剪，保留 Markdown 结构
+ * 裁剪顺序: HTML注释 → SVG块 → details/summary块 → 带布局属性HTML标签(剥离保留内文)
+ *            → 剩余HTML标签 → Badge图片链接 → 纯URL行
+ */
+export function sanitizeReadme(raw: string): string {
+  return (
+    raw
+      // 1. HTML 注释（badge 配置、隐藏元数据，无语义）
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      // 2. SVG 整块（图标/图表 XML 原始数据）
+      .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+      // 3. <details>/<summary> 块（折叠内容，结构混乱）
+      .replace(/<details[\s\S]*?<\/details>/gi, " ")
+      // 4. 带布局属性的 HTML 标签 → 剥离标签保留内文
+      .replace(
+        /<([a-zA-Z][a-zA-Z0-9]*)\s[^>]*(align|width|height|style|class)[^>]*>([\s\S]*?)<\/\1>/gi,
+        "$3",
+      )
+      // 5. 所有剩余 HTML/XML 标签 → 保留内文
+      .replace(/<\/?[a-zA-Z][^>]*>/g, " ")
+      // 6. Badge 图片链接 [![...](img)](url)（纯装饰，语义为零）
+      .replace(/\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, " ")
+      // 7. 纯 URL 行（行内容仅为 URL，无描述上下文）
+      .replace(/^https?:\/\/\S+$/gm, " ")
+      // 合并多余空白行（最多保留两个连续换行）
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+/**
+ * 从 README 中提取结构化语义内容，用于 BGE-M3 向量化（最大利用 8192 token 窗口）
+ * 流程: sanitizeReadme → 按H2/H3划分section → 语义分类 → 按配额填充 → 结构化文档
+ * @param readme 原始 README 文本（Markdown 格式）
+ * @returns 结构化纯文本，总长不超过 7500 字符
+ */
+export function extractReadmeSemanticContent(readme: string): string {
+  const TOTAL_BUDGET = 7500;
+
+  // 1. HTML/XML 净化，保留 Markdown 结构
+  const sanitized = sanitizeReadme(readme);
+
+  // 2. 提取仓库描述行（Title 从首行 H1 提取）
+  const titleMatch = sanitized.match(/^#\s+(.+)$/m);
+  const repoTitle = titleMatch ? titleMatch[1].trim() : "";
+
+  // 3. 按 H2/H3 边界划分 section
+  const sectionPattern = /^(#{2,3})\s+(.+)$/gm;
+  const sections: Array<{ title: string; content: string; start: number }> = [];
+  let lastMatch: RegExpExecArray | null = null;
+
+  let m: RegExpExecArray | null;
+  while ((m = sectionPattern.exec(sanitized)) !== null) {
+    if (lastMatch !== null) {
+      sections.push({
+        title: lastMatch[2].trim(),
+        content: sanitized.slice(lastMatch.index + lastMatch[0].length, m.index).trim(),
+        start: lastMatch.index,
+      });
+    }
+    lastMatch = m;
+  }
+  if (lastMatch !== null) {
+    sections.push({
+      title: lastMatch[2].trim(),
+      content: sanitized.slice(lastMatch.index + lastMatch[0].length).trim(),
+      start: lastMatch.index,
+    });
+  }
+
+  // 4. 平铺 README 兜底：无 H2/H3 时直接取 stripMarkdownToPlainText 前 7500 字符
+  if (sections.length === 0) {
+    const flat = stripMarkdownToPlainText(sanitized);
+    return flat.slice(0, TOTAL_BUDGET);
+  }
+
+  // 5. 标题汇总
+  const allTitles = sections.map((s) => s.title).join(", ");
+
+  // 6. 提取 H1 下首段落（到第一个 H2/H3 之前）作为 Overview
+  const firstSectionStart = sections[0].start;
+  const preH2Text = sanitized.slice(0, firstSectionStart);
+  const overviewRaw = preH2Text.replace(/^#\s+.+$/m, "").trim();
+  const overview = stripMarkdownToPlainText(overviewRaw);
+
+  // 7. 语义分类关键词
+  const FEATURE_KW = /features?|功能|特性|highlights?|what'?s included|capabilities/i;
+  const USECASE_KW = /use[- ]cases?|scenarios?|使用场景|应用场景|who uses|motivation/i;
+  const QUICKSTART_KW = /quick[- ]?start|getting[- ]?started|快速开始|installation|install|安装|setup/i;
+
+  // 8. 去除 fenced 代码块（避免命令行污染语义）
+  function stripCodeBlocks(text: string): string {
+    return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`]+`/g, " ");
+  }
+
+  let featuresText = "";
+  let useCaseText = "";
+  let quickStartText = "";
+  const bodyLines: string[] = [];
+
+  for (const sec of sections) {
+    const plain = stripMarkdownToPlainText(sec.content);
+    if (FEATURE_KW.test(sec.title)) {
+      featuresText += (featuresText ? "\n" : "") + plain;
+    } else if (USECASE_KW.test(sec.title)) {
+      useCaseText += (useCaseText ? "\n" : "") + plain;
+    } else if (QUICKSTART_KW.test(sec.title)) {
+      // Quick Start: 额外去掉代码块，避免命令行污染语义
+      const stripped = stripMarkdownToPlainText(stripCodeBlocks(sec.content));
+      quickStartText += (quickStartText ? "\n" : "") + stripped;
+    } else {
+      // 兜底：取非空的高密度正文段落（字符数 > 30）
+      if (plain.length > 30) {
+        bodyLines.push(plain);
+      }
+    }
+  }
+
+  // 9. 按配额构建输出
+  const QUOTA = {
+    description: 200,
+    titles: 400,
+    overview: 1500,
+    features: 1500,
+    useCases: 1000,
+    quickStart: 600,
+  };
+
+  const parts: string[] = [];
+  let remaining = TOTAL_BUDGET;
+
+  function addPart(label: string, text: string, quota: number): void {
+    if (!text || remaining <= 0) return;
+    const allowed = Math.min(quota, remaining);
+    const slice = text.slice(0, allowed);
+    if (slice.trim()) {
+      parts.push(`${label}: ${slice.trim()}`);
+      remaining -= slice.length + label.length + 2;
+    }
+  }
+
+  addPart("Title", repoTitle, QUOTA.description);
+  addPart("Sections", allTitles, QUOTA.titles);
+  addPart("Overview", overview, QUOTA.overview);
+  addPart("Features", featuresText, QUOTA.features);
+  addPart("Use Cases", useCaseText, QUOTA.useCases);
+  addPart("Quick Start", quickStartText, QUOTA.quickStart);
+
+  // 兜底：高密度正文行
+  if (remaining > 50 && bodyLines.length > 0) {
+    const body = bodyLines.join(" ").slice(0, remaining);
+    if (body.trim()) {
+      parts.push(`Content: ${body.trim()}`);
+    }
+  }
+
+  return parts.join("\n");
+}
+
+/**
  * 将 Markdown 转为纯文本，去掉格式符号、HTML 标签、链接语法、代码块等
  * 保留所有可读性内容，用于 embedding 前的文本净化
  */
