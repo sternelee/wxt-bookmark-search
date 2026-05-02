@@ -490,55 +490,54 @@ async function processEnrichmentQueue(): Promise<void> {
     try {
       const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
       if (readme && readme.length > 10) {
-        const plainText = stripMarkdownToPlainText(readme);
-        let summary = plainText.slice(0, 500);
-        let tags: string[] = [];
-        let llmEnhanced = false;
+          // 语义内容提取（用于 embedding，充分利用 BGE-M3 的 8192 token 窗口）
+          const semanticContent = extractReadmeSemanticContent(readme);
+          const plainText = stripMarkdownToPlainText(readme);
+          let summary = plainText.slice(0, 800);  // 展示用摘要（关键词搜索 + UI）
+          let tags: string[] = [];
+          let llmEnhanced = false;
 
-        // LLM 增强（如果启用）
-        if (settings.enableLLMEnrichment && plainText.length > 100) {
-          try {
-            const provider = getLLMProvider();
-            if (provider) {
-              const llmResult = await provider.generateDeepContent(
-                plainText.slice(0, 4000),
+          // LLM 增强（仅影响 summary + tags，不影响 embedding）
+          if (settings.enableLLMEnrichment && plainText.length > 100) {
+            try {
+              const provider = getLLMProvider();
+              if (provider) {
+                const llmResult = await provider.generateDeepContent(
+                  plainText.slice(0, 4000),
+                );
+                summary = llmResult.summary;   // UI 展示摘要来自 LLM
+                tags = llmResult.tags;
+                llmEnhanced = true;
+              }
+            } catch (llmError) {
+              console.warn(
+                `[indexer] LLM enrichment failed for ${job.owner}/${job.repo}:`,
+                llmError,
               );
-              summary = llmResult.summary;
-              tags = llmResult.tags;
-              llmEnhanced = true;
+              // 降级：使用原始摘要
             }
-          } catch (llmError) {
-            console.warn(
-              `[indexer] LLM enrichment failed for ${job.owner}/${job.repo}:`,
-              llmError,
-            );
-            // 降级：使用原始摘要
           }
-        }
 
-        const textToEmbed = buildEmbeddingText(
-          `${job.owner}/${job.repo}`,
-          summary,
-          tags,
-          job.url,
-        );
-        const { embedding } = await getEmbedding(
-          textToEmbed,
-          settings.openaiApiKey!,
-          undefined,
-          settings.embeddingModel,
-          settings.baseURL,
-        );
-        await updateBookmark(job.bookmarkId, {
-          summary,
-          tags,
-          embedding,
-          needsEnrichment: false,
-          indexedAt: Date.now(),
-          llmEnhanced,
-        });
-        console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
-      }
+          // embedding 始终使用 semanticContent（与 LLM 开关无关）
+          // 不通过 buildEmbeddingText，避免 "Summary:" 标签重复嵌套已结构化的内容
+          const textToEmbed = semanticContent.slice(0, 8000);
+          const { embedding } = await getEmbedding(
+            textToEmbed,
+            settings.openaiApiKey!,
+            undefined,
+            settings.embeddingModel,
+            settings.baseURL,
+          );
+          await updateBookmark(job.bookmarkId, {
+            summary,
+            tags,
+            embedding,
+            needsEnrichment: false,
+            indexedAt: Date.now(),
+            llmEnhanced,
+          });
+          console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
+        }
     } catch (err) {
       console.warn(
         `[indexer] Enrichment failed for ${job.owner}/${job.repo}:`,
