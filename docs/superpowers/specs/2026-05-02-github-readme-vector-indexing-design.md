@@ -1,7 +1,7 @@
 # GitHub Stars README 智能单向量化 — 设计文档
 
 **日期**: 2026-05-02  
-**状态**: 已批准，待实施  
+**状态**: 已批准，待实施（规格评审 v2）  
 **影响文件**: `src/indexer.ts`, `src/types.ts`, `src/db.ts`
 
 ---
@@ -54,7 +54,7 @@ sanitizeReadme(readme)
   → 按 H2/H3 划分 section 边界
   → 对每个 section 的标题做语义分类
   → 按配额优先填充各类型区域
-  → 拼装结构化 embedding 文档（含结构标签）
+  → 拼装结构化 embedding 文档（纯文本标签）
 ```
 
 **配额分配（总上限 7500 字符）**：
@@ -70,6 +70,8 @@ sanitizeReadme(readme)
 | 高密度正文兜底（行长 > 30 chars） | 剩余 | 按原文顺序填充 |
 
 **代码块处理**：所有区域提取均跳过 fenced code block（`` ``` ``），避免命令行、API 签名等代码污染语义向量。
+
+**平铺 README 兜底**（无任何 H2/H3 的情况）：若解析后无任何具名 section，则直接将 `sanitizeReadme` 输出经 `stripMarkdownToPlainText` 净化后取前 7500 字符，不使用结构化标签。
 
 **输出格式示例**：
 ```
@@ -87,7 +89,7 @@ Content: [兜底填充文本]
 
 ### 3. Enrichment 队列逻辑升级
 
-修改 `processEnrichmentQueue()` 中对 README 的处理：
+修改 `processEnrichmentQueue()` 中对 README 的处理（`indexer.ts:330–381`）：
 
 ```typescript
 // 旧逻辑
@@ -97,17 +99,42 @@ let summary = plainText.slice(0, 500);
 // 新逻辑
 const semanticContent = extractReadmeSemanticContent(readme);
 const plainText = stripMarkdownToPlainText(readme);
-const summary = plainText.slice(0, 800);  // DB 展示用摘要，取净化后纯文本
+const summary = plainText.slice(0, 800);  // DB 展示 + 关键词搜索用
 
-const textToEmbed = buildEmbeddingText(
-  `${job.owner}/${job.repo}`,
-  semanticContent,   // ← 完整结构化提取内容（≤7500 chars）
-  tags,
-  job.url,
-);
+// 直接构建 embedding 输入文本，不通过 buildEmbeddingText（避免 "Summary:" 标签重复嵌套）
+const textToEmbed = semanticContent.slice(0, 8000);
 ```
 
-**注意**：`summary` 字段仍存纯文本摘要（用于 UI 展示和关键词匹配），`embedding` 使用完整语义内容生成。
+然后直接调用 `getEmbedding(textToEmbed, ...)` 而非先调用 `buildEmbeddingText`。
+
+**与 LLM enrichment 路径的协调**：当 `enableLLMEnrichment` 为 true 时：
+- `summary` 字段使用 LLM 生成的摘要（供 UI 展示，保持短文本语义质量）
+- `textToEmbed` 仍使用 `semanticContent`（保证完整 README 语义进入向量）
+- LLM 路径不再覆盖 `textToEmbed`，仅覆盖 `summary` 和 `tags`
+
+```typescript
+// LLM 分支更新后的结构
+let summary = plainText.slice(0, 800);
+let tags: string[] = [];
+let llmEnhanced = false;
+const semanticContent = extractReadmeSemanticContent(readme);
+
+if (settings.enableLLMEnrichment && plainText.length > 100) {
+  try {
+    const provider = getLLMProvider();
+    if (provider) {
+      const llmResult = await provider.generateDeepContent(plainText.slice(0, 4000));
+      summary = llmResult.summary;   // ← 展示用摘要来自 LLM
+      tags = llmResult.tags;
+      llmEnhanced = true;
+    }
+  } catch { /* 降级：使用原始摘要 */ }
+}
+
+// embedding 始终使用 semanticContent（与 LLM 开关无关）
+const textToEmbed = semanticContent.slice(0, 8000);
+const { embedding } = await getEmbedding(textToEmbed, settings.openaiApiKey!, ...);
+```
 
 ---
 
@@ -127,16 +154,15 @@ interface Settings {
 
 在 `defaultSettings` 中设置 `githubReadmeVersion: 0`。
 
-#### `src/indexer.ts` — `initIndexer()`
+#### `src/indexer.ts` — `initIndexer()` 插入位置
 
-在恢复 enrichment 队列之后，添加版本检查：
+在现有代码的 **`restoreEnrichmentQueue()` 调用之后、`processEnrichmentQueue()` 调用之前** 插入（即 `indexer.ts:1417` 和 `indexer.ts:1452` 之间）：
 
 ```typescript
 const CURRENT_README_VERSION = 1;
 
-const settings = await getSettings();
-if ((settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
-  // 将所有 source='github' 的已索引记录放入 enrichment 队列
+// 仅在 githubToken 存在时才做重建（无 token 无法拉 README，跳过并保留版本为旧值）
+if (settings.githubToken && (settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
   const githubRecords = await db.bookmarks
     .filter(r => r.source === 'github' && r.status === 'indexed')
     .toArray();
@@ -144,13 +170,13 @@ if ((settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
   let added = 0;
   for (const record of githubRecords) {
     if (enrichmentQueue.some(j => j.bookmarkId === record.id)) continue;
-    const match = record.url.match(/github\.com\/([^/]+)\/([^/]+)/);
-    if (match && settings.githubToken) {
+    const match = record.url.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+    if (match) {
       enrichmentQueue.push({
         bookmarkId: record.id,
         url: record.url,
         owner: match[1],
-        repo: match[2],
+        repo: match[2].replace(/\/$/, ""),  // 与 fetchPageContent 保持一致
         token: settings.githubToken,
       });
       added++;
@@ -162,8 +188,11 @@ if ((settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
     console.log(`[indexer] Queued ${added} GitHub repos for README re-indexing (v${CURRENT_README_VERSION})`);
   }
 
+  // 仅在 token 存在时推进版本（无 token 情况下保留旧版本，等待下次启动时重试）
   await saveSettings({ githubReadmeVersion: CURRENT_README_VERSION });
 }
+// 注意：processEnrichmentQueue() 的现有调用（indexer.ts:1452）会自动处理新加入的队列
+// isEnriching 守卫确保不会重复启动
 ```
 
 ---
@@ -182,5 +211,7 @@ if ((settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
 1. `pnpm compile` 零错误
 2. `extractReadmeSemanticContent` 对典型 README（有 badge、SVG、Features section）输出：无 XML 标签、无 badge 链接、标题汇总存在、Features 内容正确提取
 3. `sanitizeReadme` 对含 `<details>` 和 `<!-- comment -->` 的输入正确清除
-4. `processEnrichmentQueue` 对一个已有 repo 触发后，DB 中该记录的 `summary` 更新为新摘要（>500 chars）
+4. `processEnrichmentQueue` 对一个已有 repo 触发后，DB 中该记录的 `summary` 更新为新摘要（>500 chars），且 `embedding` 维度不变
 5. 重启扩展后，`githubReadmeVersion` 为 1，不重复触发重建队列
+6. 无 GitHub Token 时，版本保持 0，下次配置 Token 后重启可正常触发重建
+7. 平铺 README（无 H2/H3）不崩溃，输出不为空
