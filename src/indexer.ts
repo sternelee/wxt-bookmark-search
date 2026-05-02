@@ -1575,6 +1575,42 @@ export async function initIndexer(): Promise<void> {
     // 1. 先从 storage 恢复队列
     await restoreEnrichmentQueue();
 
+    // === README 向量版本检查：存量重建 ===
+    const CURRENT_README_VERSION = 1;
+    // 仅在 githubToken 存在时才做重建（无 token 无法拉 README，保留旧版本号等待下次启动）
+    if (settings.githubToken && (settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
+      const githubRecords = await db.bookmarks
+        .filter((r) => r.source === "github" && r.status === "indexed")
+        .toArray();
+
+      let versionAdded = 0;
+      for (const record of githubRecords) {
+        if (enrichmentQueue.some((j) => j.bookmarkId === record.id)) continue;
+        const match = record.url.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+        if (match) {
+          enrichmentQueue.push({
+            bookmarkId: record.id,
+            url: record.url,
+            owner: match[1],
+            repo: match[2].replace(/\/$/, ""),
+            token: settings.githubToken,
+          });
+          versionAdded++;
+        }
+      }
+
+      if (versionAdded > 0) {
+        await persistEnrichmentQueue();
+        console.log(
+          `[indexer] Queued ${versionAdded} GitHub repos for README re-indexing (v${CURRENT_README_VERSION})`,
+        );
+      }
+
+      // 仅在 token 存在时推进版本（无 token 时保留旧值，等待下次启动时重试）
+      await saveSettings({ githubReadmeVersion: CURRENT_README_VERSION });
+    }
+    // === 版本检查结束 ===
+
     // 2. 从 DB 中恢复需要 enrichment 的记录（避免重复）
     try {
       const needsEnrich = await db.bookmarks
