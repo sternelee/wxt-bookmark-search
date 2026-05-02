@@ -132,6 +132,9 @@ export interface Settings {
 
   /** AI 摘要提供者: "remote" | "disabled" */
   aiProvider?: import("./ai-providers/types").LLMProviderType;
+
+  /** GitHub README 向量化版本号（用于存量重建触发），当前目标值 = 1 */
+  githubReadmeVersion?: number;
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */

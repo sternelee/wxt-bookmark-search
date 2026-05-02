@@ -288,6 +288,7 @@ const defaultSettings: Settings = {
   historyDays: 30,
   language: "en",
   aiProvider: "remote",
+  githubReadmeVersion: 0,
 };
 
 /** 获取设置 */
