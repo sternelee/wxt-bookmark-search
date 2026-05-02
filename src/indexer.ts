@@ -331,7 +331,37 @@ async function processEnrichmentQueue(): Promise<void> {
       const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
       if (readme && readme.length > 10) {
         const plainText = stripMarkdownToPlainText(readme);
-        const textToEmbed = `${job.owner}/${job.repo}\n${plainText.slice(0, 2000)}`;
+        let summary = plainText.slice(0, 500);
+        let tags: string[] = [];
+        let llmEnhanced = false;
+
+        // LLM 增强（如果启用）
+        if (settings.enableLLMEnrichment && plainText.length > 100) {
+          try {
+            const provider = getLLMProvider();
+            if (provider) {
+              const llmResult = await provider.generateDeepContent(
+                plainText.slice(0, 4000),
+              );
+              summary = llmResult.summary;
+              tags = llmResult.tags;
+              llmEnhanced = true;
+            }
+          } catch (llmError) {
+            console.warn(
+              `[indexer] LLM enrichment failed for ${job.owner}/${job.repo}:`,
+              llmError,
+            );
+            // 降级：使用原始摘要
+          }
+        }
+
+        const textToEmbed = buildEmbeddingText(
+          `${job.owner}/${job.repo}`,
+          summary,
+          tags,
+          job.url,
+        );
         const { embedding } = await getEmbedding(
           textToEmbed,
           settings.openaiApiKey!,
@@ -340,10 +370,12 @@ async function processEnrichmentQueue(): Promise<void> {
           settings.baseURL,
         );
         await updateBookmark(job.bookmarkId, {
-          summary: plainText.slice(0, 500),
+          summary,
+          tags,
           embedding,
           needsEnrichment: false,
           indexedAt: Date.now(),
+          llmEnhanced,
         });
         console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
       }
@@ -418,6 +450,7 @@ export async function syncGithubStars(): Promise<{
             status: embeddings[i] ? "indexed" : "pending",
             indexedAt: embeddings[i] ? Date.now() : undefined,
             needsEnrichment: !!embeddings[i],
+            source: "github",
           }) as BookmarkRecord,
       );
 
@@ -1552,6 +1585,47 @@ export async function syncTwitterBookmarks(): Promise<{
 
       await upsertBookmarks(records);
       totalCount += bookmarks.length;
+
+      // LLM 增强（如果启用）
+      if (settings.enableLLMEnrichment) {
+        const provider = getLLMProvider();
+        if (provider) {
+          for (let i = 0; i < bookmarks.length; i++) {
+            if (!embeddings[i]) continue; // 跳过嵌入失败的
+            const bookmark = bookmarks[i];
+            const text = texts[i];
+            try {
+              const llmResult = await provider.generateDeepContent(
+                text.slice(0, 4000),
+              );
+              const newText = buildEmbeddingText(
+                `@${bookmark.authorHandle || "unknown"}`,
+                llmResult.summary,
+                llmResult.tags,
+                `https://x.com/${bookmark.authorHandle || "i"}/status/${bookmark.tweetId}`,
+              );
+              const { embedding } = await getEmbedding(
+                newText,
+                settings.openaiApiKey!,
+                undefined,
+                settings.embeddingModel,
+                settings.baseURL,
+              );
+              await updateBookmark(`tw-${bookmark.tweetId}`, {
+                summary: llmResult.summary,
+                tags: llmResult.tags,
+                embedding,
+                llmEnhanced: true,
+              });
+            } catch (llmError) {
+              console.warn(
+                `[indexer] LLM enhancement failed for tweet ${bookmark.tweetId}:`,
+                llmError,
+              );
+            }
+          }
+        }
+      }
 
       const successCount = records.filter((r) => r.status === "indexed").length;
       console.log(

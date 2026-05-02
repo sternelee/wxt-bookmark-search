@@ -121,6 +121,24 @@ class BookmarkDB extends Dexie {
         console.warn("[db] v5 migration skipped:", e);
       }
     });
+    // v6: migrate aiProvider "chrome" to "remote" (Chrome AI support removed)
+    this.version(6).stores({
+      bookmarks: "id, url, status, indexedAt",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+    }).upgrade(async () => {
+      try {
+        const result = await browser.storage.local.get(SETTINGS_KEY);
+        const stored = result[SETTINGS_KEY] as Record<string, unknown> | undefined;
+        if (stored && stored.aiProvider === "chrome") {
+          await browser.storage.local.set({
+            [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
+          });
+          console.log("[db] v6 migration: aiProvider 'chrome' -> 'remote'");
+        }
+      } catch (e) {
+        console.warn("[db] v6 migration skipped:", e);
+      }
+    });
   }
 }
 

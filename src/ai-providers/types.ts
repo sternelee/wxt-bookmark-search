@@ -8,7 +8,7 @@ export interface LLMResult {
 export interface LLMProvider {
   readonly name: string;
   readonly available: boolean;
-  /** 销毁会话资源（Chrome Prompt API 专属，Remote 为 no-op） */
+  /** 销毁会话资源（Remote 为 no-op） */
   destroy(): void;
   /** 生成摘要和标签 */
   generateDeepContent(
@@ -17,5 +17,5 @@ export interface LLMProvider {
   ): Promise<LLMResult>;
 }
 
-/** LLM 提供者类型: Chrome 内置 AI | 远程 API | 禁用 */
-export type LLMProviderType = "chrome" | "remote" | "disabled";
+/** LLM 提供者类型: 远程 API | 禁用 */
+export type LLMProviderType = "remote" | "disabled";

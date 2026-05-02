@@ -325,6 +325,7 @@ export function convertToBookmarkRecord(
     embedding,
     status: embedding ? "indexed" : "pending",
     indexedAt: embedding ? Date.now() : undefined,
+    source: "twitter",
     tweetId: bookmark.tweetId,
     authorHandle: bookmark.authorHandle,
     authorName: bookmark.authorName,

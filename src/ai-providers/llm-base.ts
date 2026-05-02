@@ -1,8 +1,6 @@
 import type { LLMProvider } from "./types";
 import type { Settings } from "../types";
-import { detectChromeAI } from "./detect";
 import { createRemoteLLMProvider } from "./llm-remote";
-import { createChromeLLMProvider } from "./llm-chrome";
 
 let _provider: LLMProvider | null = null;
 
@@ -28,21 +26,7 @@ export async function autoCreateLLMProvider(
     return null;
   }
 
-  // 用户手动选择 "chrome" 或未设置时自动检测
-  if (settings.aiProvider === "chrome" || !settings.aiProvider) {
-    // 尝试 Chrome AI
-    const detection = await detectChromeAI();
-    if (detection.available) {
-      const provider = await createChromeLLMProvider();
-      if (provider) return provider;
-    }
-    // 明确选择了 chrome 但不可用，不降级到远程
-    if (settings.aiProvider === "chrome") {
-      return null;
-    }
-  }
-
-  // 降级到远程 API（需要 apiKey）
+  // 创建远程 API provider（需要 apiKey）
   if (settings.openaiApiKey) {
     return createRemoteLLMProvider(
       settings.openaiApiKey,

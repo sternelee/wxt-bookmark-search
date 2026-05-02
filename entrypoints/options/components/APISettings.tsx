@@ -21,7 +21,7 @@ export default function APISettings() {
   const [embeddingModel, setEmbeddingModel] = createSignal("");
   const [llmModel, setLLMModel] = createSignal("");
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
-  const [aiProvider, setAIProvider] = createSignal<"chrome" | "remote" | "disabled">("remote");
+  const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [showAdvanced, setShowAdvanced] = createSignal(false);
   const [status, setStatus] = createSignal<{
     message: string;
@@ -37,7 +37,11 @@ export default function APISettings() {
     setEmbeddingModel(settings.embeddingModel || "");
     setLLMModel(settings.llmModel || "");
     setEnableLLMEnrichment(settings.enableLLMEnrichment ?? true);
-    setAIProvider((settings.aiProvider as "chrome" | "remote" | "disabled") || "remote");
+    // 兼容旧设置中的 "chrome"，降级为 "remote"
+    const provider = settings.aiProvider;
+    setAIProvider(
+      provider === "disabled" ? "disabled" : "remote",
+    );
   });
 
   const handleSave = async () => {
@@ -65,17 +69,18 @@ export default function APISettings() {
   };
 
   const handleTest = async () => {
-    if (!apiKey()) {
-      setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
-      return;
-    }
-
     setIsTesting(true);
     try {
+      if (!apiKey()) {
+        setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
+        return;
+      }
       await testApiKey(apiKey(), embeddingModel() || undefined, baseURL());
-      if (enableLLMEnrichment()) {
+
+      if (enableLLMEnrichment() && aiProvider() === "remote") {
         await testLlmModel(apiKey(), llmModel() || undefined, baseURL());
       }
+
       setStatus({ message: t("options.api.testSuccess"), type: "success" });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -154,10 +159,9 @@ export default function APISettings() {
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={aiProvider()}
             onChange={(e) =>
-              setAIProvider(e.currentTarget.value as "chrome" | "remote" | "disabled")
+              setAIProvider(e.currentTarget.value as "remote" | "disabled")
             }
           >
-            <option value="chrome">{t("options.api.aiProviderChrome")}</option>
             <option value="remote">{t("options.api.aiProviderRemote")}</option>
             <option value="disabled">{t("options.api.aiProviderDisabled")}</option>
           </select>

@@ -1,55 +1,27 @@
 /**
- * Chrome AI Prompt API 能力检测。
+ * Chrome AI Prompt API 检测 — 已废弃。
  *
- * 注意：chrome.aiOriginTrial 是 Chrome 专属实验性 API，
- * WXT 的 browser.* polyfill 不包含此命名空间，因此必须
- * 直接使用 chrome.aiOriginTrial。这是经过评审的例外。
+ * Chrome AI 在扩展环境中不可靠，已移除支持。
+ * 保留此模块作为向后兼容占位符。
  */
 
-export interface ChromeAICapabilities {
-  available: "readily" | "after-download" | "no";
-  defaultTemperature?: number;
-  defaultTopK?: number;
-  maxTopK?: number;
-}
-
-declare const chrome:
-  | {
-      aiOriginTrial: {
-        languageModel: {
-          capabilities(): Promise<ChromeAICapabilities>;
-        };
-      };
-    }
-  | undefined;
-
 export interface ChromeAIDetectionResult {
-  available: boolean;
-  needsDownload: boolean;
-  capabilities?: ChromeAICapabilities;
+  available: false;
+  needsDownload: false;
+  errorMessage?: string;
 }
 
-/** 检测 Chrome AI Prompt API 是否可用 */
+/** 检测 Chrome AI — 始终返回不可用 */
 export async function detectChromeAI(): Promise<ChromeAIDetectionResult> {
-  if (typeof chrome === "undefined") {
-    return { available: false, needsDownload: false };
-  }
-  if (!("aiOriginTrial" in chrome)) {
-    return { available: false, needsDownload: false };
-  }
-  try {
-    const ai = chrome.aiOriginTrial as {
-      languageModel: {
-        capabilities(): Promise<ChromeAICapabilities>;
-      };
-    };
-    const caps = await ai.languageModel.capabilities();
-    return {
-      available: caps.available !== "no",
-      needsDownload: caps.available === "after-download",
-      capabilities: caps,
-    };
-  } catch {
-    return { available: false, needsDownload: false };
-  }
+  return {
+    available: false,
+    needsDownload: false,
+    errorMessage:
+      "Chrome AI 已在扩展中移除支持。请使用 Remote API (SiliconFlow/OpenAI)。",
+  };
+}
+
+/** 获取 Chrome AI 工厂 — 始终返回 null */
+export async function getChromeAIFactory(): Promise<null> {
+  return null;
 }

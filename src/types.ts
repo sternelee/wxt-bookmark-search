@@ -130,7 +130,7 @@ export interface Settings {
   // 语言设置
   language?: string; // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
 
-  /** AI 摘要提供者: "chrome" | "remote" | "disabled" */
+  /** AI 摘要提供者: "remote" | "disabled" */
   aiProvider?: import("./ai-providers/types").LLMProviderType;
 }
 
