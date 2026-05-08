@@ -105,40 +105,48 @@ class BookmarkDB extends Dexie {
       indexQueue: "bookmarkId, url, enqueuedAt",
     });
     // v5: add aiProvider default to storage.local settings
-    this.version(5).stores({
-      bookmarks: "id, url, status, indexedAt",
-      indexQueue: "bookmarkId, url, enqueuedAt",
-    }).upgrade(async () => {
-      try {
-        const result = await browser.storage.local.get(SETTINGS_KEY);
-        const stored = result[SETTINGS_KEY] as Record<string, unknown> | undefined;
-        if (stored && stored.aiProvider === undefined) {
-          await browser.storage.local.set({
-            [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
-          });
+    this.version(5)
+      .stores({
+        bookmarks: "id, url, status, indexedAt",
+        indexQueue: "bookmarkId, url, enqueuedAt",
+      })
+      .upgrade(async () => {
+        try {
+          const result = await browser.storage.local.get(SETTINGS_KEY);
+          const stored = result[SETTINGS_KEY] as
+            | Record<string, unknown>
+            | undefined;
+          if (stored && stored.aiProvider === undefined) {
+            await browser.storage.local.set({
+              [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
+            });
+          }
+        } catch (e) {
+          console.warn("[db] v5 migration skipped:", e);
         }
-      } catch (e) {
-        console.warn("[db] v5 migration skipped:", e);
-      }
-    });
+      });
     // v6: migrate aiProvider "chrome" to "remote" (Chrome AI support removed)
-    this.version(6).stores({
-      bookmarks: "id, url, status, indexedAt",
-      indexQueue: "bookmarkId, url, enqueuedAt",
-    }).upgrade(async () => {
-      try {
-        const result = await browser.storage.local.get(SETTINGS_KEY);
-        const stored = result[SETTINGS_KEY] as Record<string, unknown> | undefined;
-        if (stored && stored.aiProvider === "chrome") {
-          await browser.storage.local.set({
-            [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
-          });
-          console.log("[db] v6 migration: aiProvider 'chrome' -> 'remote'");
+    this.version(6)
+      .stores({
+        bookmarks: "id, url, status, indexedAt",
+        indexQueue: "bookmarkId, url, enqueuedAt",
+      })
+      .upgrade(async () => {
+        try {
+          const result = await browser.storage.local.get(SETTINGS_KEY);
+          const stored = result[SETTINGS_KEY] as
+            | Record<string, unknown>
+            | undefined;
+          if (stored && stored.aiProvider === "chrome") {
+            await browser.storage.local.set({
+              [SETTINGS_KEY]: { ...stored, aiProvider: "remote" },
+            });
+            console.log("[db] v6 migration: aiProvider 'chrome' -> 'remote'");
+          }
+        } catch (e) {
+          console.warn("[db] v6 migration skipped:", e);
         }
-      } catch (e) {
-        console.warn("[db] v6 migration skipped:", e);
-      }
-    });
+      });
   }
 }
 
@@ -266,6 +274,117 @@ export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
   return db.bookmarks.where("status").equals("failed").toArray();
 }
 
+/** 获取可进行链接检查的书签（已索引，按上次检查时间升序，未检查的优先） */
+export async function getUncheckedBookmarks(
+  limit?: number,
+): Promise<BookmarkRecord[]> {
+  const indexed = await db.bookmarks
+    .where("status")
+    .equals("indexed")
+    .toArray();
+  const sorted = indexed.sort((a, b) => {
+    const aChecked = a.linkCheckedAt ?? 0;
+    const bChecked = b.linkCheckedAt ?? 0;
+    return aChecked - bChecked;
+  });
+  return limit ? sorted.slice(0, limit) : sorted;
+}
+
+/** 获取所有已索引书签的 URL 统计（用于重复检测） */
+export async function getAllIndexedUrls(): Promise<
+  { url: string; ids: string[] }[]
+> {
+  const indexed = await db.bookmarks
+    .where("status")
+    .equals("indexed")
+    .toArray();
+  const urlMap = new Map<string, string[]>();
+  for (const r of indexed) {
+    const ids = urlMap.get(r.url);
+    if (ids) {
+      ids.push(r.id);
+    } else {
+      urlMap.set(r.url, [r.id]);
+    }
+  }
+  const groups: { url: string; ids: string[] }[] = [];
+  for (const [url, ids] of urlMap) {
+    if (ids.length >= 2) {
+      groups.push({ url, ids });
+    }
+  }
+  return groups;
+}
+
+/** 批量更新链接健康状态 */
+export async function updateLinkStatus(
+  updates: { id: string; linkStatus: number; linkCheckedAt: number }[],
+): Promise<void> {
+  await db.transaction("rw", db.bookmarks, async () => {
+    for (const { id, linkStatus, linkCheckedAt } of updates) {
+      await db.bookmarks.update(id, { linkStatus, linkCheckedAt });
+    }
+  });
+  // 同步缓存
+  if (_indexedCache !== null) {
+    for (const u of updates) {
+      const idx = _indexedCache.findIndex((r) => r.id === u.id);
+      if (idx >= 0) {
+        _indexedCache[idx].linkStatus = u.linkStatus;
+        _indexedCache[idx].linkCheckedAt = u.linkCheckedAt;
+      }
+    }
+  }
+}
+
+/** 获取死链书签（linkStatus >= 400 或 0/超时） */
+export async function getDeadLinks(): Promise<BookmarkRecord[]> {
+  const indexed = await db.bookmarks
+    .where("status")
+    .equals("indexed")
+    .toArray();
+  return indexed.filter((r) => {
+    if (r.linkStatus === undefined) return false;
+    return r.linkStatus >= 400 || r.linkStatus === 0;
+  });
+}
+
+/** 获取链接健康统计 */
+export async function getLinkHealthStats(): Promise<{
+  total: number;
+  alive: number;
+  dead: number;
+  unchecked: number;
+  lastCheckAt?: number;
+}> {
+  const indexed = await getIndexedBookmarks();
+  let alive = 0;
+  let dead = 0;
+  let unchecked = 0;
+  let lastCheckAt: number | undefined;
+
+  for (const r of indexed) {
+    if (r.linkStatus === undefined) {
+      unchecked++;
+    } else if (r.linkStatus >= 200 && r.linkStatus < 400) {
+      alive++;
+    } else {
+      dead++;
+    }
+    if (r.linkCheckedAt && (!lastCheckAt || r.linkCheckedAt > lastCheckAt)) {
+      lastCheckAt = r.linkCheckedAt;
+    }
+  }
+
+  return {
+    total: indexed.length,
+    alive,
+    dead,
+    unchecked,
+    lastCheckAt,
+  };
+}
+
 // === 设置管理 ===
 
 const defaultSettings: Settings = {
@@ -289,6 +408,11 @@ const defaultSettings: Settings = {
   language: "en",
   aiProvider: "remote",
   githubReadmeVersion: 0,
+  linkCheckEnabled: false,
+  linkCheckInterval: 24,
+  autoCategorizeEnabled: false,
+  categoryRules: "",
+  categoryFolderMap: {},
 };
 
 /** 获取设置 */

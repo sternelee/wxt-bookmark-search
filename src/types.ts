@@ -29,6 +29,11 @@ export interface BookmarkRecord {
   /** 预计算的 embedding 向量模长（内存缓存专用，不持久化到 DB） */
   _embeddingNorm?: number;
 
+  /** 最后一次链接健康检查的 HTTP 状态码 (0=网络错误/超时) */
+  linkStatus?: number;
+  /** 最后一次链接健康检查的时间戳 */
+  linkCheckedAt?: number;
+
   // Twitter/X 特定字段
   tweetId?: string;
   authorHandle?: string;
@@ -135,6 +140,20 @@ export interface Settings {
 
   /** GitHub README 向量化版本号（用于存量重建触发），当前目标值 = 1 */
   githubReadmeVersion?: number;
+
+  /** 死链检测：是否启用定期扫描 */
+  linkCheckEnabled?: boolean;
+  /** 死链检测：扫描间隔（小时），默认 24 */
+  linkCheckInterval?: number;
+  /** 死链检测：上次扫描完成时间 */
+  lastLinkCheck?: number;
+
+  /** AI 自动分类：是否启用 */
+  autoCategorizeEnabled?: boolean;
+  /** AI 自动分类：用户自定义分类规则（追加到 prompt） */
+  categoryRules?: string;
+  /** AI 自动分类：分类名 → 浏览器文件夹 ID 映射 */
+  categoryFolderMap?: Record<string, string>;
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */
@@ -144,4 +163,39 @@ export interface IndexQueueRecord {
   title: string;
   retryCount: number;
   enqueuedAt: number;
+}
+
+/** 死链健康检查结果 */
+export interface LinkCheckResult {
+  total: number;
+  checked: number;
+  alive: number;
+  dead: number;
+  elapsedMs: number;
+}
+
+/** 死链健康统计 */
+export interface LinkHealthStats {
+  total: number;
+  alive: number;
+  dead: number;
+  unchecked: number;
+  lastCheckAt?: number;
+}
+
+/** 重复书签组 */
+export interface DuplicateGroup {
+  url: string;
+  bookmarks: BookmarkRecord[];
+  folderPaths: string[][];
+}
+
+/** AI 分类建议 */
+export interface CategorySuggestion {
+  bookmarkId: string;
+  url: string;
+  title: string;
+  suggestedCategory: string;
+  confidence: "high" | "medium" | "low";
+  reasoning: string;
 }

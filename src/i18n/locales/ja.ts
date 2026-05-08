@@ -210,9 +210,12 @@ export default {
       cacheCleared: "✓ クエリキャッシュを削除しました",
       cacheClearFailed: "キャッシュ削除に失敗しました",
       clearQueryCacheCleared: "✓ クエリキャッシュを削除しました",
-      databaseCleared: "✓ データベースを削除しました。すべてのインデックスデータが削除されました",
-      clearQueryCacheConfirm: "クエリベクトルキャッシュを削除してもよろしいですか？これはメモリ内のクエリ埋め込みのみを削除し、インデックス済みのブックマークデータには影響しません。",
-      clearDatabaseConfirm: "⚠️ 警告：ローカルデータベースを削除してもよろしいですか？\n\nこれにより、すべてのインデックス済みブックマークベクトル、要約、タグが永久に削除されます。ブラウザのブックマーク自体は削除されませんが、AI検索機能を復元するには再インデックスが必要です。\n\nこの操作は元に戻せません。",
+      databaseCleared:
+        "✓ データベースを削除しました。すべてのインデックスデータが削除されました",
+      clearQueryCacheConfirm:
+        "クエリベクトルキャッシュを削除してもよろしいですか？これはメモリ内のクエリ埋め込みのみを削除し、インデックス済みのブックマークデータには影響しません。",
+      clearDatabaseConfirm:
+        "⚠️ 警告：ローカルデータベースを削除してもよろしいですか？\n\nこれにより、すべてのインデックス済みブックマークベクトル、要約、タグが永久に削除されます。ブラウザのブックマーク自体は削除されませんが、AI検索機能を復元するには再インデックスが必要です。\n\nこの操作は元に戻せません。",
       startFailed: "開始に失敗しました",
       pauseFailed: "一時停止に失敗しました",
       resumeFailed: "再開に失敗しました",
@@ -231,13 +234,68 @@ export default {
     },
 
     dataManagement: {
-      description: "クエリキャッシュをクリアするか、ローカルデータベースからすべてのインデックスデータを削除します。ブラウザのブックマーク自体は削除されません。",
+      description:
+        "クエリキャッシュをクリアするか、ローカルデータベースからすべてのインデックスデータを削除します。ブラウザのブックマーク自体は削除されません。",
     },
 
     folderTree: {
       expand: "展開",
       collapse: "折りたたむ",
       select: "選択",
+    },
+
+    health: {
+      title: "💚 リンク健全性チェック",
+      enableLabel: "定期的なリンク切れスキャンを有効化",
+      enableHint:
+        "インデックス済みブックマークのURLがまだ有効か定期的に確認します",
+      intervalLabel: "スキャン間隔",
+      checkNow: "今すぐチェック",
+      checking: "チェック中...",
+      stats: "スキャン統計",
+      alive: "正常",
+      dead: "リンク切れ",
+      unchecked: "未チェック",
+      lastCheck: "最終チェック",
+      never: "未実施",
+      noDeadLinks: "リンク切れは見つかりませんでした",
+    },
+
+    duplicates: {
+      title: "📋 重複検出",
+      scanButton: "重複をスキャン",
+      scanning: "スキャン中...",
+      duplicatesFound: "{{count}} グループの重複が見つかりました",
+      noDuplicates: "重複は見つかりませんでした",
+      keep: "保持",
+      removeOthers: "他を削除",
+      resolveSuccess: "✓ 重複を解決しました",
+      urlLabel: "URL",
+      folderLabel: "フォルダ",
+    },
+
+    categorize: {
+      title: "🏷️ AI 自動分類",
+      enableLabel: "AI 自動分類を有効化",
+      enableHint:
+        "LLM を使用してコンテンツに基づいてブックマークをトピックフォルダに自動分類",
+      selectFolders: "分類範囲を選択",
+      analyzeButton: "分類案を分析",
+      analyzing: "分析中...",
+      suggestionsFound: "{{count}} 件の分類案が見つかりました",
+      noSuggestions: "分類可能なブックマークがありません",
+      applyButton: "分類を適用",
+      applying: "ブックマークを移動中...",
+      applySuccess:
+        "✓ {{moved}} 件移動, {{created}} フォルダ作成, {{skipped}} 件スキップ",
+      confidenceHigh: "高",
+      confidenceMedium: "中",
+      confidenceLow: "低",
+      rulesLabel: "カスタムルール",
+      rulesHint: "分類動作をカスタマイズする追加プロンプト",
+      categoryColumn: "カテゴリ",
+      currentFolder: "現在のフォルダ",
+      suggestedCategory: "提案",
     },
   },
 

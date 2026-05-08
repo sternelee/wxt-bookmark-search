@@ -207,9 +207,12 @@ export default {
       cacheCleared: "✓ 쿼리 캐시를 지웠습니다",
       cacheClearFailed: "캐시 지우기에 실패했습니다",
       clearQueryCacheCleared: "✓ 쿼리 캐시를 지웠습니다",
-      databaseCleared: "✓ 데이터베이스를 지웠습니다. 모든 색인 데이터가 삭제되었습니다",
-      clearQueryCacheConfirm: "쿼리 벡터 캐시를 지우시겠습니까? 이것은 메모리 내 쿼리 임베딩만 지우며 색인된 북마크 데이터에는 영향을 주지 않습니다.",
-      clearDatabaseConfirm: "⚠️ 경고: 로컬 데이터베이스를 지우시겠습니까?\n\n이 작업은 모든 색인된 북마크 벡터, 요약 및 태그 데이터를 영구적으로 삭제합니다. 브라우저 북마크 자체는 삭제되지 않지만 AI 검색 기능을 복원하려면 다시 색인해야 합니다.\n\n이 작업은 되돌릴 수 없습니다.",
+      databaseCleared:
+        "✓ 데이터베이스를 지웠습니다. 모든 색인 데이터가 삭제되었습니다",
+      clearQueryCacheConfirm:
+        "쿼리 벡터 캐시를 지우시겠습니까? 이것은 메모리 내 쿼리 임베딩만 지우며 색인된 북마크 데이터에는 영향을 주지 않습니다.",
+      clearDatabaseConfirm:
+        "⚠️ 경고: 로컬 데이터베이스를 지우시겠습니까?\n\n이 작업은 모든 색인된 북마크 벡터, 요약 및 태그 데이터를 영구적으로 삭제합니다. 브라우저 북마크 자체는 삭제되지 않지만 AI 검색 기능을 복원하려면 다시 색인해야 합니다.\n\n이 작업은 되돌릴 수 없습니다.",
       startFailed: "시작에 실패했습니다",
       pauseFailed: "일시정지에 실패했습니다",
       resumeFailed: "재개에 실패했습니다",
@@ -227,13 +230,66 @@ export default {
     },
 
     dataManagement: {
-      description: "쿼리 캐시를 지우거나 로컬 데이터베이스에서 모든 인덱스 데이터를 삭제합니다. 브라우저 북마크 자체는 삭제되지 않습니다.",
+      description:
+        "쿼리 캐시를 지우거나 로컬 데이터베이스에서 모든 인덱스 데이터를 삭제합니다. 브라우저 북마크 자체는 삭제되지 않습니다.",
     },
 
     folderTree: {
       expand: "펼치기",
       collapse: "접기",
       select: "선택",
+    },
+
+    health: {
+      title: "💚 링크 상태 확인",
+      enableLabel: "정기적 깨진 링크 검사 활성화",
+      enableHint: "색인된 북마크 URL이 여전히 유효한지 정기적으로 확인",
+      intervalLabel: "검사 간격",
+      checkNow: "지금 확인",
+      checking: "확인 중...",
+      stats: "검사 통계",
+      alive: "정상",
+      dead: "깨짐",
+      unchecked: "미확인",
+      lastCheck: "마지막 확인",
+      never: "확인 안 됨",
+      noDeadLinks: "깨진 링크가 없습니다",
+    },
+
+    duplicates: {
+      title: "📋 중복 감지",
+      scanButton: "중복 검사",
+      scanning: "검사 중...",
+      duplicatesFound: "{{count}}개의 중복 그룹 발견",
+      noDuplicates: "중복이 없습니다",
+      keep: "유지",
+      removeOthers: "나머지 삭제",
+      resolveSuccess: "✓ 중복이 해결되었습니다",
+      urlLabel: "URL",
+      folderLabel: "폴더",
+    },
+
+    categorize: {
+      title: "🏷️ AI 자동 분류",
+      enableLabel: "AI 자동 분류 활성화",
+      enableHint: "LLM을 사용하여 콘텐츠에 따라 북마크를 주제 폴더로 자동 분류",
+      selectFolders: "분류 범위 선택",
+      analyzeButton: "분류 제안 분석",
+      analyzing: "분석 중...",
+      suggestionsFound: "{{count}}개의 분류 제안 발견",
+      noSuggestions: "분류할 북마크가 없습니다",
+      applyButton: "분류 적용",
+      applying: "북마크 이동 중...",
+      applySuccess:
+        "✓ {{moved}}개 이동, {{created}}개 폴더 생성, {{skipped}}개 건너뜀",
+      confidenceHigh: "높음",
+      confidenceMedium: "중간",
+      confidenceLow: "낮음",
+      rulesLabel: "사용자 정의 규칙",
+      rulesHint: "분류 동작을 사용자 정의하는 추가 프롬프트",
+      categoryColumn: "카테고리",
+      currentFolder: "현재 폴더",
+      suggestedCategory: "제안",
     },
   },
 

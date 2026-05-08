@@ -11,6 +11,9 @@ import LanguageSettings from "./components/LanguageSettings";
 import IndexManager from "./components/IndexManager";
 import FailedBookmarks from "./components/FailedBookmarks";
 import DataManagement from "./components/DataManagement";
+import HealthSettings from "./components/HealthSettings";
+import DuplicateSettings from "./components/DuplicateSettings";
+import CategorizeSettings from "./components/CategorizeSettings";
 
 function App() {
   const { t } = useI18n();
@@ -45,6 +48,9 @@ function App() {
         <LanguageSettings />
         <SearchSettings />
         <GistSyncSettings />
+        <HealthSettings />
+        <DuplicateSettings />
+        <CategorizeSettings />
         <FailedBookmarks />
         <DataManagement />
       </Show>

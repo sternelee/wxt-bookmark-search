@@ -201,8 +201,10 @@ export default {
       cacheClearFailed: "清空缓存失败",
       clearQueryCacheCleared: "✓ 查询缓存已清空",
       databaseCleared: "✓ 数据库已清空，所有索引数据已删除",
-      clearQueryCacheConfirm: "确定要清空查询向量缓存吗？这只会清除内存中的查询缓存，不会影响已索引的书签数据。",
-      clearDatabaseConfirm: "⚠️ 警告：确定要清空本地数据库吗？\n\n这将永久删除所有已索引的书签向量、摘要和标签数据。浏览器书签本身不会被删除，但需要重新索引才能恢复 AI 搜索功能。\n\n此操作不可撤销。",
+      clearQueryCacheConfirm:
+        "确定要清空查询向量缓存吗？这只会清除内存中的查询缓存，不会影响已索引的书签数据。",
+      clearDatabaseConfirm:
+        "⚠️ 警告：确定要清空本地数据库吗？\n\n这将永久删除所有已索引的书签向量、摘要和标签数据。浏览器书签本身不会被删除，但需要重新索引才能恢复 AI 搜索功能。\n\n此操作不可撤销。",
       startFailed: "启动失败",
       pauseFailed: "暂停失败",
       resumeFailed: "恢复失败",
@@ -220,13 +222,66 @@ export default {
     },
 
     dataManagement: {
-      description: "清空查询缓存或删除本地数据库中的所有索引数据。浏览器书签本身不会被删除。",
+      description:
+        "清空查询缓存或删除本地数据库中的所有索引数据。浏览器书签本身不会被删除。",
     },
 
     folderTree: {
       expand: "展开",
       collapse: "折叠",
       select: "选择",
+    },
+
+    health: {
+      title: "💚 链接健康检测",
+      enableLabel: "启用定期死链扫描",
+      enableHint: "定期检测已索引书签的链接是否仍然有效",
+      intervalLabel: "扫描间隔",
+      checkNow: "立即检测",
+      checking: "正在检测...",
+      stats: "检测统计",
+      alive: "正常",
+      dead: "失效",
+      unchecked: "未检测",
+      lastCheck: "上次检测",
+      never: "从未检测",
+      noDeadLinks: "未发现失效链接",
+    },
+
+    duplicates: {
+      title: "📋 重复书签检测",
+      scanButton: "扫描重复书签",
+      scanning: "扫描中...",
+      duplicatesFound: "找到 {{count}} 组重复书签",
+      noDuplicates: "未发现重复书签",
+      keep: "保留此项",
+      removeOthers: "删除其他",
+      resolveSuccess: "✓ 重复项已处理",
+      urlLabel: "URL",
+      folderLabel: "文件夹",
+    },
+
+    categorize: {
+      title: "🏷️ AI 自动分类",
+      enableLabel: "启用 AI 自动分类",
+      enableHint: "使用 LLM 根据书签内容自动归类到技术主题文件夹",
+      selectFolders: "选择分类范围",
+      analyzeButton: "分析分类建议",
+      analyzing: "分析中...",
+      suggestionsFound: "共 {{count}} 条分类建议",
+      noSuggestions: "没有可分类的书签",
+      applyButton: "应用分类",
+      applying: "正在移动书签...",
+      applySuccess:
+        "✓ 已移动 {{moved}} 个书签，新建 {{created}} 个文件夹，跳过 {{skipped}} 个",
+      confidenceHigh: "高",
+      confidenceMedium: "中",
+      confidenceLow: "低",
+      rulesLabel: "自定义分类规则",
+      rulesHint: "额外的提示词来定制分类行为，例如：将编译器相关仓库归到 Rust",
+      categoryColumn: "分类",
+      currentFolder: "当前文件夹",
+      suggestedCategory: "建议分类",
     },
   },
 

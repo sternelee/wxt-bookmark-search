@@ -62,6 +62,13 @@ import {
   autoCreateLLMProvider,
   setLLMProvider,
 } from "../src/ai-providers/llm-base";
+import { checkLinks, getLinkHealthStats, getDeadLinks } from "../src/health";
+import { findDuplicates, resolveDuplicates, buildFolderPathMapFromTree } from "../src/dedup";
+import type { BookmarkTreeNode } from "../src/dedup";
+import {
+  getCategorySuggestions,
+  applyCategories,
+} from "../src/categorize";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -315,6 +322,9 @@ export default defineBackground(() => {
   // 初始化 LLM provider
   initLLMProvider();
 
+  // 初始化死链检测定时任务
+  initLinkCheckAlarm();
+
   // 预热已索引书签缓存
   ensureCachedIndexedBookmarks().then((cached) => {
     console.log(
@@ -345,6 +355,26 @@ export default defineBackground(() => {
       }
     } catch (error) {
       console.error("[FlowSearch] Failed to init LLM provider:", error);
+    }
+  }
+
+  /** 初始化死链检测定时任务 */
+  async function initLinkCheckAlarm(): Promise<void> {
+    const settings = await getSettings();
+    const alarmName = "linkCheck";
+
+    // 清除可能存在的旧定时器
+    try {
+      await browser.alarms.clear(alarmName);
+    } catch {}
+
+    if (settings.linkCheckEnabled && settings.linkCheckInterval) {
+      browser.alarms.create(alarmName, {
+        periodInMinutes: settings.linkCheckInterval * 60,
+      });
+      console.log(
+        `[FlowSearch] Link check alarm set: every ${settings.linkCheckInterval}h`,
+      );
     }
   }
 
@@ -915,6 +945,30 @@ export default defineBackground(() => {
         console.error("[FlowSearch] Failed to recreate LLM provider:", error);
       }
     }
+
+    // 死链检测设置变更 → 重建定时器
+    if (
+      oldVal?.linkCheckEnabled !== newVal?.linkCheckEnabled ||
+      oldVal?.linkCheckInterval !== newVal?.linkCheckInterval
+    ) {
+      await initLinkCheckAlarm();
+    }
+  });
+
+  // 死链检测定时器
+  browser.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === "linkCheck") {
+      console.log("[FlowSearch] Running scheduled link check...");
+      try {
+        const result = await checkLinks();
+        console.log(
+          `[FlowSearch] Link check complete: ${result.checked} checked, ${result.alive} alive, ${result.dead} dead`,
+        );
+        await saveSettings({ lastLinkCheck: Date.now() });
+      } catch (error) {
+        console.error("[FlowSearch] Scheduled link check failed:", error);
+      }
+    }
   });
 
   // 监听来自 Options 页面的消息
@@ -1075,6 +1129,73 @@ export default defineBackground(() => {
             );
             await saveSettings({ lastGistSync: Date.now() });
             return { success: true, ...downloadResult };
+          }
+          case "CHECK_LINKS": {
+            const result = await checkLinks();
+            await saveSettings({ lastLinkCheck: Date.now() });
+            return { success: true, ...result };
+          }
+          case "GET_LINK_STATS": {
+            const stats = await getLinkHealthStats();
+            return { success: true, ...stats };
+          }
+          case "GET_DEAD_LINKS": {
+            const deadLinks = await getDeadLinks();
+            return { success: true, deadLinks };
+          }
+          case "FIND_DUPLICATES": {
+            const tree = await browser.bookmarks.getTree();
+            const folderPathMap = buildFolderPathMapFromTree(
+              tree as unknown as BookmarkTreeNode[],
+            );
+            const duplicates = await findDuplicates(folderPathMap);
+            return { success: true, duplicates };
+          }
+          case "RESOLVE_DUPLICATES": {
+            await resolveDuplicates(
+              message.keepId,
+              message.deleteIds,
+              async (id: string) => {
+                await browser.bookmarks.remove(id);
+              },
+            );
+            return { success: true };
+          }
+          case "GET_CATEGORY_SUGGESTIONS": {
+            const suggestions = await getCategorySuggestions(
+              message.bookmarkIds,
+            );
+            return { success: true, suggestions };
+          }
+          case "APPLY_CATEGORIES": {
+            // 获取默认可写根目录
+            const rootParentId = await getDefaultWritableBookmarkParentId();
+            const result = await applyCategories(
+              message.suggestions,
+              message.categoryFolderMap,
+              rootParentId,
+              async (parentId, title) => {
+                const folder = await browser.bookmarks.create({
+                  parentId,
+                  title,
+                });
+                return folder.id;
+              },
+              async (id, parentId) => {
+                await browser.bookmarks.move(id, { parentId });
+              },
+            );
+            // 保存更新后的 categoryFolderMap
+            await saveSettings({
+              categoryFolderMap: {
+                ...message.categoryFolderMap,
+              },
+            });
+            return { success: true, ...result };
+          }
+          case "GET_CATEGORY_FOLDERS": {
+            const folderMap = (await getSettings()).categoryFolderMap || {};
+            return { success: true, folderMap };
           }
           default:
             return { success: false, error: "Unknown message type" };

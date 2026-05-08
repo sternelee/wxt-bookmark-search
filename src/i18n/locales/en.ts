@@ -207,8 +207,10 @@ export default {
       cacheClearFailed: "Failed to clear cache",
       clearQueryCacheCleared: "✓ Query cache cleared",
       databaseCleared: "✓ Database cleared, all indexed data has been deleted",
-      clearQueryCacheConfirm: "Are you sure you want to clear the query vector cache? This only clears in-memory query embeddings and will not affect indexed bookmark data.",
-      clearDatabaseConfirm: "⚠️ Warning: Are you sure you want to clear the local database?\n\nThis will permanently delete all indexed bookmark vectors, summaries, and tags. Browser bookmarks themselves will not be deleted, but you will need to re-index to restore AI search functionality.\n\nThis action cannot be undone.",
+      clearQueryCacheConfirm:
+        "Are you sure you want to clear the query vector cache? This only clears in-memory query embeddings and will not affect indexed bookmark data.",
+      clearDatabaseConfirm:
+        "⚠️ Warning: Are you sure you want to clear the local database?\n\nThis will permanently delete all indexed bookmark vectors, summaries, and tags. Browser bookmarks themselves will not be deleted, but you will need to re-index to restore AI search functionality.\n\nThis action cannot be undone.",
       startFailed: "Failed to start",
       pauseFailed: "Failed to pause",
       resumeFailed: "Failed to resume",
@@ -227,13 +229,67 @@ export default {
     },
 
     dataManagement: {
-      description: "Clear the query cache or delete all indexed data from the local database. Browser bookmarks themselves will not be deleted.",
+      description:
+        "Clear the query cache or delete all indexed data from the local database. Browser bookmarks themselves will not be deleted.",
     },
 
     folderTree: {
       expand: "Expand",
       collapse: "Collapse",
       select: "Select",
+    },
+
+    health: {
+      title: "💚 Link Health Check",
+      enableLabel: "Enable periodic dead link scanning",
+      enableHint: "Periodically check if indexed bookmark URLs are still valid",
+      intervalLabel: "Scan Interval",
+      checkNow: "Check Now",
+      checking: "Checking...",
+      stats: "Scan Statistics",
+      alive: "Alive",
+      dead: "Dead",
+      unchecked: "Unchecked",
+      lastCheck: "Last Check",
+      never: "Never",
+      noDeadLinks: "No dead links found",
+    },
+
+    duplicates: {
+      title: "📋 Duplicate Detection",
+      scanButton: "Scan for Duplicates",
+      scanning: "Scanning...",
+      duplicatesFound: "{{count}} duplicate group(s) found",
+      noDuplicates: "No duplicates found",
+      keep: "Keep",
+      removeOthers: "Remove Others",
+      resolveSuccess: "✓ Duplicates resolved",
+      urlLabel: "URL",
+      folderLabel: "Folder",
+    },
+
+    categorize: {
+      title: "🏷️ AI Auto-Categorization",
+      enableLabel: "Enable AI auto-categorization",
+      enableHint:
+        "Use LLM to automatically classify bookmarks into topic folders based on content",
+      selectFolders: "Select Scope",
+      analyzeButton: "Analyze Suggestions",
+      analyzing: "Analyzing...",
+      suggestionsFound: "{{count}} suggestion(s) found",
+      noSuggestions: "No bookmarks to categorize",
+      applyButton: "Apply Categories",
+      applying: "Moving bookmarks...",
+      applySuccess:
+        "✓ {{moved}} moved, {{created}} folders created, {{skipped}} skipped",
+      confidenceHigh: "High",
+      confidenceMedium: "Medium",
+      confidenceLow: "Low",
+      rulesLabel: "Custom Rules",
+      rulesHint: "Additional prompts to customize categorization behavior",
+      categoryColumn: "Category",
+      currentFolder: "Current Folder",
+      suggestedCategory: "Suggested",
     },
   },
 
