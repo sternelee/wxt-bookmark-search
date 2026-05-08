@@ -314,6 +314,15 @@ export default {
     searchError: "検索エラー",
     resultsCount: "{{count}} 件の結果",
     aiIndexed: "AI インデックス済",
+    summarize: "✨ 要約",
+    summarizing: "要約を生成中...",
+    summaryFailed: "要約に失敗しました",
+    summaryEmpty: "要約するコンテンツがありません",
+    askPlaceholder: "ブックマークについてAIに質問...",
+    askButton: "質問",
+    asking: "検索中...",
+    answerSources: "参照元",
+    noAnswer: "この質問に回答できる関連ブックマークが見つかりませんでした。",
   },
 
   background: {

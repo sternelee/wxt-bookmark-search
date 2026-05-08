@@ -307,6 +307,15 @@ export default {
     searchError: "검색 오류",
     resultsCount: "{{count}}개 결과",
     aiIndexed: "AI 색인됨",
+    summarize: "✨ 요약",
+    summarizing: "요약 생성 중...",
+    summaryFailed: "요약 실패",
+    summaryEmpty: "요약할 콘텐츠가 없습니다",
+    askPlaceholder: "북마크에 대해 AI에게 질문...",
+    askButton: "질문",
+    asking: "검색 중...",
+    answerSources: "출처",
+    noAnswer: "이 질문에 답변할 관련 북마크를 찾을 수 없습니다.",
   },
 
   background: {

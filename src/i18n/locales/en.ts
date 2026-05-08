@@ -307,6 +307,15 @@ export default {
     searchError: "Search error",
     resultsCount: "{{count}} results",
     aiIndexed: "AI Indexed",
+    summarize: "✨ Summarize",
+    summarizing: "Generating summary...",
+    summaryFailed: "Summary failed",
+    summaryEmpty: "No content to summarize",
+    askPlaceholder: "Ask AI about your bookmarks...",
+    askButton: "Ask",
+    asking: "Searching...",
+    answerSources: "Sources",
+    noAnswer: "No relevant bookmarks found to answer this question.",
   },
 
   background: {

@@ -85,9 +85,13 @@ export default function GitHubSettings() {
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
-          <Button onClick={handleSave}>{t("options.github.saveSettings")}</Button>
+          <Button onClick={handleSave}>
+            {t("options.github.saveSettings")}
+          </Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
-            {isSyncing() ? t("options.github.syncingStars") : t("options.github.syncStars")}
+            {isSyncing()
+              ? t("options.github.syncingStars")
+              : t("options.github.syncStars")}
           </Button>
         </div>
 

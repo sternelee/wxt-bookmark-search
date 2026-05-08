@@ -199,3 +199,18 @@ export interface CategorySuggestion {
   confidence: "high" | "medium" | "low";
   reasoning: string;
 }
+
+/** 按需摘要结果 */
+export interface SummarizeResult {
+  url: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  excerpt: string;
+}
+
+/** RAG 问答结果 */
+export interface RAGAnswer {
+  answer: string;
+  citations: { title: string; url: string; excerpt: string }[];
+}

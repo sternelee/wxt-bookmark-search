@@ -193,7 +193,9 @@ export function extractReadmeSemanticContent(readme: string): string {
     if (lastMatch !== null) {
       sections.push({
         title: lastMatch[2].trim(),
-        content: sanitized.slice(lastMatch.index + lastMatch[0].length, m.index).trim(),
+        content: sanitized
+          .slice(lastMatch.index + lastMatch[0].length, m.index)
+          .trim(),
         start: lastMatch.index,
       });
     }
@@ -223,9 +225,12 @@ export function extractReadmeSemanticContent(readme: string): string {
   const overview = stripMarkdownToPlainText(overviewRaw);
 
   // 7. 语义分类关键词
-  const FEATURE_KW = /features?|功能|特性|highlights?|what'?s included|capabilities/i;
-  const USECASE_KW = /use[- ]cases?|scenarios?|使用场景|应用场景|who uses|motivation/i;
-  const QUICKSTART_KW = /quick[- ]?start|getting[- ]?started|快速开始|installation|install|安装|setup/i;
+  const FEATURE_KW =
+    /features?|功能|特性|highlights?|what'?s included|capabilities/i;
+  const USECASE_KW =
+    /use[- ]cases?|scenarios?|使用场景|应用场景|who uses|motivation/i;
+  const QUICKSTART_KW =
+    /quick[- ]?start|getting[- ]?started|快速开始|installation|install|安装|setup/i;
 
   // 8. 去除 fenced 代码块（避免命令行污染语义）
   function stripCodeBlocks(text: string): string {
@@ -490,54 +495,54 @@ async function processEnrichmentQueue(): Promise<void> {
     try {
       const readme = await fetchRepoReadme(job.token, job.owner, job.repo);
       if (readme && readme.length > 10) {
-          // 语义内容提取（用于 embedding，充分利用 BGE-M3 的 8192 token 窗口）
-          const semanticContent = extractReadmeSemanticContent(readme);
-          const plainText = stripMarkdownToPlainText(readme);
-          let summary = plainText.slice(0, 800);  // 展示用摘要（关键词搜索 + UI）
-          let tags: string[] = [];
-          let llmEnhanced = false;
+        // 语义内容提取（用于 embedding，充分利用 BGE-M3 的 8192 token 窗口）
+        const semanticContent = extractReadmeSemanticContent(readme);
+        const plainText = stripMarkdownToPlainText(readme);
+        let summary = plainText.slice(0, 800); // 展示用摘要（关键词搜索 + UI）
+        let tags: string[] = [];
+        let llmEnhanced = false;
 
-          // LLM 增强（仅影响 summary + tags，不影响 embedding）
-          if (settings.enableLLMEnrichment && plainText.length > 100) {
-            try {
-              const provider = getLLMProvider();
-              if (provider) {
-                const llmResult = await provider.generateDeepContent(
-                  plainText.slice(0, 4000),
-                );
-                summary = llmResult.summary;   // UI 展示摘要来自 LLM
-                tags = llmResult.tags;
-                llmEnhanced = true;
-              }
-            } catch (llmError) {
-              console.warn(
-                `[indexer] LLM enrichment failed for ${job.owner}/${job.repo}:`,
-                llmError,
+        // LLM 增强（仅影响 summary + tags，不影响 embedding）
+        if (settings.enableLLMEnrichment && plainText.length > 100) {
+          try {
+            const provider = getLLMProvider();
+            if (provider) {
+              const llmResult = await provider.generateDeepContent(
+                plainText.slice(0, 4000),
               );
-              // 降级：使用原始摘要
+              summary = llmResult.summary; // UI 展示摘要来自 LLM
+              tags = llmResult.tags;
+              llmEnhanced = true;
             }
+          } catch (llmError) {
+            console.warn(
+              `[indexer] LLM enrichment failed for ${job.owner}/${job.repo}:`,
+              llmError,
+            );
+            // 降级：使用原始摘要
           }
-
-          // embedding 始终使用 semanticContent（与 LLM 开关无关）
-          // 不通过 buildEmbeddingText，避免 "Summary:" 标签重复嵌套已结构化的内容
-          const textToEmbed = semanticContent.slice(0, 8000);
-          const { embedding } = await getEmbedding(
-            textToEmbed,
-            settings.openaiApiKey!,
-            undefined,
-            settings.embeddingModel,
-            settings.baseURL,
-          );
-          await updateBookmark(job.bookmarkId, {
-            summary,
-            tags,
-            embedding,
-            needsEnrichment: false,
-            indexedAt: Date.now(),
-            llmEnhanced,
-          });
-          console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
         }
+
+        // embedding 始终使用 semanticContent（与 LLM 开关无关）
+        // 不通过 buildEmbeddingText，避免 "Summary:" 标签重复嵌套已结构化的内容
+        const textToEmbed = semanticContent.slice(0, 8000);
+        const { embedding } = await getEmbedding(
+          textToEmbed,
+          settings.openaiApiKey!,
+          undefined,
+          settings.embeddingModel,
+          settings.baseURL,
+        );
+        await updateBookmark(job.bookmarkId, {
+          summary,
+          tags,
+          embedding,
+          needsEnrichment: false,
+          indexedAt: Date.now(),
+          llmEnhanced,
+        });
+        console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
+      }
     } catch (err) {
       console.warn(
         `[indexer] Enrichment failed for ${job.owner}/${job.repo}:`,
@@ -695,7 +700,7 @@ function buildEmbeddingText(
 /**
  * 核心内容提取策略器
  */
-async function fetchPageContent(
+export async function fetchPageContent(
   url: string,
   settings: Settings,
 ): Promise<{ markdown: string; title?: string; summary?: string } | null> {
@@ -1578,7 +1583,10 @@ export async function initIndexer(): Promise<void> {
     // === README 向量版本检查：存量重建 ===
     const CURRENT_README_VERSION = 1;
     // 仅在 githubToken 存在时才做重建（无 token 无法拉 README，保留旧版本号等待下次启动）
-    if (settings.githubToken && (settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION) {
+    if (
+      settings.githubToken &&
+      (settings.githubReadmeVersion ?? 0) < CURRENT_README_VERSION
+    ) {
       const githubRecords = await db.bookmarks
         .filter((r) => r.source === "github" && r.status === "indexed")
         .toArray();
@@ -1672,8 +1680,9 @@ export async function syncTwitterBookmarks(): Promise<{
 
   // 动态导入 Twitter 相关模块
   const { extractTwitterCookies } = await import("./twitter-cookies");
-  const { fetchTwitterBookmarks, convertToBookmarkRecord } =
-    await import("./twitter");
+  const { fetchTwitterBookmarks, convertToBookmarkRecord } = await import(
+    "./twitter"
+  );
 
   // 1. 尝试自动提取 cookies
   let cookies = await extractTwitterCookies();

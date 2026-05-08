@@ -43,6 +43,7 @@ import {
   syncGithubStars,
   syncTwitterBookmarks,
   stripMarkdownToPlainText,
+  fetchPageContent,
 } from "../src/indexer";
 import { syncHistoryBookmarks } from "../src/history";
 import { t } from "../src/i18n";
@@ -61,14 +62,16 @@ import {
 import {
   autoCreateLLMProvider,
   setLLMProvider,
+  getLLMProvider,
 } from "../src/ai-providers/llm-base";
 import { checkLinks, getLinkHealthStats, getDeadLinks } from "../src/health";
-import { findDuplicates, resolveDuplicates, buildFolderPathMapFromTree } from "../src/dedup";
-import type { BookmarkTreeNode } from "../src/dedup";
 import {
-  getCategorySuggestions,
-  applyCategories,
-} from "../src/categorize";
+  findDuplicates,
+  resolveDuplicates,
+  buildFolderPathMapFromTree,
+} from "../src/dedup";
+import type { BookmarkTreeNode } from "../src/dedup";
+import { getCategorySuggestions, applyCategories } from "../src/categorize";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -243,24 +246,15 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     let results: BookmarkRecord[];
 
     if (mode === "vector") {
-      results = await vectorSearch(
-        query,
-        filteredIndexed,
-        queryVector,
-        { limit: 20 },
-      );
+      results = await vectorSearch(query, filteredIndexed, queryVector, {
+        limit: 20,
+      });
     } else {
-      results = await hybridSearch(
-        query,
-        valid,
-        filteredIndexed,
-        queryVector,
-        {
-          mode,
-          vectorWeight: settings.vectorWeight || 0.4,
-          limit: 20,
-        },
-      );
+      results = await hybridSearch(query, valid, filteredIndexed, queryVector, {
+        mode,
+        vectorWeight: settings.vectorWeight || 0.4,
+        limit: 20,
+      });
     }
 
     return results.map(toSearchResult);
@@ -1051,8 +1045,9 @@ export default defineBackground(() => {
               await saveSettings({ gistDeviceId: deviceId });
             }
             const tree = await browser.bookmarks.getTree();
-            const { exportBookmarkTree, createGist } =
-              await import("../src/gist-sync");
+            const { exportBookmarkTree, createGist } = await import(
+              "../src/gist-sync"
+            );
             const localTree = exportBookmarkTree(tree);
             const gistId = await createGist(octokit, {
               version: 1,
@@ -1196,6 +1191,108 @@ export default defineBackground(() => {
           case "GET_CATEGORY_FOLDERS": {
             const folderMap = (await getSettings()).categoryFolderMap || {};
             return { success: true, folderMap };
+          }
+          case "SUMMARIZE_URL": {
+            const summarizeSettings = await getSettings();
+            if (!summarizeSettings.openaiApiKey) {
+              return { success: false, error: "API Key not configured" };
+            }
+            const content = await fetchPageContent(
+              message.url,
+              summarizeSettings,
+            );
+            if (!content) {
+              return { success: false, error: "Content extraction failed" };
+            }
+            const provider = getLLMProvider();
+            if (!provider) {
+              const fallback = (content.summary || content.markdown).slice(
+                0,
+                500,
+              );
+              return {
+                success: true,
+                url: message.url,
+                title: content.title || message.url,
+                summary: fallback,
+                tags: [],
+                excerpt: content.markdown.slice(0, 200),
+              };
+            }
+            try {
+              const result = await provider.generateDeepContent(
+                content.markdown.slice(0, 4000),
+              );
+              return {
+                success: true,
+                url: message.url,
+                title: content.title || message.url,
+                summary: result.summary,
+                tags: result.tags,
+                excerpt: content.markdown.slice(0, 200),
+              };
+            } catch {
+              const fallback = (content.summary || content.markdown).slice(
+                0,
+                500,
+              );
+              return {
+                success: true,
+                url: message.url,
+                title: content.title || message.url,
+                summary: fallback,
+                tags: [],
+                excerpt: content.markdown.slice(0, 200),
+              };
+            }
+          }
+          case "ASK_BOOKMARKS": {
+            const askSettings = await getSettings();
+            if (!askSettings.openaiApiKey) {
+              return { success: false, error: "API Key not configured" };
+            }
+            const { askBookmarks } = await import("../src/rag");
+            const queryVector = await getQueryEmbedding(
+              message.question,
+              askSettings.openaiApiKey,
+              undefined,
+              askSettings.embeddingModel,
+              askSettings.baseURL,
+            );
+            const cached = await ensureCachedIndexedBookmarks();
+            if (cached.length === 0) {
+              return {
+                success: true,
+                answer: "No indexed bookmarks available.",
+                citations: [],
+              };
+            }
+            const topK = message.topK || 8;
+            const results = await vectorSearch(
+              message.question,
+              cached,
+              queryVector,
+              { limit: topK },
+            );
+            if (results.length === 0) {
+              return {
+                success: true,
+                answer: "No relevant bookmarks found.",
+                citations: [],
+              };
+            }
+            const ragResult = await askBookmarks(
+              message.question,
+              results.map((r) => ({
+                title: r.title,
+                url: r.url,
+                summary: r.summary,
+              })),
+              askSettings.openaiApiKey,
+              askSettings.llmModel,
+              askSettings.baseURL,
+            );
+            return { success: true, ...ragResult };
           }
           default:
             return { success: false, error: "Unknown message type" };

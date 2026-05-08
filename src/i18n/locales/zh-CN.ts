@@ -299,6 +299,15 @@ export default {
     searchError: "搜索出错",
     resultsCount: "共 {{count}} 条结果",
     aiIndexed: "已 AI 索引",
+    summarize: "✨ AI 摘要",
+    summarizing: "正在生成摘要...",
+    summaryFailed: "摘要生成失败",
+    summaryEmpty: "无内容可摘要",
+    askPlaceholder: "向 AI 提问你的书签...",
+    askButton: "提问",
+    asking: "搜索中...",
+    answerSources: "参考来源",
+    noAnswer: "未找到相关的书签来回答此问题。",
   },
 
   background: {
