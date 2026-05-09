@@ -96,7 +96,13 @@ export async function resolveDuplicates(
   // 从 DB 中删除
   await db.bookmarks.bulkDelete(deleteIds);
 
-  // 同步内存缓存
-  const { invalidateIndexedCache } = await import("./db");
-  invalidateIndexedCache();
+  // 从搜索引擎中移除
+  const { removeFromSearchEngine, scheduleSaveSearchEngine } =
+    await import("./search-engine");
+  for (const id of deleteIds) {
+    try {
+      await removeFromSearchEngine(id);
+    } catch {}
+  }
+  scheduleSaveSearchEngine();
 }

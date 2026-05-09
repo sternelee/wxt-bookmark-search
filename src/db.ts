@@ -8,79 +8,6 @@ import type { BookmarkRecord, IndexQueueRecord, Settings } from "./types";
 
 const SETTINGS_KEY = "settings";
 
-// === 已索引书签内存缓存 ===
-let _indexedCache: BookmarkRecord[] | null = null;
-/** 并发加载锁：防止同时发起多次 DB 读取 */
-let _cacheLoadingPromise: Promise<BookmarkRecord[]> | null = null;
-
-/** 从 DB 加载已索引书签到缓存，并预计算 embedding 模长 */
-async function loadIndexedCache(): Promise<BookmarkRecord[]> {
-  const records = await db.bookmarks
-    .where("status")
-    .equals("indexed")
-    .toArray();
-  // 预计算 embedding 模长，加速后续余弦相似度计算
-  for (const r of records) {
-    if (
-      r.embedding &&
-      r.embedding.length > 0 &&
-      r._embeddingNorm === undefined
-    ) {
-      let norm = 0;
-      for (let i = 0; i < r.embedding.length; i++) {
-        norm += r.embedding[i] * r.embedding[i];
-      }
-      r._embeddingNorm = Math.sqrt(norm);
-    }
-  }
-  _indexedCache = records;
-  return _indexedCache;
-}
-
-/** 获取已索引书签（优先使用缓存，并发安全） */
-export async function ensureCachedIndexedBookmarks(): Promise<
-  BookmarkRecord[]
-> {
-  if (_indexedCache !== null) return _indexedCache;
-  if (_cacheLoadingPromise) return _cacheLoadingPromise;
-  _cacheLoadingPromise = loadIndexedCache().finally(() => {
-    _cacheLoadingPromise = null;
-  });
-  return _cacheLoadingPromise;
-}
-
-/** 使缓存失效（供 clearAll 调用） */
-export function invalidateIndexedCache(): void {
-  _indexedCache = null;
-}
-
-/** 内部：同步缓存中的单条记录 */
-function syncCacheRecord(record: BookmarkRecord): void {
-  if (_indexedCache === null) return;
-
-  const idx = _indexedCache.findIndex((r) => r.id === record.id);
-  if (record.status === "indexed") {
-    if (idx >= 0) {
-      _indexedCache[idx] = record;
-    } else {
-      _indexedCache.push(record);
-    }
-  } else {
-    if (idx >= 0) {
-      _indexedCache.splice(idx, 1);
-    }
-  }
-}
-
-/** 内部：从缓存中移除记录 */
-function removeCacheRecord(id: string): void {
-  if (_indexedCache === null) return;
-  const idx = _indexedCache.findIndex((r) => r.id === id);
-  if (idx >= 0) {
-    _indexedCache.splice(idx, 1);
-  }
-}
-
 class BookmarkDB extends Dexie {
   bookmarks!: Table<BookmarkRecord, string>;
   indexQueue!: Table<IndexQueueRecord, string>;
@@ -162,6 +89,11 @@ export async function getIndexedBookmarks(): Promise<BookmarkRecord[]> {
   return db.bookmarks.where("status").equals("indexed").toArray();
 }
 
+/** 获取所有已索引的书签记录（用于重建搜索引擎） */
+export async function getAllIndexedRecords(): Promise<BookmarkRecord[]> {
+  return db.bookmarks.where("status").equals("indexed").toArray();
+}
+
 /** 根据 URL 查找记录 */
 export async function getBookmarkByUrl(
   url: string,
@@ -196,10 +128,6 @@ export async function upsertBookmarks(
   records: BookmarkRecord[],
 ): Promise<void> {
   await db.bookmarks.bulkPut(records);
-  // 同步缓存
-  for (const record of records) {
-    syncCacheRecord(record);
-  }
 }
 
 /** 更新单条记录 */
@@ -208,43 +136,11 @@ export async function updateBookmark(
   updates: Partial<BookmarkRecord>,
 ): Promise<void> {
   await db.bookmarks.update(id, updates);
-
-  // 同步缓存
-  if (_indexedCache !== null) {
-    const idx = _indexedCache.findIndex((r) => r.id === id);
-    const newStatus = updates.status as string | undefined;
-    if (newStatus === "indexed") {
-      if (idx >= 0) {
-        _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
-      } else {
-        const fullRecord = await db.bookmarks.get(id);
-        if (fullRecord) {
-          if (
-            fullRecord.embedding &&
-            fullRecord.embedding.length > 0 &&
-            fullRecord._embeddingNorm === undefined
-          ) {
-            let norm = 0;
-            for (let i = 0; i < fullRecord.embedding.length; i++) {
-              norm += fullRecord.embedding[i] * fullRecord.embedding[i];
-            }
-            fullRecord._embeddingNorm = Math.sqrt(norm);
-          }
-          _indexedCache.push(fullRecord);
-        }
-      }
-    } else if (newStatus && newStatus !== "indexed") {
-      if (idx >= 0) _indexedCache.splice(idx, 1);
-    } else if (idx >= 0) {
-      _indexedCache[idx] = { ..._indexedCache[idx], ...updates };
-    }
-  }
 }
 
 /** 删除书签记录 */
 export async function deleteBookmark(id: string): Promise<void> {
   await db.bookmarks.delete(id);
-  removeCacheRecord(id);
 }
 
 /** 获取索引统计 */
@@ -266,7 +162,6 @@ export async function getIndexStats(): Promise<{
 /** 清空数据库 */
 export async function clearAll(): Promise<void> {
   await db.bookmarks.clear();
-  invalidateIndexedCache();
 }
 
 /** 获取所有失败的书签 */
@@ -325,16 +220,6 @@ export async function updateLinkStatus(
       await db.bookmarks.update(id, { linkStatus, linkCheckedAt });
     }
   });
-  // 同步缓存
-  if (_indexedCache !== null) {
-    for (const u of updates) {
-      const idx = _indexedCache.findIndex((r) => r.id === u.id);
-      if (idx >= 0) {
-        _indexedCache[idx].linkStatus = u.linkStatus;
-        _indexedCache[idx].linkCheckedAt = u.linkCheckedAt;
-      }
-    }
-  }
 }
 
 /** 获取死链书签（linkStatus >= 400 或 0/超时） */

@@ -17,6 +17,11 @@ import {
 } from "./db";
 import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
 import { getLLMProvider } from "./ai-providers/llm-base";
+import {
+  upsertSearchEngineBatch,
+  removeFromSearchEngine,
+  scheduleSaveSearchEngine,
+} from "./search-engine";
 
 /** 索引任务状态 */
 interface IndexJob {
@@ -621,6 +626,12 @@ export async function syncGithubStars(): Promise<{
       await upsertBookmarks(records);
       totalQueued += records.length;
 
+      upsertSearchEngineBatch(records)
+        .then(() => scheduleSaveSearchEngine())
+        .catch((e) => {
+          console.warn("[indexer] Search engine sync failed:", e);
+        });
+
       // 把成功快速索引的 repos 加入 enrichment 队列（后台慢慢补 README）
       for (const repo of pageRepos) {
         const match = repo.html_url.match(/github\.com\/([^/]+)\/([^/]+)/);
@@ -1117,6 +1128,12 @@ async function processQueue(): Promise<void> {
     try {
       await upsertBookmarks(records);
       console.log(`[indexer] Batch indexed: ${batch.length} items`);
+
+      upsertSearchEngineBatch(records)
+        .then(() => scheduleSaveSearchEngine())
+        .catch((e) => {
+          console.warn("[indexer] Search engine sync failed:", e);
+        });
       processedCount += batch.length;
 
       notifyProgress({
@@ -1572,6 +1589,8 @@ export async function initIndexer(): Promise<void> {
   browser.bookmarks.onRemoved.addListener(async (id) => {
     const { deleteBookmark } = await import("./db");
     await deleteBookmark(id);
+    await removeFromSearchEngine(id).catch(() => {});
+    scheduleSaveSearchEngine();
   });
 
   // === 恢复 enrichment 队列 ===
@@ -1680,9 +1699,8 @@ export async function syncTwitterBookmarks(): Promise<{
 
   // 动态导入 Twitter 相关模块
   const { extractTwitterCookies } = await import("./twitter-cookies");
-  const { fetchTwitterBookmarks, convertToBookmarkRecord } = await import(
-    "./twitter"
-  );
+  const { fetchTwitterBookmarks, convertToBookmarkRecord } =
+    await import("./twitter");
 
   // 1. 尝试自动提取 cookies
   let cookies = await extractTwitterCookies();
@@ -1789,6 +1807,12 @@ export async function syncTwitterBookmarks(): Promise<{
 
       await upsertBookmarks(records);
       totalCount += bookmarks.length;
+
+      upsertSearchEngineBatch(records)
+        .then(() => scheduleSaveSearchEngine())
+        .catch((e) => {
+          console.warn("[indexer] Search engine sync failed:", e);
+        });
 
       // LLM 增强（如果启用）
       if (settings.enableLLMEnrichment) {

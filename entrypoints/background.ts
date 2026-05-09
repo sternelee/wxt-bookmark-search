@@ -11,12 +11,7 @@ import {
   highlightBookmarkPlain,
   escapeXml,
 } from "../src/highlight";
-import {
-  getSettings,
-  ensureCachedIndexedBookmarks,
-  hasApiKey,
-  saveSettings,
-} from "../src/db";
+import { getSettings, hasApiKey, saveSettings } from "../src/db";
 import type {
   BookmarkRecord,
   SearchResult,
@@ -29,7 +24,18 @@ import {
   clearEmbeddingCache,
   hasCachedQuery,
 } from "../src/embedding";
-import { hybridSearch, vectorSearch } from "../src/hybrid";
+import {
+  initSearchEngine,
+  populateSearchEngine,
+  saveSearchEngine,
+  loadSearchEngine,
+  searchHybrid,
+  searchVector,
+  removeFromSearchEngine,
+  registerSaveFn,
+  scheduleSaveSearchEngine,
+} from "../src/search-engine";
+import type { RawData } from "@orama/orama";
 import {
   initIndexer,
   enqueueBookmark,
@@ -226,13 +232,24 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     });
   }
 
-  // 向量搜索
-  const allIndexed = await ensureCachedIndexedBookmarks();
-  let filteredIndexed = allowedUrls
-    ? allIndexed.filter((idx) => allowedUrls!.has(idx.url))
-    : allIndexed;
+  // Orama 搜索
+  if (valid.length === 0 && !settings.openaiApiKey) return [];
 
-  if (filteredIndexed.length === 0 && valid.length === 0) return [];
+  if (!settings.openaiApiKey) {
+    // 无 API Key：Chrome 关键词搜索（不依赖 Orama）
+    const suggestions = rerankBookmarks(query, valid, IS_FIREFOX);
+    return suggestions.slice(0, 20).map((s) => {
+      const b = valid.find((x) => x.url === s.content);
+      return {
+        url: s.content,
+        title: b?.title ?? s.content,
+        summary: "",
+        tags: [],
+        source: "bookmark" as const,
+        indexed: false,
+      };
+    });
+  }
 
   try {
     const queryVector = await getQueryEmbedding(
@@ -245,16 +262,20 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     const mode = settings.searchMode || "hybrid";
     let results: BookmarkRecord[];
 
+    const oramaLimit = allowedUrls ? Math.max(60, 20 * 3) : 20;
+
     if (mode === "vector") {
-      results = await vectorSearch(query, filteredIndexed, queryVector, {
-        limit: 20,
-      });
+      results = await searchVector(queryVector, { limit: oramaLimit });
     } else {
-      results = await hybridSearch(query, valid, filteredIndexed, queryVector, {
-        mode,
+      results = await searchHybrid(query, queryVector, {
+        limit: oramaLimit,
         vectorWeight: settings.vectorWeight || 0.4,
-        limit: 20,
       });
+    }
+
+    // 如果 scope 过滤了，手动过滤 Orama 结果
+    if (allowedUrls) {
+      results = results.filter((r) => allowedUrls!.has(r.url));
     }
 
     return results.map(toSearchResult);
@@ -313,20 +334,26 @@ export default defineBackground(() => {
     console.log("[FlowSearch] Indexer initialized");
   });
 
+  // 注册 Orama 索引持久化回调（必须在 initSearchAndPopulate 之前）
+  registerSaveFn(async () => {
+    const raw = saveSearchEngine();
+    if (!raw) return;
+    const json = JSON.stringify(raw);
+    if (json.length > 900 * 1024) {
+      console.warn("[FlowSearch] Orama index too large, skipping save");
+      return;
+    }
+    await browser.storage.local.set({ orama_index: JSON.parse(json) });
+  });
+
+  // 初始化搜索引擎 (Orama)
+  initSearchAndPopulate();
+
   // 初始化 LLM provider
   initLLMProvider();
 
   // 初始化死链检测定时任务
   initLinkCheckAlarm();
-
-  // 预热已索引书签缓存
-  ensureCachedIndexedBookmarks().then((cached) => {
-    console.log(
-      "[FlowSearch] Indexed bookmark cache loaded:",
-      cached.length,
-      "entries",
-    );
-  });
 
   // 首次启动时检查是否需要索引
   hasApiKey().then((hasKey) => {
@@ -349,6 +376,36 @@ export default defineBackground(() => {
       }
     } catch (error) {
       console.error("[FlowSearch] Failed to init LLM provider:", error);
+    }
+  }
+
+  /** 初始化搜索引擎（Orama），优先从 storage.local 恢复 */
+  async function initSearchAndPopulate(): Promise<void> {
+    try {
+      await initSearchEngine();
+
+      // 尝试从 storage.local 恢复
+      const stored = await browser.storage.local.get("orama_index");
+      if (stored.orama_index) {
+        try {
+          loadSearchEngine(stored.orama_index as RawData);
+          console.log("[FlowSearch] Orama index restored from storage");
+          return;
+        } catch {
+          console.warn(
+            "[FlowSearch] Failed to load Orama index, rebuilding...",
+          );
+        }
+      }
+
+      // 从 IndexedDB 重建
+      const { getAllIndexedRecords } = await import("../src/db");
+      const records = await getAllIndexedRecords();
+      const count = await populateSearchEngine(records);
+      console.log(`[FlowSearch] Orama index rebuilt: ${count} records`);
+      scheduleSaveSearchEngine();
+    } catch (error) {
+      console.error("[FlowSearch] Failed to init search engine:", error);
     }
   }
 
@@ -792,19 +849,7 @@ export default defineBackground(() => {
       return;
     }
 
-    // 3. 获取已索引书签，并应用过滤
-    const allIndexed = await ensureCachedIndexedBookmarks();
-    let filteredIndexed = allIndexed;
-    if (allowedUrls) {
-      filteredIndexed = allIndexed.filter((idx) => allowedUrls!.has(idx.url));
-    }
-
-    if (filteredIndexed.length === 0 && valid.length === 0) {
-      suggest([]);
-      return;
-    }
-
-    // === 防抖搜索：快速路径保持立即响应，向量搜索包裹 debounce ===
+    // 3. 防抖搜索
     if (searchTimer) clearTimeout(searchTimer);
     if (searchAbortController) searchAbortController.abort();
     searchAbortController = new AbortController();
@@ -836,33 +881,24 @@ export default defineBackground(() => {
         // 如果已中止，直接返回
         if (signal.aborted) return;
 
-        // 5. 执行混合搜索
-        let results;
+        // 5. 执行 Orama 搜索
+        let results: BookmarkRecord[];
         const mode = settings.searchMode || "hybrid";
 
+        const oramaLimit = allowedUrls ? Math.max(27, 9 * 3) : 9;
+
         if (mode === "vector") {
-          results = await vectorSearch(
-            query,
-            filteredIndexed,
-            queryVector,
-            {
-              limit: 9,
-            },
-            signal,
-          );
+          results = await searchVector(queryVector, { limit: oramaLimit });
         } else {
-          results = await hybridSearch(
-            query,
-            valid,
-            filteredIndexed,
-            queryVector,
-            {
-              mode,
-              vectorWeight: settings.vectorWeight || 0.4,
-              limit: 9,
-            },
-            signal,
-          );
+          results = await searchHybrid(query, queryVector, {
+            limit: oramaLimit,
+            vectorWeight: settings.vectorWeight || 0.4,
+          });
+        }
+
+        // 应用 scope 过滤
+        if (allowedUrls) {
+          results = results.filter((r) => allowedUrls!.has(r.url));
         }
 
         suggest(
@@ -1005,6 +1041,8 @@ export default defineBackground(() => {
               console.debug("[FlowSearch] Bookmark already gone from browser");
             }
             await deleteBookmark(message.id);
+            await removeFromSearchEngine(message.id).catch(() => {});
+            scheduleSaveSearchEngine();
             return { success: true };
           case "GET_BOOKMARK_FOLDERS":
             const folders = await getBookmarkFolders();
@@ -1045,9 +1083,8 @@ export default defineBackground(() => {
               await saveSettings({ gistDeviceId: deviceId });
             }
             const tree = await browser.bookmarks.getTree();
-            const { exportBookmarkTree, createGist } = await import(
-              "../src/gist-sync"
-            );
+            const { exportBookmarkTree, createGist } =
+              await import("../src/gist-sync");
             const localTree = exportBookmarkTree(tree);
             const gistId = await createGist(octokit, {
               version: 1,
@@ -1259,21 +1296,8 @@ export default defineBackground(() => {
               askSettings.embeddingModel,
               askSettings.baseURL,
             );
-            const cached = await ensureCachedIndexedBookmarks();
-            if (cached.length === 0) {
-              return {
-                success: true,
-                answer: "No indexed bookmarks available.",
-                citations: [],
-              };
-            }
             const topK = message.topK || 8;
-            const results = await vectorSearch(
-              message.question,
-              cached,
-              queryVector,
-              { limit: topK },
-            );
+            const results = await searchVector(queryVector, { limit: topK });
             if (results.length === 0) {
               return {
                 success: true,
