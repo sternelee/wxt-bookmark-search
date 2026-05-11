@@ -154,6 +154,22 @@ export interface Settings {
   categoryRules?: string;
   /** AI 自动分类：分类名 → 浏览器文件夹 ID 映射 */
   categoryFolderMap?: Record<string, string>;
+
+  // 云盘同步（Google Drive / Dropbox）— 同步 Orama 索引 + 全部 BookmarkRecord
+  /** 启用的云盘 provider；null/undefined 表示未启用 */
+  cloudSyncProvider?: "google-drive" | "dropbox" | null;
+  /** 手动 access token */
+  cloudSyncToken?: string;
+  /** 自动定时上传开关 */
+  cloudSyncEnabled?: boolean;
+  /** 自动上传间隔（小时），默认 24 */
+  cloudSyncInterval?: number;
+  /** 上次成功上传/下载时间戳 */
+  lastCloudSync?: number;
+  /** 本设备 UUID（在同步 blob 中标识来源） */
+  cloudSyncDeviceId?: string;
+  /** 远程文件 ID（Google Drive fileId / Dropbox path） */
+  cloudSyncFileId?: string;
 }
 
 /** 索引队列持久化记录（用于 Service Worker 重启后恢复） */

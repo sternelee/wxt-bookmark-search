@@ -298,6 +298,13 @@ const defaultSettings: Settings = {
   autoCategorizeEnabled: false,
   categoryRules: "",
   categoryFolderMap: {},
+  cloudSyncProvider: null,
+  cloudSyncToken: undefined,
+  cloudSyncEnabled: false,
+  cloudSyncInterval: 24,
+  lastCloudSync: undefined,
+  cloudSyncDeviceId: undefined,
+  cloudSyncFileId: undefined,
 };
 
 /** 获取设置 */

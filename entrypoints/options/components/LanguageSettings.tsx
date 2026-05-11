@@ -1,5 +1,10 @@
 import { createSignal } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../../src/components/ui/card";
 import { Select } from "../../../src/components/ui/select";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
@@ -55,7 +60,7 @@ export default function LanguageSettings() {
         />
 
         <Button onClick={handleApply} class="mt-4">
-          {t("common.apply")}
+          {t("common.save")}
         </Button>
 
         <Alert

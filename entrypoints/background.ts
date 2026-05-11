@@ -78,6 +78,15 @@ import {
 } from "../src/dedup";
 import type { BookmarkTreeNode } from "../src/dedup";
 import { getCategorySuggestions, applyCategories } from "../src/categorize";
+import {
+  getCloudProvider,
+  uploadCloudSync,
+  downloadCloudSync,
+  testCloudConnection,
+  getCloudSyncStatus,
+  deleteCloudSync,
+  CloudSyncError,
+} from "../src/cloud-sync";
 
 // 搜索防抖状态
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -355,6 +364,9 @@ export default defineBackground(() => {
   // 初始化死链检测定时任务
   initLinkCheckAlarm();
 
+  // 初始化云盘同步定时任务
+  initCloudSyncAlarm();
+
   // 首次启动时检查是否需要索引
   hasApiKey().then((hasKey) => {
     if (hasKey) {
@@ -425,6 +437,30 @@ export default defineBackground(() => {
       });
       console.log(
         `[FlowSearch] Link check alarm set: every ${settings.linkCheckInterval}h`,
+      );
+    }
+  }
+
+  /** 初始化云盘同步定时任务 */
+  async function initCloudSyncAlarm(): Promise<void> {
+    const settings = await getSettings();
+    const alarmName = "cloudSync";
+
+    try {
+      await browser.alarms.clear(alarmName);
+    } catch {}
+
+    if (
+      settings.cloudSyncEnabled &&
+      settings.cloudSyncProvider &&
+      settings.cloudSyncToken &&
+      settings.cloudSyncInterval
+    ) {
+      browser.alarms.create(alarmName, {
+        periodInMinutes: settings.cloudSyncInterval * 60,
+      });
+      console.log(
+        `[FlowSearch] Cloud sync alarm set: every ${settings.cloudSyncInterval}h (${settings.cloudSyncProvider})`,
       );
     }
   }
@@ -999,6 +1035,28 @@ export default defineBackground(() => {
         console.error("[FlowSearch] Scheduled link check failed:", error);
       }
     }
+    if (alarm.name === "cloudSync") {
+      try {
+        const settings = await getSettings();
+        if (!settings.cloudSyncEnabled) return;
+        const provider = getCloudProvider(settings);
+        if (!provider) {
+          console.warn(
+            "[FlowSearch] Cloud sync alarm fired but provider unavailable",
+          );
+          return;
+        }
+        console.log(
+          `[FlowSearch] Running scheduled cloud sync (${provider.name})...`,
+        );
+        const result = await uploadCloudSync(provider);
+        console.log(
+          `[FlowSearch] Cloud sync uploaded ${result.size} bytes (fileId=${result.fileId})`,
+        );
+      } catch (error) {
+        console.error("[FlowSearch] Scheduled cloud sync failed:", error);
+      }
+    }
   });
 
   // 监听来自 Options 页面的消息
@@ -1317,6 +1375,97 @@ export default defineBackground(() => {
               askSettings.baseURL,
             );
             return { success: true, ...ragResult };
+          }
+          case "CLOUD_SYNC_TEST_CONNECTION": {
+            const provider = getCloudProvider({
+              cloudSyncProvider: message.provider,
+              cloudSyncToken: message.token,
+            });
+            if (!provider) {
+              return { success: false, error: "Provider not configured" };
+            }
+            try {
+              const ok = await testCloudConnection(provider);
+              return { success: ok };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error?.message || String(error),
+                code: error instanceof CloudSyncError ? error.code : "UNKNOWN",
+              };
+            }
+          }
+          case "CLOUD_SYNC_GET_STATUS": {
+            const settings = await getSettings();
+            const provider = getCloudProvider(settings);
+            if (!provider) {
+              return { success: false, error: "Provider not configured" };
+            }
+            try {
+              const status = await getCloudSyncStatus(provider);
+              return { success: true, ...status };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error?.message || String(error),
+                code: error instanceof CloudSyncError ? error.code : "UNKNOWN",
+              };
+            }
+          }
+          case "CLOUD_SYNC_UPLOAD": {
+            const settings = await getSettings();
+            const provider = getCloudProvider(settings);
+            if (!provider) {
+              return { success: false, error: "Provider not configured" };
+            }
+            try {
+              const result = await uploadCloudSync(provider);
+              return { success: true, ...result };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error?.message || String(error),
+                code: error instanceof CloudSyncError ? error.code : "UNKNOWN",
+              };
+            }
+          }
+          case "CLOUD_SYNC_DOWNLOAD": {
+            const settings = await getSettings();
+            const provider = getCloudProvider(settings);
+            if (!provider) {
+              return { success: false, error: "Provider not configured" };
+            }
+            try {
+              const result = await downloadCloudSync(provider);
+              return { success: true, ...result };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error?.message || String(error),
+                code: error instanceof CloudSyncError ? error.code : "UNKNOWN",
+              };
+            }
+          }
+          case "CLOUD_SYNC_DELETE": {
+            const settings = await getSettings();
+            const provider = getCloudProvider(settings);
+            if (!provider) {
+              return { success: false, error: "Provider not configured" };
+            }
+            try {
+              await deleteCloudSync(provider);
+              return { success: true };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error?.message || String(error),
+                code: error instanceof CloudSyncError ? error.code : "UNKNOWN",
+              };
+            }
+          }
+          case "CLOUD_SYNC_REFRESH_ALARM": {
+            await initCloudSyncAlarm();
+            return { success: true };
           }
           default:
             return { success: false, error: "Unknown message type" };

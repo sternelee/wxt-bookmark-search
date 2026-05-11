@@ -6,6 +6,7 @@ import GitHubSettings from "./components/GitHubSettings";
 import TwitterSettings from "./components/TwitterSettings";
 import HistorySettings from "./components/HistorySettings";
 import GistSyncSettings from "./components/GistSyncSettings";
+import CloudSyncSettings from "./components/CloudSyncSettings";
 import SearchSettings from "./components/SearchSettings";
 import LanguageSettings from "./components/LanguageSettings";
 import IndexManager from "./components/IndexManager";
@@ -48,6 +49,7 @@ function App() {
         <LanguageSettings />
         <SearchSettings />
         <GistSyncSettings />
+        <CloudSyncSettings />
         <HealthSettings />
         <DuplicateSettings />
         <CategorizeSettings />

@@ -193,6 +193,54 @@ export default {
       inProgress: "同期は既に進行中です",
     },
 
+    cloudSync: {
+      title: "☁️ クラウドベクター同期 (Google Drive / Dropbox)",
+      description:
+        "ブックマーク全データ + Orama ベクターインデックスをクラウドに同期します。Gist より効率的 (gzip 圧縮) で、端末を変えても再生成不要。",
+      providerLabel: "プロバイダ",
+      providerHint:
+        "クラウドを選択。プロバイダごとに専用のアクセストークンが必要です。",
+      providerNone: "— 無効 —",
+      tokenLabel: "アクセストークン",
+      tokenPlaceholder: "アクセストークンを貼り付け",
+      tokenHintGoogleDrive:
+        "Google Drive OAuth アクセストークン (scope: drive.file)。OAuth Playground 等から取得。",
+      tokenHintDropbox:
+        "Dropbox アプリのアクセストークン (Settings → Apps → 生成済みトークン)。",
+      intervalLabel: "自動アップロード間隔 (時間)",
+      intervalHint:
+        "自動同期が有効なら、N 時間ごとにバックグラウンドでアップロード。ダウンロードは常に手動。",
+      autoSyncLabel: "バックグラウンド自動アップロード",
+      autoSyncEnabled: "✓ クラウド自動同期を有効化",
+      autoSyncDisabled: "クラウド自動同期を無効化",
+      testButton: "⚡ 接続テスト",
+      uploadButton: "⬆️ 今すぐアップロード",
+      downloadButton: "⬇️ ダウンロードして置換",
+      deleteButton: "🗑️ リモートファイルを削除",
+      testing: "トークンをテスト中...",
+      testSuccess: "✓ 接続成功",
+      testFailed: "接続に失敗: {{error}}",
+      uploading: "同期データをアップロード中...",
+      uploadSuccess: "✓ アップロード完了 ({{size}})",
+      uploadFailed: "アップロード失敗: {{error}}",
+      downloading: "同期データをダウンロード中...",
+      downloadSuccess: "✓ クラウドから {{count}} 件のブックマークを復元",
+      downloadFailed: "ダウンロード失敗: {{error}}",
+      confirmDownloadTitle: "⬇️ ダウンロードと置換の確認",
+      confirmDownloadBody:
+        "ローカルのブックマーク + 検索インデックスがクラウドのデータで完全に置き換えられます。未アップロードのローカルデータは失われます。",
+      confirmDelete:
+        "リモート同期ファイルを削除しますか? ローカルデータは保持されますが、端末リンクはリセットされます。",
+      deleteSuccess: "✓ リモートファイルを削除しました",
+      deleteFailed: "削除失敗: {{error}}",
+      configRequired:
+        "プロバイダを選択しアクセストークンを貼り付けてください。",
+      remoteModified: "リモート更新日時",
+      deviceId: "デバイス ID",
+      showToken: "表示",
+      hideToken: "非表示",
+    },
+
     indexManager: {
       title: "⚙️ インデックスエンジン管理",
       scopeLabel: "インデックス範囲の選択",

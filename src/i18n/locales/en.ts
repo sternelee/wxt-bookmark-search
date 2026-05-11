@@ -190,6 +190,53 @@ export default {
       inProgress: "Sync is already in progress",
     },
 
+    cloudSync: {
+      title: "☁️ Cloud Vector Sync (Google Drive / Dropbox)",
+      description:
+        "Sync the full bookmark database + Orama vector index to your cloud drive. Faster than Gist (compressed gzip) and avoids re-embedding bookmarks on a new device.",
+      providerLabel: "Provider",
+      providerHint:
+        "Select cloud drive. Each provider requires its own access token.",
+      providerNone: "— Disabled —",
+      tokenLabel: "Access Token",
+      tokenPlaceholder: "Paste access token",
+      tokenHintGoogleDrive:
+        "Google Drive OAuth access token with scope drive.file. Get one from OAuth Playground or your own OAuth flow.",
+      tokenHintDropbox:
+        "Dropbox app access token (Settings → Apps → Generated access token).",
+      intervalLabel: "Auto-upload interval (hours)",
+      intervalHint:
+        "Background uploads every N hours when auto-sync is enabled. Downloads are always manual.",
+      autoSyncLabel: "Auto-upload in background",
+      autoSyncEnabled: "✓ Cloud auto-sync enabled",
+      autoSyncDisabled: "Cloud auto-sync disabled",
+      testButton: "⚡ Test Connection",
+      uploadButton: "⬆️ Upload Now",
+      downloadButton: "⬇️ Download & Replace",
+      deleteButton: "🗑️ Remove Remote File",
+      testing: "Testing token...",
+      testSuccess: "✓ Connection successful",
+      testFailed: "Connection failed: {{error}}",
+      uploading: "Uploading sync blob...",
+      uploadSuccess: "✓ Upload complete ({{size}})",
+      uploadFailed: "Upload failed: {{error}}",
+      downloading: "Downloading sync blob...",
+      downloadSuccess: "✓ Restored {{count}} bookmarks from cloud",
+      downloadFailed: "Download failed: {{error}}",
+      confirmDownloadTitle: "⬇️ Confirm Download & Replace",
+      confirmDownloadBody:
+        "This will replace ALL local bookmarks + the search index with the remote copy. Local-only data not yet uploaded will be lost.",
+      confirmDelete:
+        "Delete the remote sync file? Your local data stays intact, but the device link is reset.",
+      deleteSuccess: "✓ Remote file removed",
+      deleteFailed: "Delete failed: {{error}}",
+      configRequired: "Please choose a provider and paste an access token.",
+      remoteModified: "Remote modified",
+      deviceId: "Device ID",
+      showToken: "Show",
+      hideToken: "Hide",
+    },
+
     indexManager: {
       title: "⚙️ Index Engine Management",
       scopeLabel: "Index Scope Selection",

@@ -190,6 +190,54 @@ export default {
       inProgress: "동기화가 이미 진행 중입니다",
     },
 
+    cloudSync: {
+      title: "☁️ 클라우드 벡터 동기화 (Google Drive / Dropbox)",
+      description:
+        "전체 북마크 데이터 + Orama 벡터 인덱스를 클라우드 드라이브로 동기화합니다. Gist 보다 효율적 (gzip 압축) 이며, 기기를 변경해도 다시 임베딩할 필요가 없습니다.",
+      providerLabel: "제공자",
+      providerHint:
+        "클라우드를 선택하세요. 각 제공자에는 자체 액세스 토큰이 필요합니다.",
+      providerNone: "— 비활성화 —",
+      tokenLabel: "액세스 토큰",
+      tokenPlaceholder: "액세스 토큰 붙여넣기",
+      tokenHintGoogleDrive:
+        "Google Drive OAuth 액세스 토큰 (scope: drive.file). OAuth Playground 등에서 발급.",
+      tokenHintDropbox:
+        "Dropbox 앱 액세스 토큰 (Settings → Apps → 생성된 토큰).",
+      intervalLabel: "자동 업로드 간격 (시간)",
+      intervalHint:
+        "자동 동기화가 활성화되어 있으면 백그라운드에서 N 시간마다 업로드합니다. 다운로드는 항상 수동입니다.",
+      autoSyncLabel: "백그라운드 자동 업로드",
+      autoSyncEnabled: "✓ 클라우드 자동 동기화 활성화됨",
+      autoSyncDisabled: "클라우드 자동 동기화 비활성화됨",
+      testButton: "⚡ 연결 테스트",
+      uploadButton: "⬆️ 지금 업로드",
+      downloadButton: "⬇️ 다운로드 및 교체",
+      deleteButton: "🗑️ 원격 파일 삭제",
+      testing: "토큰 테스트 중...",
+      testSuccess: "✓ 연결 성공",
+      testFailed: "연결 실패: {{error}}",
+      uploading: "동기화 데이터 업로드 중...",
+      uploadSuccess: "✓ 업로드 완료 ({{size}})",
+      uploadFailed: "업로드 실패: {{error}}",
+      downloading: "동기화 데이터 다운로드 중...",
+      downloadSuccess: "✓ 클라우드에서 {{count}} 개의 북마크 복원",
+      downloadFailed: "다운로드 실패: {{error}}",
+      confirmDownloadTitle: "⬇️ 다운로드 및 교체 확인",
+      confirmDownloadBody:
+        "이 작업은 로컬 북마크 + 검색 인덱스를 원격 사본으로 완전히 교체합니다. 아직 업로드되지 않은 로컬 데이터는 손실됩니다.",
+      confirmDelete:
+        "원격 동기화 파일을 삭제할까요? 로컬 데이터는 보존되지만 기기 링크가 초기화됩니다.",
+      deleteSuccess: "✓ 원격 파일 삭제됨",
+      deleteFailed: "삭제 실패: {{error}}",
+      configRequired:
+        "제공자를 선택하고 액세스 토큰을 붙여넣으세요.",
+      remoteModified: "원격 수정 시간",
+      deviceId: "기기 ID",
+      showToken: "표시",
+      hideToken: "숨기기",
+    },
+
     indexManager: {
       title: "⚙️ 색인 엔진 관리",
       scopeLabel: "색인 범위 선택",

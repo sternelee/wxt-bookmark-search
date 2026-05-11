@@ -185,6 +185,52 @@ export default {
       inProgress: "同步正在进行中",
     },
 
+    cloudSync: {
+      title: "☁️ 云端向量同步（Google Drive / Dropbox）",
+      description:
+        "将完整书签数据 + Orama 向量索引同步到云盘。比 Gist 更高效（gzip 压缩），换设备无需重新生成向量。",
+      providerLabel: "云盘 Provider",
+      providerHint: "选择云盘，每个 Provider 需要各自的 Access Token。",
+      providerNone: "— 未启用 —",
+      tokenLabel: "Access Token",
+      tokenPlaceholder: "粘贴 Access Token",
+      tokenHintGoogleDrive:
+        "Google Drive OAuth Access Token，需要 drive.file 权限。可通过 OAuth Playground 或自建 OAuth 流程获取。",
+      tokenHintDropbox:
+        "Dropbox 应用 Access Token（设置 → Apps → 生成的访问令牌）。",
+      intervalLabel: "自动上传间隔（小时）",
+      intervalHint:
+        "启用自动同步后，后台每 N 小时上传一次。下载始终需手动触发。",
+      autoSyncLabel: "后台自动上传",
+      autoSyncEnabled: "✓ 云端自动同步已启用",
+      autoSyncDisabled: "已关闭云端自动同步",
+      testButton: "⚡ 测试连接",
+      uploadButton: "⬆️ 立即上传",
+      downloadButton: "⬇️ 下载并覆盖",
+      deleteButton: "🗑️ 删除云端文件",
+      testing: "正在测试 Token...",
+      testSuccess: "✓ 连接成功",
+      testFailed: "连接失败：{{error}}",
+      uploading: "正在上传同步包...",
+      uploadSuccess: "✓ 上传完成（{{size}}）",
+      uploadFailed: "上传失败：{{error}}",
+      downloading: "正在下载同步包...",
+      downloadSuccess: "✓ 已从云端恢复 {{count}} 条书签",
+      downloadFailed: "下载失败：{{error}}",
+      confirmDownloadTitle: "⬇️ 确认下载并覆盖",
+      confirmDownloadBody:
+        "本操作将用云端数据全量替换本地书签 + 搜索索引。尚未上传的本地数据会丢失。",
+      confirmDelete:
+        "确认删除云端同步文件？本地数据不受影响，但设备绑定会被清空。",
+      deleteSuccess: "✓ 云端文件已删除",
+      deleteFailed: "删除失败：{{error}}",
+      configRequired: "请先选择 Provider 并粘贴 Access Token。",
+      remoteModified: "云端最近修改",
+      deviceId: "设备 ID",
+      showToken: "显示",
+      hideToken: "隐藏",
+    },
+
     indexManager: {
       title: "⚙️ 索引引擎管理",
       scopeLabel: "索引范围选择",

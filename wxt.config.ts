@@ -4,12 +4,23 @@ export default defineConfig({
   modules: ["@wxt-dev/module-solid"],
   manifest: {
     name: "Flow Search",
-    permissions: ["storage", "tabs", "bookmarks", "cookies", "history", "alarms"],
+    permissions: [
+      "storage",
+      "tabs",
+      "bookmarks",
+      "cookies",
+      "history",
+      "alarms",
+    ],
     host_permissions: [
       "https://r.jina.ai/*",
       "https://x.com/*",
       "https://twitter.com/*",
-      "https://api.x.com/*"
+      "https://api.x.com/*",
+      "https://www.googleapis.com/*",
+      "https://content.googleapis.com/*",
+      "https://api.dropboxapi.com/*",
+      "https://content.dropboxapi.com/*",
     ],
     omnibox: { keyword: "bi" },
     trial_tokens: process.env.CHROME_AI_TRIAL_TOKEN
