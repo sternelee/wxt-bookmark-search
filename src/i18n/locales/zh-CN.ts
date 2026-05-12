@@ -190,7 +190,6 @@ export default {
       description:
         "将完整书签数据 + Orama 向量索引同步到云盘。比 Gist 更高效（gzip 压缩），换设备无需重新生成向量。",
       providerLabel: "云盘 Provider",
-      providerHint: "选择云盘，每个 Provider 需要各自的 Access Token。",
       providerNone: "— 未启用 —",
       tokenLabel: "Access Token",
       tokenPlaceholder: "粘贴 Access Token",
@@ -198,6 +197,17 @@ export default {
         "Google Drive OAuth Access Token，需要 drive.file 权限。可通过 OAuth Playground 或自建 OAuth 流程获取。",
       tokenHintDropbox:
         "Dropbox 应用 Access Token（设置 → Apps → 生成的访问令牌）。",
+      tokenHintWebdav:
+        "WebDAV 账户密码。密码仅保存在本地，用于 Basic Auth。",
+      webdavUrlLabel: "WebDAV URL",
+      webdavUrlPlaceholder:
+        "https://dav.example.com/remote.php/dav/files/user/",
+      webdavUrlHint:
+        "同步文件存放目录的 WebDAV URL，必须以 / 结尾。",
+      webdavUsernameLabel: "用户名",
+      webdavUsernamePlaceholder: "输入 WebDAV 用户名",
+      providerHint:
+        "选择云盘。Google Drive / Dropbox 需要 Access Token；WebDAV 需要 URL、用户名和密码。",
       intervalLabel: "自动上传间隔（小时）",
       intervalHint:
         "启用自动同步后，后台每 N 小时上传一次。下载始终需手动触发。",

@@ -195,8 +195,6 @@ export default {
       description:
         "전체 북마크 데이터 + Orama 벡터 인덱스를 클라우드 드라이브로 동기화합니다. Gist 보다 효율적 (gzip 압축) 이며, 기기를 변경해도 다시 임베딩할 필요가 없습니다.",
       providerLabel: "제공자",
-      providerHint:
-        "클라우드를 선택하세요. 각 제공자에는 자체 액세스 토큰이 필요합니다.",
       providerNone: "— 비활성화 —",
       tokenLabel: "액세스 토큰",
       tokenPlaceholder: "액세스 토큰 붙여넣기",
@@ -204,6 +202,17 @@ export default {
         "Google Drive OAuth 액세스 토큰 (scope: drive.file). OAuth Playground 등에서 발급.",
       tokenHintDropbox:
         "Dropbox 앱 액세스 토큰 (Settings → Apps → 생성된 토큰).",
+      tokenHintWebdav:
+        "WebDAV 계정 비밀번호입니다. 로컬에 저장되며 Basic Auth 에 사용됩니다.",
+      webdavUrlLabel: "WebDAV URL",
+      webdavUrlPlaceholder:
+        "https://dav.example.com/remote.php/dav/files/user/",
+      webdavUrlHint:
+        "동기화 파일을 저장할 WebDAV 디렉터리 URL 입니다. 반드시 / 로 끝나야 합니다.",
+      webdavUsernameLabel: "사용자 이름",
+      webdavUsernamePlaceholder: "WebDAV 사용자 이름 입력",
+      providerHint:
+        "제공자를 선택하세요. Google Drive / Dropbox 는 액세스 토큰이, WebDAV 는 URL·사용자 이름·비밀번호가 필요합니다.",
       intervalLabel: "자동 업로드 간격 (시간)",
       intervalHint:
         "자동 동기화가 활성화되어 있으면 백그라운드에서 N 시간마다 업로드합니다. 다운로드는 항상 수동입니다.",

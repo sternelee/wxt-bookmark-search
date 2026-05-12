@@ -198,8 +198,6 @@ export default {
       description:
         "ブックマーク全データ + Orama ベクターインデックスをクラウドに同期します。Gist より効率的 (gzip 圧縮) で、端末を変えても再生成不要。",
       providerLabel: "プロバイダ",
-      providerHint:
-        "クラウドを選択。プロバイダごとに専用のアクセストークンが必要です。",
       providerNone: "— 無効 —",
       tokenLabel: "アクセストークン",
       tokenPlaceholder: "アクセストークンを貼り付け",
@@ -207,6 +205,17 @@ export default {
         "Google Drive OAuth アクセストークン (scope: drive.file)。OAuth Playground 等から取得。",
       tokenHintDropbox:
         "Dropbox アプリのアクセストークン (Settings → Apps → 生成済みトークン)。",
+      tokenHintWebdav:
+        "WebDAV アカウントのパスワード。ローカルに保存され、Basic Auth に使用されます。",
+      webdavUrlLabel: "WebDAV URL",
+      webdavUrlPlaceholder:
+        "https://dav.example.com/remote.php/dav/files/user/",
+      webdavUrlHint:
+        "同期ファイルを保存する WebDAV ディレクトリ URL。末尾は / で終える必要があります。",
+      webdavUsernameLabel: "ユーザー名",
+      webdavUsernamePlaceholder: "WebDAV ユーザー名を入力",
+      providerHint:
+        "プロバイダを選択。Google Drive / Dropbox はアクセストークン、WebDAV は URL・ユーザー名・パスワードが必要です。",
       intervalLabel: "自動アップロード間隔 (時間)",
       intervalHint:
         "自動同期が有効なら、N 時間ごとにバックグラウンドでアップロード。ダウンロードは常に手動。",

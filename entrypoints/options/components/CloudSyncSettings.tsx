@@ -337,10 +337,11 @@ export default function CloudSyncSettings() {
     const p = provider();
     if (p === "google-drive") return t("options.cloudSync.tokenHintGoogleDrive");
     if (p === "dropbox") return t("options.cloudSync.tokenHintDropbox");
-    if (p === "webdav")
-      return "Enter your WebDAV account password. Password is stored locally.";
+    if (p === "webdav") return t("options.cloudSync.tokenHintWebdav");
     return "";
   };
+
+  const providerHint = () => t("options.cloudSync.providerHint");
 
   return (
     <Card class="mb-6">
@@ -357,25 +358,25 @@ export default function CloudSyncSettings() {
           options={providerOptions()}
           value={provider()}
           onChange={handleProviderChange}
-          hint={t("options.cloudSync.providerHint")}
+          hint={providerHint()}
         />
 
         <Show when={!!provider()}>
           {/* WebDAV URL + Username */}
           <Show when={provider() === "webdav"}>
             <Input
-              label="WebDAV URL"
+              label={t("options.cloudSync.webdavUrlLabel")}
               type="url"
-              placeholder="https://dav.example.com/remote.php/dav/files/user/"
+              placeholder={t("options.cloudSync.webdavUrlPlaceholder")}
               value={webdavUrl()}
               onInput={(e) => setWebdavUrl(e.currentTarget.value)}
               onBlur={handleWebdavUrlBlur}
-              hint="The directory URL where sync files will be stored. Must end with /"
+              hint={t("options.cloudSync.webdavUrlHint")}
             />
             <Input
-              label="Username"
+              label={t("options.cloudSync.webdavUsernameLabel")}
               type="text"
-              placeholder="user"
+              placeholder={t("options.cloudSync.webdavUsernamePlaceholder")}
               value={webdavUsername()}
               onInput={(e) => setWebdavUsername(e.currentTarget.value)}
               onBlur={handleTokenBlur}

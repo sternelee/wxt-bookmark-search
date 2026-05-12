@@ -195,8 +195,6 @@ export default {
       description:
         "Sync the full bookmark database + Orama vector index to your cloud drive. Faster than Gist (compressed gzip) and avoids re-embedding bookmarks on a new device.",
       providerLabel: "Provider",
-      providerHint:
-        "Select cloud drive. Each provider requires its own access token.",
       providerNone: "— Disabled —",
       tokenLabel: "Access Token",
       tokenPlaceholder: "Paste access token",
@@ -204,6 +202,17 @@ export default {
         "Google Drive OAuth access token with scope drive.file. Get one from OAuth Playground or your own OAuth flow.",
       tokenHintDropbox:
         "Dropbox app access token (Settings → Apps → Generated access token).",
+      tokenHintWebdav:
+        "WebDAV account password. Stored locally and used for Basic Auth.",
+      webdavUrlLabel: "WebDAV URL",
+      webdavUrlPlaceholder:
+        "https://dav.example.com/remote.php/dav/files/user/",
+      webdavUrlHint:
+        "The WebDAV directory URL where sync files will be stored. Must end with /.",
+      webdavUsernameLabel: "Username",
+      webdavUsernamePlaceholder: "Enter WebDAV username",
+      providerHint:
+        "Select provider. Google Drive / Dropbox need an access token; WebDAV needs URL, username, and password.",
       intervalLabel: "Auto-upload interval (hours)",
       intervalHint:
         "Background uploads every N hours when auto-sync is enabled. Downloads are always manual.",
