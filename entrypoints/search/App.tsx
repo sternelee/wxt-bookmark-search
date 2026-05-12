@@ -214,6 +214,15 @@ function App() {
               ◌
             </span>
           </Show>
+          <button
+            type="button"
+            class="shrink-0 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1"
+            title="标签云探索"
+            onClick={() => browser.tabs.create({ url: (browser.runtime.getURL as any)("/graph.html") })}
+          >
+            🗺
+            <span class="text-xs hidden sm:inline">探索</span>
+          </button>
         </div>
         <p class="text-xs text-muted-foreground max-w-3xl mx-auto mt-1 pl-9">
           {t("search.syntaxHint")}：

@@ -1467,6 +1467,11 @@ export default defineBackground(() => {
             await initCloudSyncAlarm();
             return { success: true };
           }
+          case "GET_ALL_INDEXED": {
+            const { getAllIndexedRecords } = await import("../src/db");
+            const records = await getAllIndexedRecords();
+            return { success: true, records };
+          }
           default:
             return { success: false, error: "Unknown message type" };
         }
