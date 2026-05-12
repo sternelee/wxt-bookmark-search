@@ -12,7 +12,7 @@ import { Select } from "../../../src/components/ui/select";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
-type ProviderValue = "" | "google-drive" | "dropbox";
+type ProviderValue = "" | "google-drive" | "dropbox" | "webdav";
 
 export default function CloudSyncSettings() {
   const { t } = useI18n();
@@ -20,6 +20,8 @@ export default function CloudSyncSettings() {
   const [provider, setProvider] = createSignal<ProviderValue>("");
   const [token, setToken] = createSignal("");
   const [showToken, setShowToken] = createSignal(false);
+  const [webdavUrl, setWebdavUrl] = createSignal("");
+  const [webdavUsername, setWebdavUsername] = createSignal("");
   const [enabled, setEnabled] = createSignal(false);
   const [interval, setIntervalH] = createSignal(24);
   const [lastSync, setLastSync] = createSignal<string | null>(null);
@@ -46,7 +48,7 @@ export default function CloudSyncSettings() {
   const refreshRemote = async () => {
     setRemoteSize(null);
     setRemoteModifiedAt(null);
-    if (!provider() || !token()) return;
+    if (!provider() || !hasTokenOrPassword()) return;
     try {
       const res = await browser.runtime.sendMessage({
         type: "CLOUD_SYNC_GET_STATUS",
@@ -66,6 +68,8 @@ export default function CloudSyncSettings() {
     const settings = await getSettings();
     setProvider((settings.cloudSyncProvider as ProviderValue) || "");
     setToken(settings.cloudSyncToken || "");
+    setWebdavUrl(settings.cloudSyncWebdavUrl || "");
+    setWebdavUsername(settings.cloudSyncWebdavUsername || "");
     setEnabled(!!settings.cloudSyncEnabled);
     setIntervalH(settings.cloudSyncInterval ?? 24);
     if (settings.lastCloudSync) {
@@ -75,13 +79,25 @@ export default function CloudSyncSettings() {
     await refreshRemote();
   });
 
+  /** 当前 provider 是否有足够的凭证 */
+  const hasTokenOrPassword = (): boolean => {
+    const p = provider();
+    if (p === "webdav") {
+      return !!webdavUrl() && !!webdavUsername() && !!token();
+    }
+    return !!token();
+  };
+
   const persistConfig = async () => {
     await saveSettings({
       cloudSyncProvider: (provider() || null) as
         | "google-drive"
         | "dropbox"
+        | "webdav"
         | null,
       cloudSyncToken: token() || undefined,
+      cloudSyncWebdavUrl: webdavUrl() || undefined,
+      cloudSyncWebdavUsername: webdavUsername() || undefined,
       cloudSyncEnabled: enabled(),
       cloudSyncInterval: interval(),
     });
@@ -96,6 +112,15 @@ export default function CloudSyncSettings() {
   };
 
   const handleTokenBlur = async () => {
+    await persistConfig();
+  };
+
+  const handleWebdavUrlBlur = async () => {
+    let url = webdavUrl().trim();
+    if (url) {
+      if (!url.endsWith("/")) url += "/";
+    }
+    setWebdavUrl(url);
     await persistConfig();
   };
 
@@ -122,7 +147,7 @@ export default function CloudSyncSettings() {
   };
 
   const handleTest = async () => {
-    if (!provider() || !token()) {
+    if (!provider() || !hasTokenOrPassword()) {
       setStatus({
         message: t("options.cloudSync.configRequired"),
         type: "error",
@@ -136,6 +161,9 @@ export default function CloudSyncSettings() {
         type: "CLOUD_SYNC_TEST_CONNECTION",
         provider: provider(),
         token: token(),
+        ...(provider() === "webdav"
+          ? { webdavUrl: webdavUrl(), webdavUsername: webdavUsername() }
+          : {}),
       });
       if (res?.success) {
         setStatus({
@@ -162,7 +190,7 @@ export default function CloudSyncSettings() {
   };
 
   const handleUpload = async () => {
-    if (!provider() || !token()) {
+    if (!provider() || !hasTokenOrPassword()) {
       setStatus({
         message: t("options.cloudSync.configRequired"),
         type: "error",
@@ -207,7 +235,7 @@ export default function CloudSyncSettings() {
   };
 
   const confirmDownload = () => {
-    if (!provider() || !token()) {
+    if (!provider() || !hasTokenOrPassword()) {
       setStatus({
         message: t("options.cloudSync.configRequired"),
         type: "error",
@@ -255,7 +283,7 @@ export default function CloudSyncSettings() {
   };
 
   const handleDelete = async () => {
-    if (!provider() || !token()) return;
+    if (!provider() || !hasTokenOrPassword()) return;
     if (!confirm(t("options.cloudSync.confirmDelete"))) return;
     setIsDeleting(true);
     try {
@@ -294,7 +322,25 @@ export default function CloudSyncSettings() {
     { value: "", label: t("options.cloudSync.providerNone") },
     { value: "google-drive", label: "Google Drive" },
     { value: "dropbox", label: "Dropbox" },
+    { value: "webdav", label: "WebDAV (Nextcloud / ownCloud / etc.)" },
   ];
+
+  const tokenLabel = () => {
+    const p = provider();
+    if (p === "google-drive") return "Access Token";
+    if (p === "dropbox") return "Access Token";
+    if (p === "webdav") return "Password";
+    return t("options.cloudSync.tokenLabel");
+  };
+
+  const tokenHint = () => {
+    const p = provider();
+    if (p === "google-drive") return t("options.cloudSync.tokenHintGoogleDrive");
+    if (p === "dropbox") return t("options.cloudSync.tokenHintDropbox");
+    if (p === "webdav")
+      return "Enter your WebDAV account password. Password is stored locally.";
+    return "";
+  };
 
   return (
     <Card class="mb-6">
@@ -315,19 +361,36 @@ export default function CloudSyncSettings() {
         />
 
         <Show when={!!provider()}>
+          {/* WebDAV URL + Username */}
+          <Show when={provider() === "webdav"}>
+            <Input
+              label="WebDAV URL"
+              type="url"
+              placeholder="https://dav.example.com/remote.php/dav/files/user/"
+              value={webdavUrl()}
+              onInput={(e) => setWebdavUrl(e.currentTarget.value)}
+              onBlur={handleWebdavUrlBlur}
+              hint="The directory URL where sync files will be stored. Must end with /"
+            />
+            <Input
+              label="Username"
+              type="text"
+              placeholder="user"
+              value={webdavUsername()}
+              onInput={(e) => setWebdavUsername(e.currentTarget.value)}
+              onBlur={handleTokenBlur}
+            />
+          </Show>
+
           <div class="relative">
             <Input
-              label={t("options.cloudSync.tokenLabel")}
+              label={tokenLabel()}
               type={showToken() ? "text" : "password"}
               placeholder={t("options.cloudSync.tokenPlaceholder")}
               value={token()}
               onInput={(e) => setToken(e.currentTarget.value)}
               onBlur={handleTokenBlur}
-              hint={
-                provider() === "google-drive"
-                  ? t("options.cloudSync.tokenHintGoogleDrive")
-                  : t("options.cloudSync.tokenHintDropbox")
-              }
+              hint={tokenHint()}
             />
             <button
               type="button"

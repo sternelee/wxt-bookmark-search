@@ -155,11 +155,15 @@ export interface Settings {
   /** AI 自动分类：分类名 → 浏览器文件夹 ID 映射 */
   categoryFolderMap?: Record<string, string>;
 
-  // 云盘同步（Google Drive / Dropbox）— 同步 Orama 索引 + 全部 BookmarkRecord
+  // 云盘同步（Google Drive / Dropbox / WebDAV）— 同步 Orama 索引 + 全部 BookmarkRecord
   /** 启用的云盘 provider；null/undefined 表示未启用 */
-  cloudSyncProvider?: "google-drive" | "dropbox" | null;
-  /** 手动 access token */
+  cloudSyncProvider?: "google-drive" | "dropbox" | "webdav" | null;
+  /** 手动 access token（Google Drive / Dropbox） */
   cloudSyncToken?: string;
+  /** WebDAV 基础 URL（目录 URL，例如 https://dav.example.com/remote.php/dav/files/user/flow-search/ ） */
+  cloudSyncWebdavUrl?: string;
+  /** WebDAV 用户名 */
+  cloudSyncWebdavUsername?: string;
   /** 自动定时上传开关 */
   cloudSyncEnabled?: boolean;
   /** 自动上传间隔（小时），默认 24 */

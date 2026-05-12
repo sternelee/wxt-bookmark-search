@@ -5,6 +5,7 @@
 import { getSettings, saveSettings } from "../db";
 import { createDropboxProvider } from "./dropbox";
 import { createGoogleDriveProvider } from "./google-drive";
+import { createWebDAVProvider } from "./webdav";
 import {
   buildSyncBlob,
   deserializeSyncBlob,
@@ -51,16 +52,36 @@ export interface CloudRemoteStatus {
  */
 export function getCloudProvider(settings: {
   cloudSyncProvider?: CloudProviderName | null;
-  cloudSyncToken?: string;
+  cloudSyncToken?: string;         // Dropbox/Google token; also WebDAV password
+  cloudSyncWebdavUrl?: string;
+  cloudSyncWebdavUsername?: string;
 }): CloudProvider | null {
   const name = settings.cloudSyncProvider;
-  const token = settings.cloudSyncToken;
-  if (!name || !token) return null;
+  if (!name) return null;
   switch (name) {
-    case "google-drive":
-      return createGoogleDriveProvider(token);
-    case "dropbox":
-      return createDropboxProvider(token);
+    case "google-drive": {
+      if (!settings.cloudSyncToken) return null;
+      return createGoogleDriveProvider(settings.cloudSyncToken);
+    }
+    case "dropbox": {
+      if (!settings.cloudSyncToken) return null;
+      return createDropboxProvider(settings.cloudSyncToken);
+    }
+    case "webdav": {
+      const { cloudSyncWebdavUrl, cloudSyncWebdavUsername, cloudSyncToken } =
+        settings;
+      if (
+        !cloudSyncWebdavUrl ||
+        !cloudSyncWebdavUsername ||
+        !cloudSyncToken
+      )
+        return null;
+      return createWebDAVProvider(
+        cloudSyncWebdavUrl,
+        cloudSyncWebdavUsername,
+        cloudSyncToken,
+      );
+    }
     default:
       return null;
   }

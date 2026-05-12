@@ -1377,15 +1377,20 @@ export default defineBackground(() => {
             return { success: true, ...ragResult };
           }
           case "CLOUD_SYNC_TEST_CONNECTION": {
-            const provider = getCloudProvider({
-              cloudSyncProvider: message.provider,
-              cloudSyncToken: message.token,
+            // 从 settings 读取完整配置（WebDAV 多字段也在 settings 中持久化）
+            const testSettings = await getSettings();
+            // 优先使用 message 中的值，fallback 到 settings
+            const testProvider = getCloudProvider({
+              cloudSyncProvider: message.provider || testSettings.cloudSyncProvider,
+              cloudSyncToken: message.token || testSettings.cloudSyncToken,
+              cloudSyncWebdavUrl: message.webdavUrl || testSettings.cloudSyncWebdavUrl,
+              cloudSyncWebdavUsername: message.webdavUsername || testSettings.cloudSyncWebdavUsername,
             });
-            if (!provider) {
+            if (!testProvider) {
               return { success: false, error: "Provider not configured" };
             }
             try {
-              const ok = await testCloudConnection(provider);
+              const ok = await testCloudConnection(testProvider);
               return { success: ok };
             } catch (error: any) {
               return {

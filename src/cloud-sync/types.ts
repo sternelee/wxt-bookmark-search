@@ -5,7 +5,7 @@ import type { RawData } from "@orama/orama";
 import type { BookmarkRecord, SearchMode } from "../types";
 
 /** Provider 名称 */
-export type CloudProviderName = "google-drive" | "dropbox";
+export type CloudProviderName = "google-drive" | "dropbox" | "webdav";
 
 /** 远程文件元信息 */
 export interface CloudFileInfo {
