@@ -17,6 +17,7 @@ export default {
     confirm: "Confirm",
     cancel: "Cancel",
     delete: "🗑️ Delete Bookmark",
+    deleting: "Deleting...",
     start: "🚀 Start Full / Incremental Index",
     startFolder: "🚀 Index {{count}} Selected Folder(s)",
     pause: "⏸️ Pause",
@@ -190,60 +191,129 @@ export default {
       inProgress: "Sync is already in progress",
     },
 
-    cloudSync: {
-      title: "☁️ Cloud Vector Sync (Google Drive / Dropbox)",
+    webdavBookmark: {
+      title: "☁️ WebDAV Bookmark Sync",
       description:
-        "Sync the full bookmark database + Orama vector index to your cloud drive. Faster than Gist (compressed gzip) and avoids re-embedding bookmarks on a new device.",
+        "Sync browser bookmarks across devices via WebDAV. Supports Nextcloud / ownCloud / Nginx WebDAV / Caddy WebDAV, etc.",
+      urlLabel: "WebDAV Directory URL",
+      urlPlaceholder: "https://dav.example.com/remote.php/dav/files/user/",
+      urlHint: "Directory where bookmark sync files are stored. Must end with /.",
+      usernameLabel: "Username",
+      usernamePlaceholder: "Enter WebDAV username",
+      passwordLabel: "Password",
+      passwordPlaceholder: "Enter WebDAV password",
+      passwordHint: "Password is stored locally and used for Basic Auth.",
+      autoSync: "Auto-sync (auto-upload 5s after bookmark changes)",
+      autoSyncEnabled: "✓ WebDAV bookmark auto-sync enabled",
+      autoSyncDisabled: "WebDAV bookmark auto-sync disabled",
+      testButton: "⚡ Test Connection",
+      testing: "Testing WebDAV connection...",
+      testSuccess: "✓ WebDAV connection successful",
+      testFailed: "Connection failed: {{error}}",
+      configRequired: "Please fill in WebDAV URL, username and password.",
+      syncInfo: "Syncing bookmarks to WebDAV...",
+      syncSuccess:
+        "✓ Sync complete! +{{added}} added, -{{removed}} removed, {{uploaded}} total",
+      syncFailed: "Sync failed: {{error}}",
+      confirmUploadTitle: "⬆️ Confirm Upload Overwrite",
+      confirmUploadBody:
+        "This will replace remote WebDAV content with local bookmarks. Remote-only bookmarks will be lost. This action cannot be undone.",
+      confirmDownloadTitle: "⬇️ Confirm Download Overwrite",
+      confirmDownloadBody:
+        "This will replace local bookmarks with remote WebDAV content. Local-only bookmarks will be deleted. This action cannot be undone.",
+      uploadInfo: "Uploading local bookmarks to overwrite WebDAV...",
+      uploadSuccess:
+        "✓ Upload complete! {{uploaded}} bookmarks overwritten to WebDAV",
+      downloadInfo: "Downloading WebDAV to overwrite local bookmarks...",
+      downloadSuccess:
+        "✓ Download complete! +{{added}} bookmarks restored, {{removed}} local items cleared",
+      uploadFailed: "Upload failed: {{error}}",
+      downloadFailed: "Download failed: {{error}}",
+    },
+
+    cloudSync: {
+      title: "☁️ Cloud Sync (Google Drive / Dropbox / WebDAV)",
+      description:
+        "Configure a single cloud provider to sync both the vector database and browser bookmark tree. Supports Google Drive, Dropbox, and WebDAV.",
       providerLabel: "Provider",
       providerNone: "— Disabled —",
       tokenLabel: "Access Token",
       tokenPlaceholder: "Paste access token",
       tokenHintGoogleDrive:
-        "Google Drive OAuth access token with scope drive.file. Get one from OAuth Playground or your own OAuth flow.",
+        "Google Drive OAuth access token with scope drive.file.",
       tokenHintDropbox:
         "Dropbox app access token (Settings → Apps → Generated access token).",
       tokenHintWebdav:
-        "WebDAV account password. Stored locally and used for Basic Auth.",
+        "WebDAV account password. Stored locally for Basic Auth.",
       webdavUrlLabel: "WebDAV URL",
       webdavUrlPlaceholder:
         "https://dav.example.com/remote.php/dav/files/user/",
       webdavUrlHint:
-        "The WebDAV directory URL where sync files will be stored. Must end with /.",
+        "Directory where sync files will be stored. Must end with /.",
       webdavUsernameLabel: "Username",
       webdavUsernamePlaceholder: "Enter WebDAV username",
       providerHint:
-        "Select provider. Google Drive / Dropbox need an access token; WebDAV needs URL, username, and password.",
-      intervalLabel: "Auto-upload interval (hours)",
+        "Google Drive / Dropbox need an access token; WebDAV needs URL, username, and password.",
+      intervalLabel: "Auto-sync interval (hours)",
       intervalHint:
-        "Background uploads every N hours when auto-sync is enabled. Downloads are always manual.",
-      autoSyncLabel: "Auto-upload in background",
-      autoSyncEnabled: "✓ Cloud auto-sync enabled",
-      autoSyncDisabled: "Cloud auto-sync disabled",
+        "Background sync every N hours for enabled content types.",
+      autoSyncLabel: "Enable auto-sync",
+      autoSyncEnabled: "✓ Auto-sync enabled",
+      autoSyncDisabled: "Auto-sync disabled",
       testButton: "⚡ Test Connection",
-      uploadButton: "⬆️ Upload Now",
-      downloadButton: "⬇️ Download & Replace",
-      deleteButton: "🗑️ Remove Remote File",
-      testing: "Testing token...",
+      deleteButton: "🗑️ Remove Remote Files",
+      testing: "Testing connection...",
       testSuccess: "✓ Connection successful",
       testFailed: "Connection failed: {{error}}",
-      uploading: "Uploading sync blob...",
-      uploadSuccess: "✓ Upload complete ({{size}})",
-      uploadFailed: "Upload failed: {{error}}",
-      downloading: "Downloading sync blob...",
-      downloadSuccess: "✓ Restored {{count}} bookmarks from cloud",
-      downloadFailed: "Download failed: {{error}}",
-      confirmDownloadTitle: "⬇️ Confirm Download & Replace",
-      confirmDownloadBody:
-        "This will replace ALL local bookmarks + the search index with the remote copy. Local-only data not yet uploaded will be lost.",
-      confirmDelete:
-        "Delete the remote sync file? Your local data stays intact, but the device link is reset.",
-      deleteSuccess: "✓ Remote file removed",
-      deleteFailed: "Delete failed: {{error}}",
-      configRequired: "Please choose a provider and paste an access token.",
+      configRequired: "Please select a provider and fill in credentials.",
       remoteModified: "Remote modified",
       deviceId: "Device ID",
       showToken: "Show",
       hideToken: "Hide",
+
+      // Sync content toggles
+      vectorSyncLabel: "Sync vector database (Orama index + embeddings)",
+      bookmarksSyncLabel: "Sync browser bookmark tree",
+      vectorEnabled: "Vector sync enabled",
+      vectorDisabled: "Vector sync disabled",
+      bookmarksEnabled: "Bookmark sync enabled",
+      bookmarksDisabled: "Bookmark sync disabled",
+
+      // Vector operations
+      vectorSection: "📦 Vector Database",
+      uploadVectorButton: "⬆️ Upload Vectors",
+      downloadVectorButton: "⬇️ Download Vectors",
+      uploadingVector: "Uploading vector database...",
+      downloadingVector: "Downloading vector database...",
+      uploadSuccess: "✓ Upload complete ({{size}})",
+      uploadFailed: "Upload failed: {{error}}",
+      downloadSuccess: "✓ Restored {{count}} records",
+      downloadFailed: "Download failed: {{error}}",
+      confirmVectorDownloadTitle: "⬇️ Confirm Download Vectors",
+      confirmVectorDownloadBody:
+        "This will replace the local vector database with the remote copy. Unsynced local data will be lost.",
+
+      // Bookmark operations
+      bookmarksSection: "🔖 Browser Bookmarks",
+      syncBookmarksButton: "🔄 Two-way Sync",
+      uploadBookmarksButton: "⬆️ Upload Overwrite",
+      downloadBookmarksButton: "⬇️ Download Overwrite",
+      syncingBookmarks: "Syncing bookmarks...",
+      uploadingBookmarks: "Uploading bookmarks...",
+      downloadingBookmarks: "Downloading bookmarks...",
+      bookmarkSyncSuccess: "✓ Sync complete! +{{added}} added, -{{removed}} removed, {{uploaded}} total",
+      bookmarkSyncFailed: "Sync failed: {{error}}",
+      bookmarkUploadSuccess: "✓ Upload complete! {{uploaded}} bookmarks overwritten",
+      bookmarkUploadFailed: "Upload failed: {{error}}",
+      bookmarkDownloadSuccess: "✓ Download complete! +{{added}} restored, {{removed}} cleared",
+      bookmarkDownloadFailed: "Download failed: {{error}}",
+      confirmBookmarksDownloadTitle: "⬇️ Confirm Download Bookmarks",
+      confirmBookmarksDownloadBody:
+        "This will replace local bookmarks with the remote copy. Local-only bookmarks will be deleted. This action cannot be undone.",
+      confirmDelete:
+        "Delete the remote sync files? Your local data stays intact, but the device link is reset.",
+      deleteSuccess: "✓ Remote files removed",
+      deleteFailed: "Delete failed: {{error}}",
     },
 
     indexManager: {

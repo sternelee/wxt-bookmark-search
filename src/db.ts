@@ -288,6 +288,9 @@ const defaultSettings: Settings = {
   gistId: undefined,
   gistDeviceId: undefined,
   lastGistSync: undefined,
+
+  cloudSyncVectorEnabled: true,
+  cloudSyncBookmarksEnabled: false,
   historySyncEnabled: false,
   historyDays: 30,
   language: "en",

@@ -65,7 +65,7 @@ export async function recordBookmarkDeletion(
 }
 
 /** 从删除记录中移除指定键（同步完成后清理） */
-async function removeFromDeletedBookmarks(keys: string[]): Promise<void> {
+export async function removeFromDeletedBookmarks(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
   const keySet = new Set(keys);
   const entries = await getDeletedBookmarks();
@@ -346,7 +346,7 @@ export function mergeBookmarks(
 }
 
 /** 深拷贝书签树，排除指定 URL */
-function cloneTreeExcluding(
+export function cloneTreeExcluding(
   nodes: GistBookmarkNode[],
   excludeUrls: Set<string>,
 ): GistBookmarkNode[] {
@@ -361,7 +361,7 @@ function cloneTreeExcluding(
 }
 
 /** 从树中过滤掉指定 key 的节点 */
-function filterTreeByKey(
+export function filterTreeByKey(
   nodes: GistBookmarkNode[],
   removeKeys: Set<string>,
   folderPath: string[] = [],
@@ -502,7 +502,7 @@ export async function fullGistSync(
 }
 
 /** 统计树中的书签 URL 数量 */
-function countUrls(nodes: GistBookmarkNode[]): number {
+export function countUrls(nodes: GistBookmarkNode[]): number {
   let count = 0;
   for (const node of nodes) {
     if (node.url) count++;
@@ -514,7 +514,7 @@ function countUrls(nodes: GistBookmarkNode[]): number {
 // === 全量覆盖辅助函数 ===
 
 /** 递归收集 Gist 树中的所有叶子书签节点及其路径 */
-function collectLeafNodes(
+export function collectLeafNodes(
   nodes: GistBookmarkNode[],
   folderPath: string[] = [],
   result: Array<{ node: GistBookmarkNode; folderPath: string[] }> = [],
@@ -533,7 +533,7 @@ function collectLeafNodes(
 }
 
 /** 清空本地可写根目录下的内容（保留根目录文件夹本身） */
-async function clearLocalBookmarks(
+export async function clearLocalBookmarks(
   localTree: BrowserBookmarkNode[],
   removeTree: (id: string) => Promise<void>,
 ): Promise<number> {

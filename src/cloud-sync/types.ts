@@ -102,8 +102,11 @@ export class CloudSyncError extends Error {
   }
 }
 
-/** 远程文件名 */
+/** 远程文件名（向量数据库同步） */
 export const CLOUD_SYNC_FILENAME = "flow-search-sync.json.gz";
+
+/** 远程文件名（书签树同步） */
+export const CLOUD_SYNC_BOOKMARK_FILENAME = "flow-search-bookmarks.json";
 
 /** 单次上传大小硬上限（防止 OOM 或异常数据） */
 export const MAX_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB

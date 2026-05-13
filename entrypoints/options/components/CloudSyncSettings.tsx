@@ -24,6 +24,8 @@ export default function CloudSyncSettings() {
   const [webdavUsername, setWebdavUsername] = createSignal("");
   const [enabled, setEnabled] = createSignal(false);
   const [interval, setIntervalH] = createSignal(24);
+  const [vectorEnabled, setVectorEnabled] = createSignal(true);
+  const [bookmarksEnabled, setBookmarksEnabled] = createSignal(false);
   const [lastSync, setLastSync] = createSignal<string | null>(null);
   const [deviceId, setDeviceId] = createSignal<string | null>(null);
   const [remoteSize, setRemoteSize] = createSignal<number | null>(null);
@@ -35,10 +37,20 @@ export default function CloudSyncSettings() {
     type: "success" | "error" | "info";
   } | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
-  const [isUploading, setIsUploading] = createSignal(false);
-  const [isDownloading, setIsDownloading] = createSignal(false);
+
+  // 向量操作
+  const [isUploadingVector, setIsUploadingVector] = createSignal(false);
+  const [isDownloadingVector, setIsDownloadingVector] = createSignal(false);
+  const [pendingVectorDownload, setPendingVectorDownload] = createSignal(false);
+
+  // 书签操作
+  const [isSyncingBookmarks, setIsSyncingBookmarks] = createSignal(false);
+  const [isUploadingBookmarks, setIsUploadingBookmarks] = createSignal(false);
+  const [isDownloadingBookmarks, setIsDownloadingBookmarks] = createSignal(false);
+  const [pendingBookmarkDownload, setPendingBookmarkDownload] = createSignal(false);
+
+  // 删除操作
   const [isDeleting, setIsDeleting] = createSignal(false);
-  const [pendingDownload, setPendingDownload] = createSignal(false);
 
   const formatError = (error: unknown): string => {
     if (error instanceof Error) return error.message;
@@ -71,6 +83,8 @@ export default function CloudSyncSettings() {
     setWebdavUrl(settings.cloudSyncWebdavUrl || "");
     setWebdavUsername(settings.cloudSyncWebdavUsername || "");
     setEnabled(!!settings.cloudSyncEnabled);
+    setVectorEnabled(settings.cloudSyncVectorEnabled ?? true);
+    setBookmarksEnabled(settings.cloudSyncBookmarksEnabled ?? false);
     setIntervalH(settings.cloudSyncInterval ?? 24);
     if (settings.lastCloudSync) {
       setLastSync(new Date(settings.lastCloudSync).toLocaleString());
@@ -79,7 +93,6 @@ export default function CloudSyncSettings() {
     await refreshRemote();
   });
 
-  /** 当前 provider 是否有足够的凭证 */
   const hasTokenOrPassword = (): boolean => {
     const p = provider();
     if (p === "webdav") {
@@ -100,6 +113,8 @@ export default function CloudSyncSettings() {
       cloudSyncWebdavUsername: webdavUsername() || undefined,
       cloudSyncEnabled: enabled(),
       cloudSyncInterval: interval(),
+      cloudSyncVectorEnabled: vectorEnabled(),
+      cloudSyncBookmarksEnabled: bookmarksEnabled(),
     });
   };
 
@@ -133,7 +148,31 @@ export default function CloudSyncSettings() {
     await browser.runtime.sendMessage({ type: "CLOUD_SYNC_REFRESH_ALARM" });
   };
 
-  const handleToggle = async () => {
+  const handleVectorToggle = async () => {
+    const v = !vectorEnabled();
+    setVectorEnabled(v);
+    await persistConfig();
+    setStatus({
+      message: v
+        ? t("options.cloudSync.vectorEnabled")
+        : t("options.cloudSync.vectorDisabled"),
+      type: "info",
+    });
+  };
+
+  const handleBookmarksToggle = async () => {
+    const v = !bookmarksEnabled();
+    setBookmarksEnabled(v);
+    await persistConfig();
+    setStatus({
+      message: v
+        ? t("options.cloudSync.bookmarksEnabled")
+        : t("options.cloudSync.bookmarksDisabled"),
+      type: "info",
+    });
+  };
+
+  const handleAutoSyncToggle = async () => {
     const v = !enabled();
     setEnabled(v);
     await persistConfig();
@@ -189,7 +228,9 @@ export default function CloudSyncSettings() {
     }
   };
 
-  const handleUpload = async () => {
+  // === 向量操作 ===
+
+  const handleUploadVector = async () => {
     if (!provider() || !hasTokenOrPassword()) {
       setStatus({
         message: t("options.cloudSync.configRequired"),
@@ -197,8 +238,8 @@ export default function CloudSyncSettings() {
       });
       return;
     }
-    setIsUploading(true);
-    setStatus({ message: t("options.cloudSync.uploading"), type: "info" });
+    setIsUploadingVector(true);
+    setStatus({ message: t("options.cloudSync.uploadingVector"), type: "info" });
     try {
       const res = await browser.runtime.sendMessage({
         type: "CLOUD_SYNC_UPLOAD",
@@ -212,8 +253,6 @@ export default function CloudSyncSettings() {
           type: "success",
         });
         await refreshRemote();
-        const s = await getSettings();
-        if (s.cloudSyncDeviceId) setDeviceId(s.cloudSyncDeviceId);
       } else {
         setStatus({
           message: t("options.cloudSync.uploadFailed", {
@@ -230,25 +269,18 @@ export default function CloudSyncSettings() {
         type: "error",
       });
     } finally {
-      setIsUploading(false);
+      setIsUploadingVector(false);
     }
   };
 
-  const confirmDownload = () => {
-    if (!provider() || !hasTokenOrPassword()) {
-      setStatus({
-        message: t("options.cloudSync.configRequired"),
-        type: "error",
-      });
-      return;
-    }
-    setPendingDownload(true);
+  const confirmDownloadVector = () => {
+    setPendingVectorDownload(true);
   };
 
-  const executeDownload = async () => {
-    setPendingDownload(false);
-    setIsDownloading(true);
-    setStatus({ message: t("options.cloudSync.downloading"), type: "info" });
+  const executeDownloadVector = async () => {
+    setPendingVectorDownload(false);
+    setIsDownloadingVector(true);
+    setStatus({ message: t("options.cloudSync.downloadingVector"), type: "info" });
     try {
       const res = await browser.runtime.sendMessage({
         type: "CLOUD_SYNC_DOWNLOAD",
@@ -278,7 +310,133 @@ export default function CloudSyncSettings() {
         type: "error",
       });
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingVector(false);
+    }
+  };
+
+  // === 书签操作 ===
+
+  const handleSyncBookmarks = async () => {
+    if (!provider() || !hasTokenOrPassword()) {
+      setStatus({
+        message: t("options.cloudSync.configRequired"),
+        type: "error",
+      });
+      return;
+    }
+    setIsSyncingBookmarks(true);
+    setStatus({ message: t("options.cloudSync.syncingBookmarks"), type: "info" });
+    try {
+      const res = await browser.runtime.sendMessage({
+        type: "CLOUD_SYNC_BOOKMARK_SYNC",
+      });
+      if (res?.success) {
+        setStatus({
+          message: t("options.cloudSync.bookmarkSyncSuccess", {
+            added: res.added,
+            removed: res.removed,
+            uploaded: res.uploaded,
+          }),
+          type: "success",
+        });
+      } else {
+        setStatus({
+          message: t("options.cloudSync.bookmarkSyncFailed", {
+            error: res?.error || "Unknown",
+          }),
+          type: "error",
+        });
+      }
+    } catch (e) {
+      setStatus({
+        message: t("options.cloudSync.bookmarkSyncFailed", {
+          error: formatError(e),
+        }),
+        type: "error",
+      });
+    } finally {
+      setIsSyncingBookmarks(false);
+    }
+  };
+
+  const handleUploadBookmarks = async () => {
+    if (!provider() || !hasTokenOrPassword()) {
+      setStatus({
+        message: t("options.cloudSync.configRequired"),
+        type: "error",
+      });
+      return;
+    }
+    setIsUploadingBookmarks(true);
+    setStatus({ message: t("options.cloudSync.uploadingBookmarks"), type: "info" });
+    try {
+      const res = await browser.runtime.sendMessage({
+        type: "CLOUD_SYNC_BOOKMARK_UPLOAD",
+      });
+      if (res?.success) {
+        setStatus({
+          message: t("options.cloudSync.bookmarkUploadSuccess", {
+            uploaded: res.uploaded,
+          }),
+          type: "success",
+        });
+      } else {
+        setStatus({
+          message: t("options.cloudSync.bookmarkUploadFailed", {
+            error: res?.error || "Unknown",
+          }),
+          type: "error",
+        });
+      }
+    } catch (e) {
+      setStatus({
+        message: t("options.cloudSync.bookmarkUploadFailed", {
+          error: formatError(e),
+        }),
+        type: "error",
+      });
+    } finally {
+      setIsUploadingBookmarks(false);
+    }
+  };
+
+  const confirmDownloadBookmarks = () => {
+    setPendingBookmarkDownload(true);
+  };
+
+  const executeDownloadBookmarks = async () => {
+    setPendingBookmarkDownload(false);
+    setIsDownloadingBookmarks(true);
+    setStatus({ message: t("options.cloudSync.downloadingBookmarks"), type: "info" });
+    try {
+      const res = await browser.runtime.sendMessage({
+        type: "CLOUD_SYNC_BOOKMARK_DOWNLOAD",
+      });
+      if (res?.success) {
+        setStatus({
+          message: t("options.cloudSync.bookmarkDownloadSuccess", {
+            added: res.added,
+            removed: res.removed,
+          }),
+          type: "success",
+        });
+      } else {
+        setStatus({
+          message: t("options.cloudSync.bookmarkDownloadFailed", {
+            error: res?.error || "Unknown",
+          }),
+          type: "error",
+        });
+      }
+    } catch (e) {
+      setStatus({
+        message: t("options.cloudSync.bookmarkDownloadFailed", {
+          error: formatError(e),
+        }),
+        type: "error",
+      });
+    } finally {
+      setIsDownloadingBookmarks(false);
     }
   };
 
@@ -417,11 +575,37 @@ export default function CloudSyncSettings() {
             hint={t("options.cloudSync.intervalHint")}
           />
 
+          {/* 同步内容开关 */}
+          <div class="space-y-2 mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={vectorEnabled()}
+                onChange={handleVectorToggle}
+                class="w-4 h-4 rounded"
+              />
+              <span class="text-sm">
+                {t("options.cloudSync.vectorSyncLabel")}
+              </span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bookmarksEnabled()}
+                onChange={handleBookmarksToggle}
+                class="w-4 h-4 rounded"
+              />
+              <span class="text-sm">
+                {t("options.cloudSync.bookmarksSyncLabel")}
+              </span>
+            </label>
+          </div>
+
           <label class="flex items-center gap-2 cursor-pointer mb-4">
             <input
               type="checkbox"
               checked={enabled()}
-              onChange={handleToggle}
+              onChange={handleAutoSyncToggle}
               class="w-4 h-4 rounded"
             />
             <span class="text-sm">
@@ -437,55 +621,138 @@ export default function CloudSyncSettings() {
             </Button>
             <Button
               variant="outline"
-              onClick={handleUpload}
-              disabled={isUploading()}
-            >
-              {isUploading()
-                ? t("common.uploading")
-                : t("options.cloudSync.uploadButton")}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={confirmDownload}
-              disabled={isDownloading()}
-            >
-              {isDownloading()
-                ? t("common.downloading")
-                : t("options.cloudSync.downloadButton")}
-            </Button>
-            <Button
-              variant="outline"
               onClick={handleDelete}
               disabled={isDeleting()}
             >
-              {t("options.cloudSync.deleteButton")}
+              {isDeleting()
+                ? t("common.deleting")
+                : t("options.cloudSync.deleteButton")}
             </Button>
           </div>
 
-          <Show when={pendingDownload()}>
-            <div class="mb-4 p-4 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
-              <p class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
-                {t("options.cloudSync.confirmDownloadTitle")}
+          {/* 向量操作 */}
+          <Show when={vectorEnabled()}>
+            <div class="border-t pt-4 mt-4">
+              <p class="text-sm font-medium mb-3">
+                {t("options.cloudSync.vectorSection")}
               </p>
-              <p class="text-sm text-amber-800 dark:text-amber-200 mb-3">
-                {t("options.cloudSync.confirmDownloadBody")}
-              </p>
-              <div class="flex gap-2">
+              <div class="flex gap-2 flex-wrap mb-4">
                 <Button
+                  variant="outline"
+                  onClick={handleUploadVector}
+                  disabled={isUploadingVector()}
                   size="sm"
-                  onClick={executeDownload}
-                  disabled={isDownloading()}
                 >
-                  {t("common.confirm")}
+                  {isUploadingVector()
+                    ? t("common.uploading")
+                    : t("options.cloudSync.uploadVectorButton")}
                 </Button>
                 <Button
-                  size="sm"
                   variant="outline"
-                  onClick={() => setPendingDownload(false)}
+                  onClick={confirmDownloadVector}
+                  disabled={isDownloadingVector()}
+                  size="sm"
                 >
-                  {t("common.cancel")}
+                  {isDownloadingVector()
+                    ? t("common.downloading")
+                    : t("options.cloudSync.downloadVectorButton")}
                 </Button>
               </div>
+
+              <Show when={pendingVectorDownload()}>
+                <div class="mb-4 p-4 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+                  <p class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                    {t("options.cloudSync.confirmVectorDownloadTitle")}
+                  </p>
+                  <p class="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                    {t("options.cloudSync.confirmVectorDownloadBody")}
+                  </p>
+                  <div class="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={executeDownloadVector}
+                      disabled={isDownloadingVector()}
+                    >
+                      {t("common.confirm")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPendingVectorDownload(false)}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
+          {/* 书签操作 */}
+          <Show when={bookmarksEnabled()}>
+            <div class="border-t pt-4 mt-4">
+              <p class="text-sm font-medium mb-3">
+                {t("options.cloudSync.bookmarksSection")}
+              </p>
+              <div class="flex gap-2 flex-wrap mb-4">
+                <Button
+                  variant="outline"
+                  onClick={handleSyncBookmarks}
+                  disabled={isSyncingBookmarks()}
+                  size="sm"
+                >
+                  {isSyncingBookmarks()
+                    ? t("common.syncing")
+                    : t("options.cloudSync.syncBookmarksButton")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleUploadBookmarks}
+                  disabled={isUploadingBookmarks()}
+                  size="sm"
+                >
+                  {isUploadingBookmarks()
+                    ? t("common.uploading")
+                    : t("options.cloudSync.uploadBookmarksButton")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={confirmDownloadBookmarks}
+                  disabled={isDownloadingBookmarks()}
+                  size="sm"
+                >
+                  {isDownloadingBookmarks()
+                    ? t("common.downloading")
+                    : t("options.cloudSync.downloadBookmarksButton")}
+                </Button>
+              </div>
+
+              <Show when={pendingBookmarkDownload()}>
+                <div class="mb-4 p-4 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+                  <p class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                    {t("options.cloudSync.confirmBookmarksDownloadTitle")}
+                  </p>
+                  <p class="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                    {t("options.cloudSync.confirmBookmarksDownloadBody")}
+                  </p>
+                  <div class="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={executeDownloadBookmarks}
+                      disabled={isDownloadingBookmarks()}
+                    >
+                      {t("common.confirm")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPendingBookmarkDownload(false)}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              </Show>
             </div>
           </Show>
         </Show>

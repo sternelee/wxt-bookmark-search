@@ -17,6 +17,7 @@ export default {
     confirm: "确认执行",
     cancel: "取消",
     delete: "🗑️ 删除书签",
+    deleting: "删除中...",
     start: "🚀 开始全量/增量索引",
     startFolder: "🚀 索引选中的 {{count}} 个文件夹",
     pause: "⏸️ 暂停",
@@ -185,60 +186,127 @@ export default {
       inProgress: "同步正在进行中",
     },
 
-    cloudSync: {
-      title: "☁️ 云端向量同步（Google Drive / Dropbox）",
+    webdavBookmark: {
+      title: "☁️ WebDAV 书签同步",
       description:
-        "将完整书签数据 + Orama 向量索引同步到云盘。比 Gist 更高效（gzip 压缩），换设备无需重新生成向量。",
+        "通过 WebDAV 协议在多设备间同步浏览器书签树。支持 Nextcloud / ownCloud / Nginx WebDAV / Caddy WebDAV 等。",
+      urlLabel: "WebDAV 目录 URL",
+      urlPlaceholder: "https://dav.example.com/remote.php/dav/files/user/",
+      urlHint: "书签同步文件存放目录，必须以 / 结尾。",
+      usernameLabel: "用户名",
+      usernamePlaceholder: "输入 WebDAV 用户名",
+      passwordLabel: "密码",
+      passwordPlaceholder: "输入 WebDAV 密码",
+      passwordHint: "密码仅保存在本地，用于 Basic Auth。",
+      autoSync: "自动同步（书签变更后 5 秒自动上传）",
+      autoSyncEnabled: "✓ WebDAV 书签自动同步已启用",
+      autoSyncDisabled: "WebDAV 书签自动同步已关闭",
+      testButton: "⚡ 测试连接",
+      testing: "正在测试 WebDAV 连接...",
+      testSuccess: "✓ WebDAV 连接成功",
+      testFailed: "连接失败：{{error}}",
+      configRequired: "请填写 WebDAV URL、用户名和密码。",
+      syncInfo: "正在同步书签到 WebDAV...",
+      syncSuccess:
+        "✓ 同步完成！+{{added}} 新增, -{{removed}} 删除, {{uploaded}} 总计",
+      syncFailed: "同步失败：{{error}}",
+      confirmUploadTitle: "⬆️ 确认上传覆盖",
+      confirmUploadBody:
+        "将用本地书签全量替换 WebDAV 远程内容。远程独有的书签将会丢失，此操作不可撤销。",
+      confirmDownloadTitle: "⬇️ 确认下载覆盖",
+      confirmDownloadBody:
+        "将用 WebDAV 远程内容全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
+      uploadInfo: "正在上传本地书签覆盖 WebDAV...",
+      uploadSuccess: "✓ 上传覆盖完成！{{uploaded}} 个书签已覆盖到 WebDAV",
+      downloadInfo: "正在从 WebDAV 下载覆盖本地书签...",
+      downloadSuccess:
+        "✓ 下载覆盖完成！+{{added}} 个书签已恢复，{{removed}} 个本地项目已清空",
+      uploadFailed: "上传失败：{{error}}",
+      downloadFailed: "下载失败：{{error}}",
+    },
+
+    cloudSync: {
+      title: "☁️ 云端同步（Google Drive / Dropbox / WebDAV）",
+      description:
+        "统一配置云盘 Provider，分别同步向量数据库和浏览器书签树。支持 Google Drive、Dropbox 和 WebDAV。",
       providerLabel: "云盘 Provider",
       providerNone: "— 未启用 —",
       tokenLabel: "Access Token",
       tokenPlaceholder: "粘贴 Access Token",
       tokenHintGoogleDrive:
-        "Google Drive OAuth Access Token，需要 drive.file 权限。可通过 OAuth Playground 或自建 OAuth 流程获取。",
+        "Google Drive OAuth Access Token，需要 drive.file 权限。",
       tokenHintDropbox:
         "Dropbox 应用 Access Token（设置 → Apps → 生成的访问令牌）。",
       tokenHintWebdav:
-        "WebDAV 账户密码。密码仅保存在本地，用于 Basic Auth。",
+        "WebDAV 账户密码。仅保存在本地，用于 Basic Auth。",
       webdavUrlLabel: "WebDAV URL",
       webdavUrlPlaceholder:
         "https://dav.example.com/remote.php/dav/files/user/",
-      webdavUrlHint:
-        "同步文件存放目录的 WebDAV URL，必须以 / 结尾。",
+      webdavUrlHint: "同步文件存放目录，必须以 / 结尾。",
       webdavUsernameLabel: "用户名",
       webdavUsernamePlaceholder: "输入 WebDAV 用户名",
       providerHint:
-        "选择云盘。Google Drive / Dropbox 需要 Access Token；WebDAV 需要 URL、用户名和密码。",
-      intervalLabel: "自动上传间隔（小时）",
+        "Google Drive / Dropbox 需要 Access Token；WebDAV 需要 URL、用户名和密码。",
+      intervalLabel: "自动同步间隔（小时）",
       intervalHint:
-        "启用自动同步后，后台每 N 小时上传一次。下载始终需手动触发。",
-      autoSyncLabel: "后台自动上传",
-      autoSyncEnabled: "✓ 云端自动同步已启用",
-      autoSyncDisabled: "已关闭云端自动同步",
+        "后台每 N 小时自动同步已勾选的内容。",
+      autoSyncLabel: "启用自动同步",
+      autoSyncEnabled: "✓ 自动同步已启用",
+      autoSyncDisabled: "自动同步已关闭",
       testButton: "⚡ 测试连接",
-      uploadButton: "⬆️ 立即上传",
-      downloadButton: "⬇️ 下载并覆盖",
       deleteButton: "🗑️ 删除云端文件",
-      testing: "正在测试 Token...",
+      testing: "正在测试连接...",
       testSuccess: "✓ 连接成功",
       testFailed: "连接失败：{{error}}",
-      uploading: "正在上传同步包...",
-      uploadSuccess: "✓ 上传完成（{{size}}）",
-      uploadFailed: "上传失败：{{error}}",
-      downloading: "正在下载同步包...",
-      downloadSuccess: "✓ 已从云端恢复 {{count}} 条书签",
-      downloadFailed: "下载失败：{{error}}",
-      confirmDownloadTitle: "⬇️ 确认下载并覆盖",
-      confirmDownloadBody:
-        "本操作将用云端数据全量替换本地书签 + 搜索索引。尚未上传的本地数据会丢失。",
-      confirmDelete:
-        "确认删除云端同步文件？本地数据不受影响，但设备绑定会被清空。",
-      deleteSuccess: "✓ 云端文件已删除",
-      deleteFailed: "删除失败：{{error}}",
-      configRequired: "请先选择 Provider 并粘贴 Access Token。",
+      configRequired: "请先选择 Provider 并填写凭证。",
       remoteModified: "云端最近修改",
       deviceId: "设备 ID",
       showToken: "显示",
       hideToken: "隐藏",
+
+      // 同步内容开关
+      vectorSyncLabel: "同步向量数据库（Orama 索引 + 书签向量）",
+      bookmarksSyncLabel: "同步浏览器书签树",
+      vectorEnabled: "向量同步已启用",
+      vectorDisabled: "向量同步已关闭",
+      bookmarksEnabled: "书签同步已启用",
+      bookmarksDisabled: "书签同步已关闭",
+
+      // 向量操作
+      vectorSection: "📦 向量数据库",
+      uploadVectorButton: "⬆️ 上传向量",
+      downloadVectorButton: "⬇️ 下载向量",
+      uploadingVector: "正在上传向量数据库...",
+      downloadingVector: "正在下载向量数据库...",
+      uploadSuccess: "✓ 上传完成（{{size}}）",
+      uploadFailed: "上传失败：{{error}}",
+      downloadSuccess: "✓ 已恢复 {{count}} 条数据",
+      downloadFailed: "下载失败：{{error}}",
+      confirmVectorDownloadTitle: "⬇️ 确认下载向量数据库",
+      confirmVectorDownloadBody:
+        "将用云端向量数据库全量替换本地数据。尚未上传的本地数据会丢失。",
+
+      // 书签操作
+      bookmarksSection: "🔖 浏览器书签",
+      syncBookmarksButton: "🔄 双向同步",
+      uploadBookmarksButton: "⬆️ 上传覆盖",
+      downloadBookmarksButton: "⬇️ 下载覆盖",
+      syncingBookmarks: "正在同步书签...",
+      uploadingBookmarks: "正在上传书签...",
+      downloadingBookmarks: "正在下载书签...",
+      bookmarkSyncSuccess: "✓ 同步完成！+{{added}} 新增, -{{removed}} 删除, {{uploaded}} 总计",
+      bookmarkSyncFailed: "同步失败：{{error}}",
+      bookmarkUploadSuccess: "✓ 上传完成！{{uploaded}} 个书签已覆盖",
+      bookmarkUploadFailed: "上传失败：{{error}}",
+      bookmarkDownloadSuccess: "✓ 下载完成！+{{added}} 个书签已恢复，{{removed}} 个本地项目已清空",
+      bookmarkDownloadFailed: "下载失败：{{error}}",
+      confirmBookmarksDownloadTitle: "⬇️ 确认下载书签",
+      confirmBookmarksDownloadBody:
+        "将用云端书签全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
+      confirmDelete:
+        "确认删除云端同步文件？本地数据不受影响，但设备绑定会被清空。",
+      deleteSuccess: "✓ 云端文件已删除",
+      deleteFailed: "删除失败：{{error}}",
     },
 
     indexManager: {

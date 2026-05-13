@@ -24,6 +24,7 @@ export function createWebDAVProvider(
   serverUrl: string,
   username: string,
   password: string,
+  filename: string = CLOUD_SYNC_FILENAME,
 ): CloudProvider {
   if (!serverUrl || !username || !password) {
     throw new CloudSyncError("WebDAV configuration incomplete", "AUTH");
@@ -31,7 +32,6 @@ export function createWebDAVProvider(
 
   // 确保 serverUrl 以 / 结尾
   const baseUrl = serverUrl.endsWith("/") ? serverUrl : serverUrl + "/";
-  const fileUrl = baseUrl + encodeURIComponent(CLOUD_SYNC_FILENAME);
   const authHeader = "Basic " + btoa(`${username}:${password}`);
 
   return {
@@ -55,13 +55,14 @@ export function createWebDAVProvider(
     },
 
     async getFileInfo(
-      _filename: string,
+      targetFilename: string,
       _fileId?: string,
       signal?: AbortSignal,
     ): Promise<CloudFileInfo | null> {
+      const targetFileUrl = baseUrl + encodeURIComponent(targetFilename);
       // PROPFIND depth:0 获取文件元信息
       const res = await fetchWithRetry(
-        fileUrl,
+        targetFileUrl,
         {
           method: "PROPFIND",
           headers: {
@@ -93,22 +94,23 @@ export function createWebDAVProvider(
       const size = parseContentLength(text);
 
       return {
-        fileId: fileUrl,
-        name: CLOUD_SYNC_FILENAME,
+        fileId: targetFileUrl,
+        name: targetFilename,
         modifiedAt,
         size,
       };
     },
 
     async upload(
-      _filename: string,
+      targetFilename: string,
       data: Uint8Array,
       _existingFileId?: string,
       signal?: AbortSignal,
     ): Promise<CloudUploadResult> {
+      const targetFileUrl = baseUrl + encodeURIComponent(targetFilename);
       // PUT 直接覆写（WebDAV PUT 语义天然幂等）
       const res = await fetchWithRetry(
-        fileUrl,
+        targetFileUrl,
         {
           method: "PUT",
           headers: {
@@ -137,18 +139,18 @@ export function createWebDAVProvider(
 
       // PUT 响应通常无 body，用当前时间作为 modifiedAt
       return {
-        fileId: fileUrl,
+        fileId: targetFileUrl,
         uploadedAt: Date.now(),
         size: data.byteLength,
       };
     },
 
     async download(
-      _fileId: string,
+      fileId: string,
       signal?: AbortSignal,
     ): Promise<CloudDownloadResult> {
       const res = await fetchWithRetry(
-        fileUrl,
+        fileId,
         {
           method: "GET",
           headers: { Authorization: authHeader },
@@ -182,9 +184,9 @@ export function createWebDAVProvider(
       return { data: new Uint8Array(buf), modifiedAt };
     },
 
-    async deleteFile(_fileId: string, signal?: AbortSignal): Promise<void> {
+    async deleteFile(fileId: string, signal?: AbortSignal): Promise<void> {
       const res = await fetchWithRetry(
-        fileUrl,
+        fileId,
         {
           method: "DELETE",
           headers: { Authorization: authHeader },

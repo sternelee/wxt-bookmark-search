@@ -24,6 +24,12 @@ import {
 
 export type { CloudProvider, CloudProviderName } from "./types";
 export { CloudSyncError } from "./types";
+export {
+  syncCloudBookmarks,
+  uploadCloudBookmarks,
+  downloadCloudBookmarks,
+  ensureDeviceId as ensureCloudBookmarkDeviceId,
+} from "./bookmark-sync";
 
 /** 上传结果 */
 export interface CloudUploadOutcome {

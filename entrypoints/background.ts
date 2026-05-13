@@ -62,6 +62,12 @@ import {
   downloadFromGist,
 } from "../src/gist-sync";
 import {
+  syncCloudBookmarks,
+  uploadCloudBookmarks,
+  downloadCloudBookmarks,
+  ensureCloudBookmarkDeviceId,
+} from "../src/cloud-sync";
+import {
   getPreferredBookmarkRoot,
   resolveBookmarkRootFolder,
 } from "../src/bookmarkRoots";
@@ -100,6 +106,13 @@ let isSyncingGist = false;
 let gistSyncLock = false;
 /** 同步进行中若又有本地变更，完成后补一次同步，避免丢事件 */
 let pendingGistSync = false;
+
+// 云端书签同步防抖状态（复用 cloudSync provider 配置）
+const CLOUD_BOOKMARK_SYNC_DEBOUNCE_MS = 5000;
+let cloudBookmarkSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let isSyncingCloudBookmarks = false;
+let cloudBookmarkSyncLock = false;
+let pendingCloudBookmarkSync = false;
 
 /**
  * 判断字符串是否为可直接导航的 URL（http/https）
@@ -629,17 +642,101 @@ export default defineBackground(() => {
     return result!;
   }
 
-  // 监听书签变更 → 触发 Gist 同步
+  // === 云端书签同步（复用 cloudSync provider） ===
+
+  /** 触发 debounced 云端书签同步（5 秒合并多次事件） */
+  function scheduleDebouncedCloudBookmarkSync(): void {
+    if (cloudBookmarkSyncLock || isSyncingCloudBookmarks) {
+      pendingCloudBookmarkSync = true;
+      return;
+    }
+    if (cloudBookmarkSyncTimer) clearTimeout(cloudBookmarkSyncTimer);
+    cloudBookmarkSyncTimer = setTimeout(() => {
+      cloudBookmarkSyncTimer = null;
+      triggerCloudBookmarkSync().catch((err) => {
+        console.error("[cloud-bookmark-sync] Auto sync failed:", err);
+      });
+    }, CLOUD_BOOKMARK_SYNC_DEBOUNCE_MS);
+  }
+
+  /** 执行云端书签同步 */
+  async function triggerCloudBookmarkSync(
+    force = false,
+  ): Promise<{
+    added: number;
+    removed: number;
+    uploaded: number;
+  }> {
+    const settings = await getSettings();
+    if (!settings.cloudSyncBookmarksEnabled && !force) {
+      throw new Error("Cloud bookmark sync not enabled");
+    }
+
+    const provider = getCloudProvider(settings);
+    if (!provider) {
+      throw new Error("Cloud provider not configured");
+    }
+
+    if (isSyncingCloudBookmarks) {
+      throw new Error("Cloud bookmark sync already in progress");
+    }
+
+    isSyncingCloudBookmarks = true;
+    let result: { added: number; removed: number; uploaded: number };
+
+    try {
+      const deviceId = await ensureCloudBookmarkDeviceId(
+        settings.cloudSyncDeviceId,
+      );
+      if (!settings.cloudSyncDeviceId) {
+        await saveSettings({ cloudSyncDeviceId: deviceId });
+      }
+
+      const tree = await browser.bookmarks.getTree();
+
+      cloudBookmarkSyncLock = true;
+      try {
+        result = await syncCloudBookmarks(
+          provider,
+          deviceId,
+          tree,
+          async (folderPath, node) => {
+            await createBookmarkFromGistPath(folderPath, node);
+          },
+        );
+
+        console.log(
+          `[cloud-bookmark-sync] Sync complete: +${result.added} -${result.removed}, uploaded ${result.uploaded} bookmarks`,
+        );
+      } finally {
+        cloudBookmarkSyncLock = false;
+      }
+    } finally {
+      isSyncingCloudBookmarks = false;
+    }
+
+    if (pendingCloudBookmarkSync) {
+      pendingCloudBookmarkSync = false;
+      queueMicrotask(() => scheduleDebouncedCloudBookmarkSync());
+    }
+
+    return result!;
+  }
+
+  // 监听书签变更 → 触发 Gist 同步 + 云端书签同步
   browser.bookmarks.onCreated.addListener(() => {
     scheduleDebouncedGistSync();
+    scheduleDebouncedCloudBookmarkSync();
   });
 
   browser.bookmarks.onChanged.addListener(() => {
     scheduleDebouncedGistSync();
+    scheduleDebouncedCloudBookmarkSync();
   });
 
   browser.bookmarks.onMoved.addListener(() => {
     scheduleDebouncedGistSync();
+    scheduleDebouncedCloudBookmarkSync();
   });
 
   browser.bookmarks.onRemoved.addListener(async (_id, removeInfo) => {
@@ -692,6 +789,7 @@ export default defineBackground(() => {
       console.warn("[gist-sync] Failed to record deleted bookmark:", error);
     }
     scheduleDebouncedGistSync();
+    scheduleDebouncedCloudBookmarkSync();
   });
 
   // Omnibox 交互
@@ -1049,10 +1147,18 @@ export default defineBackground(() => {
         console.log(
           `[FlowSearch] Running scheduled cloud sync (${provider.name})...`,
         );
-        const result = await uploadCloudSync(provider);
-        console.log(
-          `[FlowSearch] Cloud sync uploaded ${result.size} bytes (fileId=${result.fileId})`,
-        );
+        if (settings.cloudSyncVectorEnabled) {
+          const result = await uploadCloudSync(provider);
+          console.log(
+            `[FlowSearch] Cloud vector sync uploaded ${result.size} bytes`,
+          );
+        }
+        if (settings.cloudSyncBookmarksEnabled) {
+          const result = await triggerCloudBookmarkSync(true);
+          console.log(
+            `[FlowSearch] Cloud bookmark sync +${result.added} -${result.removed}, ${result.uploaded} total`,
+          );
+        }
       } catch (error) {
         console.error("[FlowSearch] Scheduled cloud sync failed:", error);
       }
@@ -1219,6 +1325,70 @@ export default defineBackground(() => {
             );
             await saveSettings({ lastGistSync: Date.now() });
             return { success: true, ...downloadResult };
+          }
+          case "CLOUD_SYNC_BOOKMARK_SYNC": {
+            try {
+              const result = await triggerCloudBookmarkSync(true);
+              return { success: true, ...result };
+            } catch (e: any) {
+              return {
+                success: false,
+                error: e?.message || String(e),
+              };
+            }
+          }
+          case "CLOUD_SYNC_BOOKMARK_UPLOAD": {
+            try {
+              const bmSettings = await getSettings();
+              const provider = getCloudProvider(bmSettings);
+              if (!provider) {
+                return { success: false, error: "Provider not configured" };
+              }
+              const deviceId = await ensureCloudBookmarkDeviceId(
+                bmSettings.cloudSyncDeviceId,
+              );
+              if (!bmSettings.cloudSyncDeviceId) {
+                await saveSettings({ cloudSyncDeviceId: deviceId });
+              }
+              const localTree = await browser.bookmarks.getTree();
+              const result = await uploadCloudBookmarks(
+                provider,
+                deviceId,
+                localTree,
+              );
+              return { success: true, ...result };
+            } catch (e: any) {
+              return {
+                success: false,
+                error: e?.message || String(e),
+              };
+            }
+          }
+          case "CLOUD_SYNC_BOOKMARK_DOWNLOAD": {
+            try {
+              const bmDownSettings = await getSettings();
+              const provider = getCloudProvider(bmDownSettings);
+              if (!provider) {
+                return { success: false, error: "Provider not configured" };
+              }
+              const localTree = await browser.bookmarks.getTree();
+              const result = await downloadCloudBookmarks(
+                provider,
+                localTree,
+                async (id: string) => {
+                  await browser.bookmarks.removeTree(id);
+                },
+                async (folderPath, node) => {
+                  await createBookmarkFromGistPath(folderPath, node);
+                },
+              );
+              return { success: true, ...result };
+            } catch (e: any) {
+              return {
+                success: false,
+                error: e?.message || String(e),
+              };
+            }
           }
           case "CHECK_LINKS": {
             const result = await checkLinks();

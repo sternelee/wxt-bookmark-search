@@ -128,6 +128,10 @@ export interface Settings {
   gistDeviceId?: string; // 本设备 UUID
   lastGistSync?: number; // 上次同步时间戳
 
+  // 云端同步内容开关（统一 provider 配置下，分别控制同步内容）
+  cloudSyncVectorEnabled?: boolean; // 同步向量数据库（Orama 索引 + BookmarkRecord）
+  cloudSyncBookmarksEnabled?: boolean; // 同步浏览器书签树
+
   // 浏览历史同步配置
   historySyncEnabled?: boolean; // 是否启用历史同步
   historyDays?: number; // 同步最近 N 天，默认 30
