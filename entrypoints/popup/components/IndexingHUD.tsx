@@ -13,8 +13,9 @@ interface IndexingHUDProps {
 export default function IndexingHUD(props: IndexingHUDProps) {
   const { t } = useI18n();
   const percentage = () => {
+    if (props.progress.total <= 0) return 0;
     return Math.round(
-      (props.progress.processed / (props.progress.total || 1)) * 100
+      (props.progress.processed / props.progress.total) * 100
     );
   };
 

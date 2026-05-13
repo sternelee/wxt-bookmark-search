@@ -1542,21 +1542,47 @@ export async function initIndexer(): Promise<void> {
   // === 恢复索引队列 ===
   try {
     const persistedQueue = await db.indexQueue.toArray();
-    for (const item of persistedQueue) {
-      if (!queue.some((j) => j.bookmarkId === item.bookmarkId)) {
-        queue.push({
-          bookmarkId: item.bookmarkId,
-          url: item.url,
-          title: item.title,
-          retryCount: item.retryCount,
-        });
-      }
-    }
     if (persistedQueue.length > 0) {
-      console.log(
-        `[indexer] Restored ${persistedQueue.length} items from persistent queue`,
-      );
-      processQueue();
+      // 获取已索引的 URL，跳过已完成的条目
+      const urlsToCheck = persistedQueue.map((i) => i.url);
+      const indexedUrls = await getIndexedUrls(urlsToCheck);
+
+      let restored = 0;
+      const staleIds: string[] = [];
+      for (const item of persistedQueue) {
+        if (indexedUrls.has(item.url)) {
+          // 已索引，不需要重新入队
+          staleIds.push(item.bookmarkId);
+        } else if (!queue.some((j) => j.bookmarkId === item.bookmarkId)) {
+          queue.push({
+            bookmarkId: item.bookmarkId,
+            url: item.url,
+            title: item.title,
+            retryCount: item.retryCount,
+          });
+          restored++;
+        }
+      }
+
+      // 清理 DB 中的过期队列条目
+      if (staleIds.length > 0) {
+        try {
+          await db.indexQueue.bulkDelete(staleIds);
+        } catch {
+          // 静默失败
+        }
+      }
+
+      if (restored > 0) {
+        console.log(
+          `[indexer] Restored ${restored} items from persistent queue (skipped ${staleIds.length} already indexed)`,
+        );
+        processQueue();
+      } else if (staleIds.length > 0) {
+        console.log(
+          `[indexer] Skipped ${staleIds.length} stale queue items (already indexed)`,
+        );
+      }
     }
   } catch (err) {
     console.warn("[indexer] Failed to restore persistent queue:", err);
