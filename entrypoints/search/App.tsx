@@ -9,7 +9,44 @@ import type { SearchResult, SummarizeResult } from "../../src/types";
 function sourceIcon(source: string): string {
   if (source === "github") return "⭐";
   if (source === "twitter") return "𝕏";
+  if (source === "history") return "🕘";
   return "🔖";
+}
+
+type SearchSourceFilter = "github" | "twitter" | "history";
+
+const SOURCE_FILTER_TOKENS: Record<SearchSourceFilter, string> = {
+  github: "/github",
+  twitter: "/twitter",
+  history: "/history",
+};
+
+function parseSourceFilter(query: string): SearchSourceFilter | null {
+  const normalized = query.trimStart().toLowerCase();
+  if (normalized.startsWith("/github")) return "github";
+  if (normalized.startsWith("/twitter")) return "twitter";
+  if (normalized.startsWith("/history")) return "history";
+  return null;
+}
+
+function stripLeadingSourceFilter(query: string): string {
+  const trimmed = query.trimStart();
+  return trimmed
+    .replace(/^\/(?:github|twitter|history)(?:\s+|$)/i, "")
+    .trimStart();
+}
+
+function setSourceFilterQuery(
+  currentQuery: string,
+  nextFilter: SearchSourceFilter | null,
+): string {
+  const searchText = stripLeadingSourceFilter(currentQuery);
+  if (!nextFilter) {
+    return searchText;
+  }
+
+  const token = SOURCE_FILTER_TOKENS[nextFilter];
+  return searchText ? `${token} ${searchText}` : `${token} `;
 }
 
 function App() {
@@ -91,6 +128,20 @@ function App() {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    const activeElement = document.activeElement;
+    const isTypingTarget =
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLTextAreaElement ||
+      activeElement instanceof HTMLSelectElement ||
+      (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+
+    if (e.key === "/" && !isTypingTarget) {
+      e.preventDefault();
+      inputRef?.focus();
+      inputRef?.select();
+      return;
+    }
+
     const rs = results();
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -176,6 +227,52 @@ function App() {
 
   let inputRef: HTMLInputElement | undefined;
 
+  const sourceFilterOptions = () =>
+    [
+      { value: null, label: t("search.filterAll") },
+      { value: "github" as const, label: t("search.filterGithubLabel") },
+      { value: "twitter" as const, label: t("search.filterTwitterLabel") },
+      { value: "history" as const, label: t("search.filterHistoryLabel") },
+    ] satisfies Array<{ value: SearchSourceFilter | null; label: string }>;
+
+  const activeSourceFilter = () => parseSourceFilter(query());
+
+  const activeFilterLabel = () => {
+    switch (activeSourceFilter()) {
+      case "github":
+        return t("search.filterGithubLabel");
+      case "twitter":
+        return t("search.filterTwitterLabel");
+      case "history":
+        return t("search.filterHistoryLabel");
+      default:
+        return "";
+    }
+  };
+
+  const applySourceFilter = (nextFilter: SearchSourceFilter | null) => {
+    const nextQuery = setSourceFilterQuery(query(), nextFilter);
+    handleInput(nextQuery);
+    inputRef?.focus();
+    if (nextQuery.length > 0) {
+      inputRef?.setSelectionRange(nextQuery.length, nextQuery.length);
+    }
+  };
+
+  const clearSearch = () => {
+    setQuery("");
+    setResults([]);
+    setErrorMsg("");
+    setSelectedIdx(-1);
+
+    const url = new URL(location.href);
+    url.searchParams.delete("q");
+    history.replaceState(null, "", url.toString());
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+    inputRef?.focus();
+  };
+
   onMount(async () => {
     const settings = await getSettings();
     if (settings.language) {
@@ -209,6 +306,16 @@ function App() {
             autocomplete="off"
             spellcheck={false}
           />
+          <Show when={query().trim().length > 0}>
+            <button
+              type="button"
+              class="shrink-0 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title={t("search.clearSearch")}
+              onClick={clearSearch}
+            >
+              {t("search.clearSearch")}
+            </button>
+          </Show>
           <Show when={loading()}>
             <span class="text-muted-foreground text-lg animate-spin select-none">
               ◌
@@ -231,6 +338,26 @@ function App() {
           <code class="bg-muted px-1 rounded">{t("search.folderFilter")}</code>{" "}
           ·{t("search.keyboardHint")}
         </p>
+        <div class="flex flex-wrap items-center gap-2 max-w-3xl mx-auto mt-2 pl-9">
+          <span class="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+            {t("search.quickFilters")}
+          </span>
+          <For each={sourceFilterOptions()}>
+            {(option) => (
+              <button
+                type="button"
+                class={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  activeSourceFilter() === option.value
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+                onClick={() => applySourceFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            )}
+          </For>
+        </div>
 
         {/* Q&A 问答栏 */}
         <div class="flex items-center gap-2 max-w-3xl mx-auto mt-2 pl-9">
@@ -251,7 +378,7 @@ function App() {
             onClick={handleAsk}
             disabled={askLoading() || !askQuestion().trim()}
           >
-            {askLoading() ? "..." : t("search.askButton")}
+            {askLoading() ? t("search.asking") : t("search.askButton")}
           </button>
         </div>
       </header>
@@ -297,6 +424,32 @@ function App() {
       {/* 结果列表 + 侧边栏 */}
       <div class="max-w-5xl mx-auto px-6 py-5 flex gap-4 items-start">
         <main class="flex-1 min-w-0">
+          <Show when={query().trim() || loading() || results().length > 0}>
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+              <div class="flex flex-wrap items-center gap-2 text-muted-foreground">
+                <span>
+                  {loading()
+                    ? t("search.searching")
+                    : t("search.resultsCount", { count: results().length })}
+                </span>
+                <Show when={activeSourceFilter()}>
+                  <span class="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                    {t("search.filteredBy", { source: activeFilterLabel() })}
+                  </span>
+                </Show>
+              </div>
+              <Show when={activeSourceFilter()}>
+                <button
+                  type="button"
+                  class="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  onClick={() => applySourceFilter(null)}
+                >
+                  {t("search.clearFilter")}
+                </button>
+              </Show>
+            </div>
+          </Show>
+
           <Show when={errorMsg()}>
             <div class="rounded-lg border border-destructive/50 bg-destructive/10 text-destructive px-4 py-3 mb-4 text-sm">
               {errorMsg()}
@@ -310,6 +463,29 @@ function App() {
                 {t("search.noResults", { query: query() })}
               </p>
               <p class="text-sm mt-2">{t("search.tryOther")}</p>
+              <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("github")}
+                >
+                  {t("search.tryGithub")}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("twitter")}
+                >
+                  {t("search.tryTwitter")}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("history")}
+                >
+                  {t("search.tryHistory")}
+                </button>
+              </div>
             </div>
           </Show>
 
@@ -317,6 +493,40 @@ function App() {
             <div class="text-center py-16 text-muted-foreground">
               <p class="text-4xl mb-4">🗂️</p>
               <p class="text-base">{t("search.emptyState")}</p>
+              <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("github")}
+                >
+                  {t("search.tryGithub")}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("twitter")}
+                >
+                  {t("search.tryTwitter")}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() => applySourceFilter("history")}
+                >
+                  {t("search.tryHistory")}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted hover:text-foreground"
+                  onClick={() =>
+                    browser.tabs.create({
+                      url: (browser.runtime.getURL as any)("/graph.html"),
+                    })
+                  }
+                >
+                  {t("search.graphExploreLabel")}
+                </button>
+              </div>
             </div>
           </Show>
 
@@ -395,12 +605,6 @@ function App() {
               </div>
             )}
           </For>
-
-          <Show when={results().length > 0}>
-            <p class="text-center text-xs text-muted-foreground mt-4">
-              {t("search.resultsCount", { count: results().length })}
-            </p>
-          </Show>
         </main>
 
         {/* 摘要侧边栏 */}
