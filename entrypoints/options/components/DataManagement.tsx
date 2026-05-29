@@ -2,7 +2,6 @@ import { createSignal, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
-import { clearAll } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
 interface ConfirmDialogState {
@@ -54,7 +53,12 @@ export default function DataManagement() {
       onConfirm: async () => {
         setConfirmDialog((prev) => ({ ...prev, open: false }));
         try {
-          await clearAll();
+          const response = await browser.runtime.sendMessage({
+            type: "CLEAR_INDEXED_DATA",
+          });
+          if (!response?.success) {
+            throw new Error(response?.error || t("options.indexManager.cacheClearFailed"));
+          }
           setStatus({ message: t("options.indexManager.databaseCleared"), type: "success" });
         } catch (error) {
           setStatus({ message: `${t("options.indexManager.cacheClearFailed")}: ${error}`, type: "error" });

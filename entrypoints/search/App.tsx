@@ -126,7 +126,7 @@ function App() {
         setSummaryResult({
           url,
           title,
-          summary: resp?.error || "Summary failed",
+          summary: resp?.error || t("search.summaryFailed"),
           tags: [],
           excerpt: "",
         });
@@ -135,7 +135,7 @@ function App() {
       setSummaryResult({
         url,
         title,
-        summary: e?.message || "Summary failed",
+        summary: e?.message || t("search.summaryFailed"),
         tags: [],
         excerpt: "",
       });
@@ -165,10 +165,10 @@ function App() {
         setAskAnswer(resp.answer || "");
         setAskCitations(resp.citations || []);
       } else {
-        setAskError(resp?.error || "Q&A failed");
+        setAskError(resp?.error || t("search.askFailed"));
       }
     } catch (e: any) {
-      setAskError(e?.message || "Q&A failed");
+      setAskError(e?.message || t("search.askFailed"));
     } finally {
       setAskLoading(false);
     }
@@ -217,11 +217,11 @@ function App() {
           <button
             type="button"
             class="shrink-0 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1"
-            title="标签云探索"
+            title={t("search.graphExploreTitle")}
             onClick={() => browser.tabs.create({ url: (browser.runtime.getURL as any)("/graph.html") })}
           >
             🗺
-            <span class="text-xs hidden sm:inline">探索</span>
+            <span class="text-xs hidden sm:inline">{t("search.graphExploreLabel")}</span>
           </button>
         </div>
         <p class="text-xs text-muted-foreground max-w-3xl mx-auto mt-1 pl-9">

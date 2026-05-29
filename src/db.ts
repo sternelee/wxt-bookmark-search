@@ -123,6 +123,24 @@ export async function getIndexedUrls(urls: string[]): Promise<Set<string>> {
   return indexedUrls;
 }
 
+/** 批量查询书签 ID 是否已索引 (返回已索引的 ID Set) */
+export async function getIndexedBookmarkIds(ids: string[]): Promise<Set<string>> {
+  const indexedIds = new Set<string>();
+
+  const BATCH_SIZE = 200;
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const records = await db.bookmarks.bulkGet(batch);
+    for (const record of records) {
+      if (record?.status === "indexed") {
+        indexedIds.add(record.id);
+      }
+    }
+  }
+
+  return indexedIds;
+}
+
 /** 批量插入或更新书签记录 */
 export async function upsertBookmarks(
   records: BookmarkRecord[],
@@ -161,7 +179,10 @@ export async function getIndexStats(): Promise<{
 
 /** 清空数据库 */
 export async function clearAll(): Promise<void> {
-  await db.bookmarks.clear();
+  await db.transaction("rw", db.bookmarks, db.indexQueue, async () => {
+    await db.bookmarks.clear();
+    await db.indexQueue.clear();
+  });
 }
 
 /** 获取所有失败的书签 */

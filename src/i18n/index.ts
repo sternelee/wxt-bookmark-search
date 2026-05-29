@@ -53,6 +53,16 @@ function getNestedValue(obj: any, path: string): string | undefined {
   return typeof current === "string" ? current : undefined;
 }
 
+function formatMissingKeyFallback(key: string): string {
+  const tail = key.split(".").pop() || key;
+  const spaced = tail
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  if (!spaced) return key;
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 const [localeSignal, setLocaleSignal] = createSignal<Locale>("en");
 
 /** 设置当前语言 */
@@ -75,17 +85,24 @@ export function t(
   key: I18nKey,
   vars?: Record<string, string | number>,
 ): string {
-  const dict = locales[localeSignal()];
-  let text = getNestedValue(dict, key);
+  const currentLocale = localeSignal();
+  const fallbackLocales = [
+    currentLocale,
+    "en",
+    "zh-CN",
+  ].filter((locale, index, list) => list.indexOf(locale) === index) as Locale[];
 
-  if (text === undefined) {
-    // 回退到中文
-    text = getNestedValue(locales["zh-CN"], key);
+  let text: string | undefined;
+  for (const locale of fallbackLocales) {
+    text = getNestedValue(locales[locale], key);
+    if (text !== undefined) {
+      break;
+    }
   }
 
   if (text === undefined) {
     console.warn(`[i18n] Missing key: ${key}`);
-    return key;
+    return formatMissingKeyFallback(key);
   }
 
   if (vars) {

@@ -30,10 +30,13 @@ import {
   saveSearchEngine,
   loadSearchEngine,
   searchHybrid,
+  searchKeyword,
   searchVector,
   removeFromSearchEngine,
+  flushSaveSearchEngine,
   registerSaveFn,
-  scheduleSaveSearchEngine,
+  resetSearchEngine,
+  ORAMA_INDEX_STORAGE_KEY,
 } from "../src/search-engine";
 import type { RawData } from "@orama/orama";
 import {
@@ -46,10 +49,12 @@ import {
   getIndexingStatus,
   getBookmarkFolders,
   indexFolders,
+  resetIndexerState,
   syncGithubStars,
   syncTwitterBookmarks,
   stripMarkdownToPlainText,
   fetchPageContent,
+  enqueueBookmarksForReindex,
 } from "../src/indexer";
 import { syncHistoryBookmarks } from "../src/history";
 import { t } from "../src/i18n";
@@ -114,6 +119,12 @@ let isSyncingCloudBookmarks = false;
 let cloudBookmarkSyncLock = false;
 let pendingCloudBookmarkSync = false;
 
+type BrowserSearchBookmark = {
+  id: string;
+  title: string;
+  url?: string;
+};
+
 /**
  * 判断字符串是否为可直接导航的 URL（http/https）
  */
@@ -150,6 +161,135 @@ function toSearchResult(record: BookmarkRecord): SearchResult {
     source,
     indexed: record.status === "indexed",
   };
+}
+
+function dedupeSearchResults(
+  results: SearchResult[],
+  limit: number,
+): SearchResult[] {
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+  for (const result of results) {
+    if (seen.has(result.url)) continue;
+    seen.add(result.url);
+    deduped.push(result);
+    if (deduped.length >= limit) break;
+  }
+  return deduped;
+}
+
+function buildBrowserSearchResults(
+  query: string,
+  bookmarks: BrowserSearchBookmark[],
+): SearchResult[] {
+  const ranked = rerankBookmarks(query, bookmarks, IS_FIREFOX);
+  return ranked.map((suggestion) => {
+    const bookmark = bookmarks.find((item) => item.url === suggestion.content);
+    return {
+      url: suggestion.content,
+      title: bookmark?.title ?? suggestion.content,
+      summary: "",
+      tags: [],
+      source: "bookmark" as const,
+      indexed: false,
+    };
+  });
+}
+
+function toSuggestionRecord(result: SearchResult): BookmarkRecord {
+  return {
+    id: result.url,
+    url: result.url,
+    title: result.title,
+    summary: result.summary,
+    tags: result.tags,
+    source: result.source,
+    status: result.indexed ? "indexed" : "pending",
+  };
+}
+
+async function buildKeywordSearchResults(
+  query: string,
+  bookmarks: BrowserSearchBookmark[],
+  options: {
+    limit: number;
+    allowedUrls: Set<string> | null;
+    sourceFilter: SearchResult["source"] | null;
+  },
+): Promise<SearchResult[]> {
+  let indexedResults = await searchKeyword(query, {
+    limit: Math.max(options.limit * 3, options.limit),
+    sourceFilter: options.sourceFilter || undefined,
+  });
+  if (options.allowedUrls) {
+    indexedResults = indexedResults.filter((record) =>
+      options.allowedUrls!.has(record.url),
+    );
+  }
+  return dedupeSearchResults(
+    [
+      ...indexedResults.map(toSearchResult),
+      ...buildBrowserSearchResults(query, bookmarks),
+    ],
+    options.limit,
+  );
+}
+
+async function buildKeywordSuggestions(
+  query: string,
+  bookmarks: BrowserSearchBookmark[],
+  options: {
+    limit: number;
+    allowedUrls: Set<string> | null;
+    sourceFilter: SearchResult["source"] | null;
+  },
+): Promise<Array<{ content: string; description: string }>> {
+  const results = await buildKeywordSearchResults(query, bookmarks, options);
+  return results.map((result) => ({
+    content: result.url,
+    description: formatSuggestion(
+      toSuggestionRecord(result),
+      query,
+      false,
+    ),
+  }));
+}
+
+async function resetIndexedData(): Promise<void> {
+  const { clearAll } = await import("../src/db");
+  clearEmbeddingCache();
+  await resetIndexerState();
+  await clearAll();
+  await resetSearchEngine();
+  await browser.storage.local.remove(ORAMA_INDEX_STORAGE_KEY);
+}
+
+async function reindexStoredEmbeddings(): Promise<number> {
+  const { db } = await import("../src/db");
+  const existingRecords = await db.bookmarks.toArray();
+  const pendingRecords = existingRecords
+    .filter((record) => typeof record.url === "string" && record.url.length > 0)
+    .map((record) => ({
+      ...record,
+      status: "pending" as const,
+      embedding: undefined,
+      indexedAt: undefined,
+      error: undefined,
+    }));
+
+  clearEmbeddingCache();
+  await resetIndexerState();
+  await db.bookmarks.bulkPut(pendingRecords);
+  await resetSearchEngine();
+  await browser.storage.local.remove(ORAMA_INDEX_STORAGE_KEY);
+
+  return enqueueBookmarksForReindex(
+    pendingRecords.map((record) => ({
+      id: record.id,
+      url: record.url,
+      title: record.title,
+    })),
+  );
 }
 
 /**
@@ -239,37 +379,12 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     });
   }
 
-  if (!settings.openaiApiKey) {
-    const suggestions = rerankBookmarks(query, valid, IS_FIREFOX);
-    return suggestions.slice(0, 20).map((s) => {
-      const b = valid.find((x) => x.url === s.content);
-      return {
-        url: s.content,
-        title: b?.title ?? s.content,
-        summary: "",
-        tags: [],
-        source: "bookmark" as const,
-        indexed: false,
-      };
-    });
-  }
-
-  // Orama 搜索
-  if (valid.length === 0 && !settings.openaiApiKey) return [];
-
-  if (!settings.openaiApiKey) {
-    // 无 API Key：Chrome 关键词搜索（不依赖 Orama）
-    const suggestions = rerankBookmarks(query, valid, IS_FIREFOX);
-    return suggestions.slice(0, 20).map((s) => {
-      const b = valid.find((x) => x.url === s.content);
-      return {
-        url: s.content,
-        title: b?.title ?? s.content,
-        summary: "",
-        tags: [],
-        source: "bookmark" as const,
-        indexed: false,
-      };
+  const mode = settings.searchMode || "hybrid";
+  if (mode === "keyword" || !settings.openaiApiKey) {
+    return buildKeywordSearchResults(query, valid, {
+      limit: 20,
+      allowedUrls,
+      sourceFilter,
     });
   }
 
@@ -281,17 +396,20 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
       settings.embeddingModel,
       settings.baseURL,
     );
-    const mode = settings.searchMode || "hybrid";
     let results: BookmarkRecord[];
 
     const oramaLimit = allowedUrls ? Math.max(60, 20 * 3) : 20;
 
     if (mode === "vector") {
-      results = await searchVector(queryVector, { limit: oramaLimit });
+      results = await searchVector(queryVector, {
+        limit: oramaLimit,
+        sourceFilter: sourceFilter || undefined,
+      });
     } else {
       results = await searchHybrid(query, queryVector, {
         limit: oramaLimit,
         vectorWeight: settings.vectorWeight || 0.4,
+        sourceFilter: sourceFilter || undefined,
       });
     }
 
@@ -303,15 +421,11 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     return results.map(toSearchResult);
   } catch (err) {
     console.error("[FlowSearch] performFullSearch error:", err);
-    // 降级到关键词结果
-    return valid.slice(0, 20).map((b) => ({
-      url: b.url!,
-      title: b.title ?? b.url!,
-      summary: "",
-      tags: [],
-      source: "bookmark" as const,
-      indexed: false,
-    }));
+    return buildKeywordSearchResults(query, valid, {
+      limit: 20,
+      allowedUrls,
+      sourceFilter,
+    });
   }
 }
 
@@ -365,7 +479,9 @@ export default defineBackground(() => {
       console.warn("[FlowSearch] Orama index too large, skipping save");
       return;
     }
-    await browser.storage.local.set({ orama_index: JSON.parse(json) });
+    await browser.storage.local.set({
+      [ORAMA_INDEX_STORAGE_KEY]: JSON.parse(json),
+    });
   });
 
   // 初始化搜索引擎 (Orama)
@@ -410,10 +526,10 @@ export default defineBackground(() => {
       await initSearchEngine();
 
       // 尝试从 storage.local 恢复
-      const stored = await browser.storage.local.get("orama_index");
-      if (stored.orama_index) {
+      const stored = await browser.storage.local.get(ORAMA_INDEX_STORAGE_KEY);
+      if (stored[ORAMA_INDEX_STORAGE_KEY]) {
         try {
-          loadSearchEngine(stored.orama_index as RawData);
+          loadSearchEngine(stored[ORAMA_INDEX_STORAGE_KEY] as RawData);
           console.log("[FlowSearch] Orama index restored from storage");
           return;
         } catch {
@@ -428,7 +544,7 @@ export default defineBackground(() => {
       const records = await getAllIndexedRecords();
       const count = await populateSearchEngine(records);
       console.log(`[FlowSearch] Orama index rebuilt: ${count} records`);
-      scheduleSaveSearchEngine();
+      await flushSaveSearchEngine();
     } catch (error) {
       console.error("[FlowSearch] Failed to init search engine:", error);
     }
@@ -584,11 +700,11 @@ export default defineBackground(() => {
   }> {
     const settings = await getSettings();
     if ((!settings.gistSyncEnabled && !force) || !settings.githubToken) {
-      throw new Error("Gist 同步未启用或缺少 GitHub Token");
+      throw new Error(t("background.gistSyncUnavailable"));
     }
 
     if (isSyncingGist) {
-      throw new Error("同步正在进行中");
+      throw new Error(t("background.syncInProgress"));
     }
 
     isSyncingGist = true;
@@ -977,9 +1093,17 @@ export default defineBackground(() => {
       });
     }
 
-    // 2. 检查 API Key
-    if (!settings.openaiApiKey) {
-      suggest(rerankBookmarks(query, valid));
+    const mode = settings.searchMode || "hybrid";
+
+    // 2. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
+    if (mode === "keyword" || !settings.openaiApiKey) {
+      suggest(
+        await buildKeywordSuggestions(query, valid, {
+          limit: 9,
+          allowedUrls,
+          sourceFilter,
+        }),
+      );
       return;
     }
 
@@ -1017,16 +1141,19 @@ export default defineBackground(() => {
 
         // 5. 执行 Orama 搜索
         let results: BookmarkRecord[];
-        const mode = settings.searchMode || "hybrid";
 
         const oramaLimit = allowedUrls ? Math.max(27, 9 * 3) : 9;
 
         if (mode === "vector") {
-          results = await searchVector(queryVector, { limit: oramaLimit });
+          results = await searchVector(queryVector, {
+            limit: oramaLimit,
+            sourceFilter: sourceFilter || undefined,
+          });
         } else {
           results = await searchHybrid(query, queryVector, {
             limit: oramaLimit,
             vectorWeight: settings.vectorWeight || 0.4,
+            sourceFilter: sourceFilter || undefined,
           });
         }
 
@@ -1038,7 +1165,7 @@ export default defineBackground(() => {
         suggest(
           results.map((record) => ({
             content: record.url,
-            description: formatSuggestion(record, query, mode !== "keyword"),
+            description: formatSuggestion(record, query, true),
           })),
         );
       } catch (error: any) {
@@ -1046,7 +1173,13 @@ export default defineBackground(() => {
         if (error.name === "AbortError" || error.message?.includes("aborted"))
           return;
         console.error("[FlowSearch] Search error:", error);
-        suggest(rerankBookmarks(query, valid));
+        suggest(
+          await buildKeywordSuggestions(query, valid, {
+            limit: 9,
+            allowedUrls,
+            sourceFilter,
+          }),
+        );
       }
     }, debounceMs);
   });
@@ -1206,7 +1339,7 @@ export default defineBackground(() => {
             }
             await deleteBookmark(message.id);
             await removeFromSearchEngine(message.id).catch(() => {});
-            scheduleSaveSearchEngine();
+            await flushSaveSearchEngine();
             return { success: true };
           case "GET_BOOKMARK_FOLDERS":
             const folders = await getBookmarkFolders();
@@ -1230,6 +1363,14 @@ export default defineBackground(() => {
           case "CLEAR_EMBEDDING_CACHE": {
             clearEmbeddingCache();
             return { success: true, ...getCacheStats() };
+          }
+          case "CLEAR_INDEXED_DATA": {
+            await resetIndexedData();
+            return { success: true };
+          }
+          case "REINDEX_STORED_EMBEDDINGS": {
+            const queued = await reindexStoredEmbeddings();
+            return { success: true, queued };
           }
           case "GIST_SYNC": {
             const syncResult = await triggerGistSync(true);
@@ -1316,6 +1457,7 @@ export default defineBackground(() => {
               downloadSettings.githubToken,
               downloadSettings.gistId,
               localTree,
+              async () => browser.bookmarks.getTree(),
               async (id) => {
                 await browser.bookmarks.removeTree(id);
               },
@@ -1342,7 +1484,10 @@ export default defineBackground(() => {
               const bmSettings = await getSettings();
               const provider = getCloudProvider(bmSettings);
               if (!provider) {
-                return { success: false, error: "Provider not configured" };
+                return {
+                  success: false,
+                  error: t("background.providerNotConfigured"),
+                };
               }
               const deviceId = await ensureCloudBookmarkDeviceId(
                 bmSettings.cloudSyncDeviceId,
@@ -1369,12 +1514,16 @@ export default defineBackground(() => {
               const bmDownSettings = await getSettings();
               const provider = getCloudProvider(bmDownSettings);
               if (!provider) {
-                return { success: false, error: "Provider not configured" };
+                return {
+                  success: false,
+                  error: t("background.providerNotConfigured"),
+                };
               }
               const localTree = await browser.bookmarks.getTree();
               const result = await downloadCloudBookmarks(
                 provider,
                 localTree,
+                async () => browser.bookmarks.getTree(),
                 async (id: string) => {
                   await browser.bookmarks.removeTree(id);
                 },
@@ -1460,14 +1609,20 @@ export default defineBackground(() => {
           case "SUMMARIZE_URL": {
             const summarizeSettings = await getSettings();
             if (!summarizeSettings.openaiApiKey) {
-              return { success: false, error: "API Key not configured" };
+              return {
+                success: false,
+                error: t("background.apiKeyNotConfigured"),
+              };
             }
             const content = await fetchPageContent(
               message.url,
               summarizeSettings,
             );
             if (!content) {
-              return { success: false, error: "Content extraction failed" };
+              return {
+                success: false,
+                error: t("background.contentExtractionFailed"),
+              };
             }
             const provider = getLLMProvider();
             if (!provider) {
@@ -1514,7 +1669,10 @@ export default defineBackground(() => {
           case "ASK_BOOKMARKS": {
             const askSettings = await getSettings();
             if (!askSettings.openaiApiKey) {
-              return { success: false, error: "API Key not configured" };
+              return {
+                success: false,
+                error: t("background.apiKeyNotConfigured"),
+              };
             }
             const { askBookmarks } = await import("../src/rag");
             const queryVector = await getQueryEmbedding(
@@ -1529,7 +1687,7 @@ export default defineBackground(() => {
             if (results.length === 0) {
               return {
                 success: true,
-                answer: "No relevant bookmarks found.",
+                answer: t("background.noRelevantBookmarks"),
                 citations: [],
               };
             }
@@ -1557,7 +1715,10 @@ export default defineBackground(() => {
               cloudSyncWebdavUsername: message.webdavUsername || testSettings.cloudSyncWebdavUsername,
             });
             if (!testProvider) {
-              return { success: false, error: "Provider not configured" };
+              return {
+                success: false,
+                error: t("background.providerNotConfigured"),
+              };
             }
             try {
               const ok = await testCloudConnection(testProvider);
@@ -1574,7 +1735,10 @@ export default defineBackground(() => {
             const settings = await getSettings();
             const provider = getCloudProvider(settings);
             if (!provider) {
-              return { success: false, error: "Provider not configured" };
+              return {
+                success: false,
+                error: t("background.providerNotConfigured"),
+              };
             }
             try {
               const status = await getCloudSyncStatus(provider);
@@ -1591,7 +1755,10 @@ export default defineBackground(() => {
             const settings = await getSettings();
             const provider = getCloudProvider(settings);
             if (!provider) {
-              return { success: false, error: "Provider not configured" };
+              return {
+                success: false,
+                error: t("background.providerNotConfigured"),
+              };
             }
             try {
               const result = await uploadCloudSync(provider);
@@ -1608,7 +1775,10 @@ export default defineBackground(() => {
             const settings = await getSettings();
             const provider = getCloudProvider(settings);
             if (!provider) {
-              return { success: false, error: "Provider not configured" };
+              return {
+                success: false,
+                error: t("background.providerNotConfigured"),
+              };
             }
             try {
               const result = await downloadCloudSync(provider);
@@ -1625,7 +1795,10 @@ export default defineBackground(() => {
             const settings = await getSettings();
             const provider = getCloudProvider(settings);
             if (!provider) {
-              return { success: false, error: "Provider not configured" };
+              return {
+                success: false,
+                error: t("background.providerNotConfigured"),
+              };
             }
             try {
               await deleteCloudSync(provider);

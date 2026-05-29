@@ -12,6 +12,10 @@ import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function HealthSettings() {
   const { t } = useI18n();
   const [enabled, setEnabled] = createSignal(false);
@@ -58,9 +62,9 @@ export default function HealthSettings() {
         linkCheckEnabled: enabled(),
         linkCheckInterval: interval(),
       });
-      setStatus({ message: t("common.save"), type: "success" });
+      setStatus({ message: t("options.health.saved"), type: "success" });
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     }
   };
 
@@ -73,7 +77,11 @@ export default function HealthSettings() {
       });
       if (response.success) {
         setStatus({
-          message: `${response.checked} checked, ${response.alive} alive, ${response.dead} dead`,
+          message: t("options.health.checkSummary", {
+            checked: response.checked,
+            alive: response.alive,
+            dead: response.dead,
+          }),
           type: "success",
         });
         // 刷新统计
@@ -99,12 +107,12 @@ export default function HealthSettings() {
         }
       } else {
         setStatus({
-          message: response.error || "Unknown error",
+          message: response.error || t("common.unknownError"),
           type: "error",
         });
       }
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     } finally {
       setChecking(false);
     }

@@ -11,9 +11,11 @@ import {
   getDeletedBookmarks,
   removeFromDeletedBookmarks,
   countUrls,
-  collectLeafNodes,
   clearLocalBookmarks,
   ensureDeviceId,
+  getWritableRoot,
+  restoreBookmarkTree,
+  validateBookmarkTreeData,
 } from "../gist-sync";
 import type { GistBookmarkData, GistBookmarkNode } from "../types";
 import type { SyncResult } from "../gist-sync";
@@ -151,6 +153,7 @@ export async function uploadCloudBookmarks(
 export async function downloadCloudBookmarks(
   provider: CloudProvider,
   localTree: BrowserBookmarkNode[],
+  getLocalTree: () => Promise<BrowserBookmarkNode[]>,
   removeTree: (id: string) => Promise<void>,
   createBookmark: (
     folderPath: string[],
@@ -175,47 +178,37 @@ export async function downloadCloudBookmarks(
     );
   }
 
-  const cleared = await clearLocalBookmarks(localTree, removeTree);
+  const localSnapshot = exportBookmarkTree(localTree);
+  const remoteRoots = getWritableRoot(validateBookmarkTreeData(remoteData.bookmarks));
 
-  const remoteRoots =
-    remoteData.bookmarks.length === 1 &&
-    !remoteData.bookmarks[0].url &&
-    remoteData.bookmarks[0].children
-      ? remoteData.bookmarks[0].children!
-      : remoteData.bookmarks;
-
+  let cleared = 0;
   let added = 0;
-  for (const root of remoteRoots) {
-    if (root.url) {
-      try {
-        await createBookmark([], root);
-        added++;
-      } catch (err) {
-        console.warn(
-          "[cloud-sync-bookmark] Failed to create top-level bookmark:",
-          err,
-        );
-      }
-      continue;
-    }
-
-    if (root.children && root.children.length > 0) {
-      const leafNodes = collectLeafNodes(
-        root.children,
-        root.title ? [root.title] : [],
+  try {
+    cleared = await clearLocalBookmarks(localTree, removeTree);
+    added = await restoreBookmarkTree(remoteRoots, createBookmark);
+  } catch (error) {
+    console.error(
+      "[cloud-sync-bookmark] Download restore failed, rolling back local snapshot:",
+      error,
+    );
+    try {
+      const currentTree = await getLocalTree();
+      await clearLocalBookmarks(currentTree, removeTree);
+      await restoreBookmarkTree(localSnapshot, createBookmark);
+    } catch (rollbackError) {
+      throw new CloudSyncError(
+        `Cloud bookmark download failed and rollback was unsuccessful: ${
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        }`,
+        "UNKNOWN",
       );
-      for (const { node, folderPath } of leafNodes) {
-        try {
-          await createBookmark(folderPath, node);
-          added++;
-        } catch (err) {
-          console.warn(
-            "[cloud-sync-bookmark] Failed to create bookmark:",
-            err,
-          );
-        }
-      }
     }
+    throw new CloudSyncError(
+      `Cloud bookmark download failed after restoring the previous local snapshot: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      "UNKNOWN",
+    );
   }
 
   return {

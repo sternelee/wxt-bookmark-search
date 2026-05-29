@@ -9,6 +9,46 @@ interface BookmarkContext {
   summary: string;
 }
 
+function normalizeCitations(
+  citations: Array<{
+    index?: number;
+    title?: string;
+    url?: string;
+    excerpt?: string;
+  }>,
+  bookmarks: BookmarkContext[],
+): { title: string; url: string; excerpt: string }[] {
+  const seen = new Set<number>();
+  const normalized: { title: string; url: string; excerpt: string }[] = [];
+
+  for (const citation of citations) {
+    if (
+      typeof citation.index !== "number" ||
+      !Number.isInteger(citation.index) ||
+      citation.index < 1
+    ) {
+      continue;
+    }
+
+    const bookmark = bookmarks[citation.index - 1];
+    if (!bookmark || seen.has(citation.index)) {
+      continue;
+    }
+    if (citation.url && citation.url !== bookmark.url) {
+      continue;
+    }
+
+    seen.add(citation.index);
+    normalized.push({
+      title: bookmark.title,
+      url: bookmark.url,
+      excerpt: citation.excerpt || bookmark.summary.slice(0, 160),
+    });
+  }
+
+  return normalized;
+}
+
 /**
  * 对书签语料库提问，返回带引用的回答
  * @param question 用户问题
@@ -95,17 +135,9 @@ Example output:
     const parsed = JSON.parse(content);
     return {
       answer: parsed.answer || "No answer generated.",
-      citations: (parsed.citations || []).map(
-        (c: {
-          index?: number;
-          title?: string;
-          url?: string;
-          excerpt?: string;
-        }) => ({
-          title: c.title || "Unknown",
-          url: c.url || "#",
-          excerpt: c.excerpt || "",
-        }),
+      citations: normalizeCitations(
+        parsed.citations || [],
+        bookmarks,
       ),
     };
   } catch {

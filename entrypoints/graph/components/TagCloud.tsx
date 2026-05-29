@@ -3,6 +3,7 @@
  * Font size and opacity respond to tag weight and active state
  */
 import { For, Show } from "solid-js";
+import { useI18n } from "../../../src/i18n";
 import type { TagNode } from "../../../src/tag-cloud";
 
 /** 标签按主题着色映射 */
@@ -60,6 +61,8 @@ interface TagCloudProps {
 }
 
 export function TagCloud(props: TagCloudProps) {
+  const { t } = useI18n();
+
   // 字号: min 12px ~ max 32px，按 weight 线性插值
   const fontSize = (weight: number) => {
     const base = 12;
@@ -105,7 +108,7 @@ export function TagCloud(props: TagCloudProps) {
                 "letter-spacing": node.weight > 0.5 ? "0.02em" : "normal",
                 background: getTagColor(node.tag) + "15",
               }}
-              title={`${node.count} 个书签`}
+              title={t("search.graphTagCount", { count: node.count })}
               onClick={() => props.onTagClick(node.tag)}
             >
               {node.tag}
@@ -118,8 +121,9 @@ export function TagCloud(props: TagCloudProps) {
       <Show when={!props.isLoading && props.nodes.length === 0}>
         <div class="absolute inset-0 flex items-center justify-center">
           <p class="text-sm text-muted-foreground text-center px-8">
-            该标签组合下无更多子标签<br />
-            <span class="text-xs mt-1 block">尝试其他标签组合</span>
+            {t("search.graphNoMoreTags")}
+            <br />
+            <span class="text-xs mt-1 block">{t("search.graphTryOtherTags")}</span>
           </p>
         </div>
       </Show>

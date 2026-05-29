@@ -38,6 +38,13 @@ export default {
     search: "검색",
     searching: "검색 중...",
     error: "오류",
+    saveFailed: "저장 실패",
+    syncFailed: "동기화 실패",
+    communicationError: "통신 오류",
+    createFailed: "생성 실패",
+    linkFailed: "연결 실패",
+    uploadFailed: "업로드 실패",
+    downloadFailed: "다운로드 실패",
     unknownError: "알 수 없는 오류",
     close: "닫기",
     language: "언어 설정",
@@ -61,6 +68,13 @@ export default {
     pageTitle: "설정",
     appTitle: "🤖 Flow Search",
 
+    language: {
+      title: "🌐 언어 설정",
+      label: "인터페이스 언어",
+      hint: "변경 후 저장이 필요하며, 일부 텍스트는 새로고침 후 반영될 수 있습니다.",
+      saved: "✓ 언어 설정이 저장되었습니다",
+    },
+
     api: {
       title: "🔑 API 설정",
       apiKeyHint: "OpenAI, SiliconFlow, Azure OpenAI 등 호환 API 지원",
@@ -75,6 +89,10 @@ export default {
       advanced: "고급 설정",
       apiKeyRequired: "API 키를 입력하세요",
       saved: "✓ 설정이 저장되었습니다",
+      savedAndReindexing:
+        "✓ 설정이 저장되었습니다. 새 embedding 설정으로 {{count}}개의 북마크를 다시 색인하는 중입니다.",
+      reindexFailedGeneric:
+        "설정은 저장되었지만 재색인을 시작하지 못했습니다.",
       testSuccess: "✓ API 키가 유효합니다, 연결 성공",
       testFail: "✗ API 키가 유효하지 않습니다",
       aiProvider: "AI 요약 제공자",
@@ -94,6 +112,7 @@ export default {
       vectorWeightHint:
         "값을 높이면 의미적 유사성이 선호됩니다. 낮추면 문자열 일치가 선호됩니다",
       applied: "✓ 검색 설정이 적용되었습니다",
+      applyFailed: "검색 설정 적용에 실패했습니다",
     },
 
     github: {
@@ -304,6 +323,9 @@ export default {
       intervalLabel: "검사 간격",
       checkNow: "지금 확인",
       checking: "확인 중...",
+      checkSummary:
+        "{{checked}}개 검사 완료, 정상 {{alive}}개, 깨진 링크 {{dead}}개",
+      saved: "✓ 링크 상태 설정이 저장되었습니다",
       stats: "검사 통계",
       alive: "정상",
       dead: "깨짐",
@@ -335,10 +357,13 @@ export default {
       analyzing: "분석 중...",
       suggestionsFound: "{{count}}개의 분류 제안 발견",
       noSuggestions: "분류할 북마크가 없습니다",
+      noIndexedBookmarks: "분류할 수 있는 색인된 북마크가 없습니다",
+      noSuggestionsAccepted: "적용할 분류 제안이 선택되지 않았습니다",
       applyButton: "분류 적용",
       applying: "북마크 이동 중...",
       applySuccess:
         "✓ {{moved}}개 이동, {{created}}개 폴더 생성, {{skipped}}개 건너뜀",
+      saved: "✓ 분류 설정이 저장되었습니다",
       confidenceHigh: "높음",
       confidenceMedium: "중간",
       confidenceLow: "낮음",
@@ -371,8 +396,26 @@ export default {
     askPlaceholder: "북마크에 대해 AI에게 질문...",
     askButton: "질문",
     asking: "검색 중...",
+    askFailed: "Q&A에 실패했습니다",
     answerSources: "출처",
     noAnswer: "이 질문에 답변할 관련 북마크를 찾을 수 없습니다.",
+    graphExploreTitle: "태그 클라우드 탐색",
+    graphExploreLabel: "탐색",
+    graphAll: "전체",
+    graphBackToLevel: '"{{tag}}"(으)로 돌아가기',
+    graphSelectedCount: "{{count}}개 북마크",
+    graphRefineHint: "태그를 더 눌러 세분화 · 브레드크럼으로 상위로 이동",
+    graphLoading: "불러오는 중...",
+    graphTagStats: "{{count}}개 태그",
+    graphTagStatsWithTop: "{{count}}개 태그 · {{topTag}} 최다",
+    graphSizeHint: "글자가 클수록 관련 항목이 많음",
+    graphTagCount: "{{count}}개 북마크",
+    graphClickTagToExplore: "왼쪽 태그를 눌러 북마크를 탐색하세요",
+    graphRelatedBookmarks: "관련 북마크",
+    graphStartExploring: "지식 그래프 탐색을 시작하세요",
+    graphNoTaggedBookmarks: "선택한 태그를 모두 포함한 북마크가 없습니다",
+    graphNoMoreTags: "이 태그 조합에는 더 이상 하위 태그가 없습니다",
+    graphTryOtherTags: "다른 태그 조합을 시도해 보세요",
   },
 
   background: {
@@ -384,5 +427,11 @@ export default {
     cmdHistory: "📜 /history 키워드 — 브라우징 기록 검색",
     cmdFolder: "📁 /folder:이름 키워드 — 특정 폴더 내 검색",
     folderSearch: "📁 폴더 검색: {{name}}",
+    providerNotConfigured: "제공자가 설정되지 않았습니다",
+    apiKeyNotConfigured: "API 키가 설정되지 않았습니다",
+    gistSyncUnavailable: "Gist 동기화가 비활성화되었거나 GitHub 토큰이 없습니다",
+    syncInProgress: "동기화가 이미 진행 중입니다",
+    contentExtractionFailed: "콘텐츠 추출에 실패했습니다",
+    noRelevantBookmarks: "관련 북마크를 찾지 못했습니다.",
   },
 } as const;

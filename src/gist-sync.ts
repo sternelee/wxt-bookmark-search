@@ -237,7 +237,7 @@ function collectUrls(
  * Chrome: getTree() 返回 [{ id: "0", children: [toolbar, other] }]
  * Firefox: getTree() 返回 [{ id: "root________", children: [menu, toolbar, unfiled, mobile] }]
  */
-function getWritableRoot<T extends { url?: string; children?: T[] }>(
+export function getWritableRoot<T extends { url?: string; children?: T[] }>(
   nodes: T[],
 ): T[] {
   if (nodes.length === 1 && !nodes[0].url && nodes[0].children) {
@@ -554,6 +554,74 @@ export async function clearLocalBookmarks(
   return cleared;
 }
 
+function assertValidBookmarkNode(
+  node: unknown,
+  path: string,
+): asserts node is GistBookmarkNode {
+  if (!node || typeof node !== "object") {
+    throw new Error(`Invalid bookmark node at ${path}`);
+  }
+
+  const candidate = node as Partial<GistBookmarkNode>;
+  if (typeof candidate.id !== "string" || typeof candidate.title !== "string") {
+    throw new Error(`Invalid bookmark node metadata at ${path}`);
+  }
+  if (candidate.url != null && typeof candidate.url !== "string") {
+    throw new Error(`Invalid bookmark URL at ${path}`);
+  }
+  if (candidate.children != null && !Array.isArray(candidate.children)) {
+    throw new Error(`Invalid bookmark children at ${path}`);
+  }
+  if (candidate.url && candidate.children && candidate.children.length > 0) {
+    throw new Error(`Bookmark node cannot contain both url and children at ${path}`);
+  }
+
+  candidate.children?.forEach((child, index) => {
+    assertValidBookmarkNode(child, `${path}/${candidate.title || index}`);
+  });
+}
+
+export function validateBookmarkTreeData(nodes: unknown): GistBookmarkNode[] {
+  if (!Array.isArray(nodes)) {
+    throw new Error("Invalid bookmark tree payload");
+  }
+  nodes.forEach((node, index) => {
+    assertValidBookmarkNode(node, `root[${index}]`);
+  });
+  return nodes as GistBookmarkNode[];
+}
+
+export async function restoreBookmarkTree(
+  roots: GistBookmarkNode[],
+  createBookmark: (
+    folderPath: string[],
+    node: GistBookmarkNode,
+  ) => Promise<void>,
+): Promise<number> {
+  let added = 0;
+
+  for (const root of roots) {
+    if (root.url) {
+      await createBookmark([], root);
+      added++;
+      continue;
+    }
+
+    if (root.children && root.children.length > 0) {
+      const leafNodes = collectLeafNodes(
+        root.children,
+        root.title ? [root.title] : [],
+      );
+      for (const { node, folderPath } of leafNodes) {
+        await createBookmark(folderPath, node);
+        added++;
+      }
+    }
+  }
+
+  return added;
+}
+
 // === 全量覆盖入口 ===
 
 /**
@@ -606,6 +674,7 @@ export async function downloadFromGist(
   token: string,
   gistId: string,
   localTree: BrowserBookmarkNode[],
+  getLocalTree: () => Promise<BrowserBookmarkNode[]>,
   removeTree: (id: string) => Promise<void>,
   createBookmark: (
     folderPath: string[],
@@ -618,47 +687,33 @@ export async function downloadFromGist(
     throw new Error("Gist 不存在或无法访问");
   }
 
-  // 1. 清空本地可写根目录下的内容
-  const cleared = await clearLocalBookmarks(localTree, removeTree);
+  const localSnapshot = exportBookmarkTree(localTree);
+  const remoteRoots = getWritableRoot(validateBookmarkTreeData(remoteData.bookmarks));
 
-  // 2. 从远程重建
-  const remoteRoots = getWritableRoot(remoteData.bookmarks);
+  let cleared = 0;
   let added = 0;
 
-  for (const root of remoteRoots) {
-    if (root.url) {
-      // 顶层直接是书签（少见）
-      try {
-        await createBookmark([], root);
-        added++;
-      } catch (err) {
-        console.warn(
-          "[gist-sync] Failed to create top-level bookmark:",
-          root.url,
-          err,
-        );
-      }
-      continue;
-    }
-
-    if (root.children && root.children.length > 0) {
-      const leafNodes = collectLeafNodes(
-        root.children,
-        root.title ? [root.title] : [],
+  try {
+    cleared = await clearLocalBookmarks(localTree, removeTree);
+    added = await restoreBookmarkTree(remoteRoots, createBookmark);
+  } catch (error) {
+    console.error("[gist-sync] Download restore failed, rolling back local snapshot:", error);
+    try {
+      const currentTree = await getLocalTree();
+      await clearLocalBookmarks(currentTree, removeTree);
+      await restoreBookmarkTree(localSnapshot, createBookmark);
+    } catch (rollbackError) {
+      throw new Error(
+        `Gist download failed and rollback was unsuccessful: ${
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        }`,
       );
-      for (const { node, folderPath } of leafNodes) {
-        try {
-          await createBookmark(folderPath, node);
-          added++;
-        } catch (err) {
-          console.warn(
-            "[gist-sync] Failed to create bookmark during download:",
-            node.url,
-            err,
-          );
-        }
-      }
     }
+    throw new Error(
+      `Gist download failed after restoring the previous local snapshot: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 
   return {

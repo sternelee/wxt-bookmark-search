@@ -11,6 +11,10 @@ import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function CategorizeSettings() {
   const { t } = useI18n();
   const [enabled, setEnabled] = createSignal(false);
@@ -50,9 +54,9 @@ export default function CategorizeSettings() {
         categoryRules: rules(),
         categoryFolderMap: categoryFolderMap(),
       });
-      setStatus({ message: t("common.save"), type: "success" });
+      setStatus({ message: t("options.categorize.saved"), type: "success" });
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     }
   };
 
@@ -65,7 +69,10 @@ export default function CategorizeSettings() {
       // 获取所有已索引书签
       const settings = await getSettings();
       if (!settings.openaiApiKey) {
-        setStatus({ message: "API Key not configured", type: "error" });
+        setStatus({
+          message: t("background.apiKeyNotConfigured"),
+          type: "error",
+        });
         return;
       }
 
@@ -76,7 +83,7 @@ export default function CategorizeSettings() {
 
       if (bookmarkIds.length === 0) {
         setStatus({
-          message: "No indexed bookmarks to categorize",
+          message: t("options.categorize.noIndexedBookmarks"),
           type: "info",
         });
         return;
@@ -110,12 +117,12 @@ export default function CategorizeSettings() {
         });
       } else {
         setStatus({
-          message: response.error || "Unknown error",
+          message: response.error || t("common.unknownError"),
           type: "error",
         });
       }
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     } finally {
       setAnalyzing(false);
     }
@@ -124,7 +131,10 @@ export default function CategorizeSettings() {
   const handleApply = async () => {
     const toApply = suggestions().filter((s) => s._accepted);
     if (toApply.length === 0) {
-      setStatus({ message: "No suggestions accepted", type: "info" });
+      setStatus({
+        message: t("options.categorize.noSuggestionsAccepted"),
+        type: "info",
+      });
       return;
     }
 
@@ -169,12 +179,12 @@ export default function CategorizeSettings() {
         setSuggestions([]);
       } else {
         setStatus({
-          message: response.error || "Unknown error",
+          message: response.error || t("common.unknownError"),
           type: "error",
         });
       }
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     } finally {
       setApplying(false);
     }

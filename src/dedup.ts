@@ -97,12 +97,12 @@ export async function resolveDuplicates(
   await db.bookmarks.bulkDelete(deleteIds);
 
   // 从搜索引擎中移除
-  const { removeFromSearchEngine, scheduleSaveSearchEngine } =
+  const { removeFromSearchEngine, flushSaveSearchEngine } =
     await import("./search-engine");
   for (const id of deleteIds) {
     try {
       await removeFromSearchEngine(id);
     } catch {}
   }
-  scheduleSaveSearchEngine();
+  await flushSaveSearchEngine();
 }

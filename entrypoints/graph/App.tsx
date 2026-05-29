@@ -7,10 +7,12 @@ import {
 } from "../../src/tag-cloud";
 import type { BookmarkRecord } from "../../src/types";
 import type { TagNode } from "../../src/tag-cloud";
+import { useI18n } from "../../src/i18n";
 import { TagCloud } from "./components/TagCloud";
 import { BookmarkPanel } from "./components/BookmarkPanel";
 
 function App() {
+  const { t } = useI18n();
   // 所有已索引书签（从 background 获取）
   const [allRecords, setAllRecords] = createSignal<BookmarkRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -95,7 +97,7 @@ function App() {
             }`}
             onClick={handleReset}
           >
-            全部
+            {t("search.graphAll")}
           </button>
 
           <For each={tagPath()}>
@@ -110,7 +112,7 @@ function App() {
                       : "text-muted-foreground"
                   }`}
                   onClick={() => handleBreadcrumb(i())}
-                  title={`返回到 "${tag}" 层级`}
+                  title={t("search.graphBackToLevel", { tag })}
                 >
                   {tag}
                 </button>
@@ -120,7 +122,9 @@ function App() {
 
           <Show when={tagPath().length > 0}>
             <span class="ml-auto shrink-0 text-xs text-muted-foreground pr-2">
-              {relatedBookmarks().length} 个书签
+              {t("search.graphSelectedCount", {
+                count: relatedBookmarks().length,
+              })}
             </span>
           </Show>
         </div>
@@ -142,16 +146,21 @@ function App() {
           <Show
             when={tagPath().length === 0}
             fallback={
-              <span>继续点击标签精细筛选 · 点击面包屑返回上级</span>
+              <span>{t("search.graphRefineHint")}</span>
             }
           >
             <span>
               {loading()
-                ? "加载中..."
-                : `${stats().totalTags} 个标签 · ${stats().totalTags > 0 ? stats().topTag + " 最多" : ""}`}
+                ? t("search.graphLoading")
+                : stats().totalTags > 0 && stats().topTag
+                  ? t("search.graphTagStatsWithTop", {
+                      count: stats().totalTags,
+                      topTag: stats().topTag ?? "",
+                    })
+                  : t("search.graphTagStats", { count: stats().totalTags })}
             </span>
           </Show>
-          <span class="text-primary opacity-70">字号越大 = 关联越多</span>
+          <span class="text-primary opacity-70">{t("search.graphSizeHint")}</span>
         </div>
       </div>
 

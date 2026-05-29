@@ -38,6 +38,13 @@ export default {
     search: "検索",
     searching: "検索中...",
     error: "エラー",
+    saveFailed: "保存に失敗しました",
+    syncFailed: "同期に失敗しました",
+    communicationError: "通信エラー",
+    createFailed: "作成に失敗しました",
+    linkFailed: "連携に失敗しました",
+    uploadFailed: "アップロードに失敗しました",
+    downloadFailed: "ダウンロードに失敗しました",
     unknownError: "不明なエラー",
     close: "閉じる",
     language: "言語設定",
@@ -61,6 +68,14 @@ export default {
     pageTitle: "設定",
     appTitle: "🤖 Flow Search",
 
+    language: {
+      title: "🌐 言語設定",
+      label: "表示言語",
+      hint:
+        "切り替え後は保存してください。一部のテキストはページを再読み込みすると反映されます。",
+      saved: "✓ 言語設定を保存しました",
+    },
+
     api: {
       title: "🔑 API 設定",
       apiKeyHint: "OpenAI、SiliconFlow、Azure OpenAI など互換 API に対応",
@@ -76,6 +91,10 @@ export default {
       advanced: "詳細設定",
       apiKeyRequired: "API キーを入力してください",
       saved: "✓ 設定を保存しました",
+      savedAndReindexing:
+        "✓ 設定を保存しました。新しい embedding 設定で {{count}} 件のブックマークを再インデックスしています。",
+      reindexFailedGeneric:
+        "設定は保存されましたが、再インデックスを開始できませんでした。",
       testSuccess: "✓ API キーは有効です、接続成功",
       testFail: "✗ API キーが無効です",
       aiProvider: "AI 要約プロバイダー",
@@ -96,6 +115,7 @@ export default {
       vectorWeightHint:
         "値を上げると意味的な類似性が重視されます。下げると文字列一致が重視されます",
       applied: "✓ 検索設定を適用しました",
+      applyFailed: "検索設定の適用に失敗しました",
     },
 
     github: {
@@ -309,6 +329,9 @@ export default {
       intervalLabel: "スキャン間隔",
       checkNow: "今すぐチェック",
       checking: "チェック中...",
+      checkSummary:
+        "{{checked}} 件チェックしました。正常 {{alive}} 件、リンク切れ {{dead}} 件です",
+      saved: "✓ リンク健全性設定を保存しました",
       stats: "スキャン統計",
       alive: "正常",
       dead: "リンク切れ",
@@ -341,10 +364,13 @@ export default {
       analyzing: "分析中...",
       suggestionsFound: "{{count}} 件の分類案が見つかりました",
       noSuggestions: "分類可能なブックマークがありません",
+      noIndexedBookmarks: "分類できるインデックス済みブックマークがありません",
+      noSuggestionsAccepted: "適用する分類案が選択されていません",
       applyButton: "分類を適用",
       applying: "ブックマークを移動中...",
       applySuccess:
         "✓ {{moved}} 件移動, {{created}} フォルダ作成, {{skipped}} 件スキップ",
+      saved: "✓ 分類設定を保存しました",
       confidenceHigh: "高",
       confidenceMedium: "中",
       confidenceLow: "低",
@@ -378,8 +404,26 @@ export default {
     askPlaceholder: "ブックマークについてAIに質問...",
     askButton: "質問",
     asking: "検索中...",
+    askFailed: "Q&A に失敗しました",
     answerSources: "参照元",
     noAnswer: "この質問に回答できる関連ブックマークが見つかりませんでした。",
+    graphExploreTitle: "タグクラウドを探索",
+    graphExploreLabel: "探索",
+    graphAll: "すべて",
+    graphBackToLevel: '"{{tag}}" に戻る',
+    graphSelectedCount: "{{count}} 件のブックマーク",
+    graphRefineHint: "タグをさらにクリックして絞り込み · パンくずで戻る",
+    graphLoading: "読み込み中...",
+    graphTagStats: "{{count}} 個のタグ",
+    graphTagStatsWithTop: "{{count}} 個のタグ · {{topTag}} が最多",
+    graphSizeHint: "文字が大きいほど関連が多い",
+    graphTagCount: "{{count}} 件のブックマーク",
+    graphClickTagToExplore: "左のタグをクリックしてブックマークを探索",
+    graphRelatedBookmarks: "関連ブックマーク",
+    graphStartExploring: "知識グラフの探索を始めましょう",
+    graphNoTaggedBookmarks: "これらのタグをすべて含むブックマークはありません",
+    graphNoMoreTags: "このタグの組み合わせにこれ以上の子タグはありません",
+    graphTryOtherTags: "別のタグの組み合わせを試してください",
   },
 
   background: {
@@ -391,5 +435,12 @@ export default {
     cmdHistory: "📜 /history キーワード — ブラウジング履歴を検索",
     cmdFolder: "📁 /folder:名前 キーワード — 特定フォルダ内を検索",
     folderSearch: "📁 フォルダを検索: {{name}}",
+    providerNotConfigured: "プロバイダーが設定されていません",
+    apiKeyNotConfigured: "API キーが設定されていません",
+    gistSyncUnavailable:
+      "Gist 同期が無効か、GitHub Token が設定されていません",
+    syncInProgress: "同期はすでに進行中です",
+    contentExtractionFailed: "コンテンツの抽出に失敗しました",
+    noRelevantBookmarks: "関連するブックマークが見つかりませんでした。",
   },
 } as const;

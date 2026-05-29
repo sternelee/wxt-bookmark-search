@@ -90,10 +90,16 @@ export default function GistSyncSettings() {
           type: "success",
         });
       } else {
-        setStatus({ message: `创建失败: ${result.error}`, type: "error" });
+        setStatus({
+          message: `${t("common.createFailed")}: ${result.error}`,
+          type: "error",
+        });
       }
     } catch (error) {
-      setStatus({ message: `创建失败: ${formatError(error)}`, type: "error" });
+      setStatus({
+        message: `${t("common.createFailed")}: ${formatError(error)}`,
+        type: "error",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -122,10 +128,16 @@ export default function GistSyncSettings() {
           type: "success",
         });
       } else {
-        setStatus({ message: `关联失败: ${result.error}`, type: "error" });
+        setStatus({
+          message: `${t("common.linkFailed")}: ${result.error}`,
+          type: "error",
+        });
       }
     } catch (error) {
-      setStatus({ message: `关联失败: ${formatError(error)}`, type: "error" });
+      setStatus({
+        message: `${t("common.linkFailed")}: ${formatError(error)}`,
+        type: "error",
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -143,10 +155,16 @@ export default function GistSyncSettings() {
           type: "success",
         });
       } else {
-        setStatus({ message: `同步失败: ${result.error}`, type: "error" });
+        setStatus({
+          message: `${t("common.syncFailed")}: ${result.error}`,
+          type: "error",
+        });
       }
     } catch (error) {
-      setStatus({ message: `同步失败: ${formatError(error)}`, type: "error" });
+      setStatus({
+        message: `${t("common.syncFailed")}: ${formatError(error)}`,
+        type: "error",
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -187,10 +205,16 @@ export default function GistSyncSettings() {
             type: "success",
           });
         } else {
-          setStatus({ message: `上传失败: ${result.error}`, type: "error" });
+          setStatus({
+            message: `${t("common.uploadFailed")}: ${result.error}`,
+            type: "error",
+          });
         }
       } catch (error) {
-        setStatus({ message: `上传失败: ${formatError(error)}`, type: "error" });
+        setStatus({
+          message: `${t("common.uploadFailed")}: ${formatError(error)}`,
+          type: "error",
+        });
       } finally {
         setIsUploading(false);
       }
@@ -209,10 +233,16 @@ export default function GistSyncSettings() {
             type: "success",
           });
         } else {
-          setStatus({ message: `下载失败: ${result.error}`, type: "error" });
+          setStatus({
+            message: `${t("common.downloadFailed")}: ${result.error}`,
+            type: "error",
+          });
         }
       } catch (error) {
-        setStatus({ message: `下载失败: ${formatError(error)}`, type: "error" });
+        setStatus({
+          message: `${t("common.downloadFailed")}: ${formatError(error)}`,
+          type: "error",
+        });
       } finally {
         setIsDownloading(false);
       }

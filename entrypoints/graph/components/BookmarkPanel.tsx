@@ -3,6 +3,7 @@
  */
 import { For, Show } from "solid-js";
 import { incrementFreq } from "../../../src/freq";
+import { useI18n } from "../../../src/i18n";
 import type { BookmarkRecord } from "../../../src/types";
 
 function sourceIcon(source?: string): string {
@@ -19,6 +20,8 @@ interface BookmarkPanelProps {
 }
 
 export function BookmarkPanel(props: BookmarkPanelProps) {
+  const { t } = useI18n();
+
   function openBookmark(url: string) {
     incrementFreq(url);
     browser.tabs.create({ url });
@@ -33,12 +36,12 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
           when={props.activeTags.length > 0}
           fallback={
             <div class="text-sm font-medium text-muted-foreground">
-              点击左侧标签探索书签
+              {t("search.graphClickTagToExplore")}
             </div>
           }
         >
           <div class="flex items-center flex-wrap gap-1.5">
-            <span class="text-sm font-medium">关联书签</span>
+            <span class="text-sm font-medium">{t("search.graphRelatedBookmarks")}</span>
             <For each={props.activeTags}>
               {(tag, i) => (
                 <>
@@ -48,7 +51,7 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
               )}
             </For>
             <span class="ml-auto text-xs text-muted-foreground">
-              {props.bookmarks.length} 个
+              {t("search.graphSelectedCount", { count: props.bookmarks.length })}
             </span>
           </div>
         </Show>
@@ -62,9 +65,9 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
             <div class="flex items-center justify-center h-40 text-muted-foreground text-sm text-center px-4">
               <Show
                 when={props.activeTags.length > 0}
-                fallback="开始探索你的知识图谱"
+                fallback={t("search.graphStartExploring")}
               >
-                未找到同时包含这些标签的书签
+                {t("search.graphNoTaggedBookmarks")}
               </Show>
             </div>
           }

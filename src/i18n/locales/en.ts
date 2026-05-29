@@ -39,6 +39,13 @@ export default {
     search: "Search",
     searching: "Searching...",
     error: "Error",
+    saveFailed: "Save failed",
+    syncFailed: "Sync failed",
+    communicationError: "Communication error",
+    createFailed: "Create failed",
+    linkFailed: "Link failed",
+    uploadFailed: "Upload failed",
+    downloadFailed: "Download failed",
     unknownError: "Unknown Error",
     close: "Close",
     language: "Language",
@@ -62,6 +69,14 @@ export default {
     pageTitle: "Settings",
     appTitle: "🤖 Flow Search",
 
+    language: {
+      title: "🌐 Language Settings",
+      label: "Interface Language",
+      hint:
+        "Save after switching. Some text may require a page refresh to fully update.",
+      saved: "✓ Language settings saved",
+    },
+
     api: {
       title: "🔑 API Configuration",
       apiKeyHint:
@@ -78,6 +93,10 @@ export default {
       advanced: "Advanced Settings",
       apiKeyRequired: "Please enter API Key",
       saved: "✓ Settings saved",
+      savedAndReindexing:
+        "✓ Settings saved. Reindexing {{count}} bookmarks with the new embedding configuration.",
+      reindexFailedGeneric:
+        "Settings were saved, but reindexing could not be started.",
       testSuccess: "✓ API Key is valid, connection successful",
       testFail: "✗ API Key is invalid",
       aiProvider: "AI Summary Provider",
@@ -98,6 +117,7 @@ export default {
       vectorWeightHint:
         "Higher value makes results more semantically similar; lower value favors literal matching",
       applied: "✓ Search settings applied",
+      applyFailed: "Failed to apply search settings",
     },
 
     github: {
@@ -372,6 +392,8 @@ export default {
       intervalLabel: "Scan Interval",
       checkNow: "Check Now",
       checking: "Checking...",
+      checkSummary: "{{checked}} checked, {{alive}} alive, {{dead}} dead",
+      saved: "✓ Link health settings saved",
       stats: "Scan Statistics",
       alive: "Alive",
       dead: "Dead",
@@ -404,10 +426,13 @@ export default {
       analyzing: "Analyzing...",
       suggestionsFound: "{{count}} suggestion(s) found",
       noSuggestions: "No bookmarks to categorize",
+      noIndexedBookmarks: "No indexed bookmarks to categorize",
+      noSuggestionsAccepted: "No suggestions selected to apply",
       applyButton: "Apply Categories",
       applying: "Moving bookmarks...",
       applySuccess:
         "✓ {{moved}} moved, {{created}} folders created, {{skipped}} skipped",
+      saved: "✓ Categorization settings saved",
       confidenceHigh: "High",
       confidenceMedium: "Medium",
       confidenceLow: "Low",
@@ -440,8 +465,26 @@ export default {
     askPlaceholder: "Ask AI about your bookmarks...",
     askButton: "Ask",
     asking: "Searching...",
+    askFailed: "Q&A failed",
     answerSources: "Sources",
     noAnswer: "No relevant bookmarks found to answer this question.",
+    graphExploreTitle: "Explore tag cloud",
+    graphExploreLabel: "Explore",
+    graphAll: "All",
+    graphBackToLevel: 'Back to "{{tag}}"',
+    graphSelectedCount: "{{count}} bookmarks",
+    graphRefineHint: "Click more tags to refine · click breadcrumb to go back",
+    graphLoading: "Loading...",
+    graphTagStats: "{{count}} tags",
+    graphTagStatsWithTop: "{{count}} tags · {{topTag}} most common",
+    graphSizeHint: "Larger text = more related bookmarks",
+    graphTagCount: "{{count}} bookmarks",
+    graphClickTagToExplore: "Click tags on the left to explore bookmarks",
+    graphRelatedBookmarks: "Related bookmarks",
+    graphStartExploring: "Start exploring your knowledge graph",
+    graphNoTaggedBookmarks: "No bookmarks match all selected tags",
+    graphNoMoreTags: "No more child tags under this tag combination",
+    graphTryOtherTags: "Try a different tag combination",
   },
 
   background: {
@@ -453,5 +496,11 @@ export default {
     cmdHistory: "📜 /history keyword — Search Browser History",
     cmdFolder: "📁 /folder:name keyword — Search in a specific folder",
     folderSearch: "📁 Search folder: {{name}}",
+    providerNotConfigured: "Provider not configured",
+    apiKeyNotConfigured: "API key not configured",
+    gistSyncUnavailable: "Gist sync is disabled or GitHub token is missing",
+    syncInProgress: "Sync is already in progress",
+    contentExtractionFailed: "Content extraction failed",
+    noRelevantBookmarks: "No relevant bookmarks found.",
   },
 } as const;

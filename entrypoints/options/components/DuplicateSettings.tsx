@@ -9,6 +9,10 @@ import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { useI18n } from "../../../src/i18n";
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function DuplicateSettings() {
   const { t } = useI18n();
   const [scanning, setScanning] = createSignal(false);
@@ -55,12 +59,12 @@ export default function DuplicateSettings() {
         });
       } else {
         setStatus({
-          message: response.error || "Unknown error",
+          message: response.error || t("common.unknownError"),
           type: "error",
         });
       }
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     } finally {
       setScanning(false);
     }
@@ -86,12 +90,12 @@ export default function DuplicateSettings() {
         });
       } else {
         setStatus({
-          message: response.error || "Unknown error",
+          message: response.error || t("common.unknownError"),
           type: "error",
         });
       }
     } catch (e) {
-      setStatus({ message: String(e), type: "error" });
+      setStatus({ message: formatErrorMessage(e), type: "error" });
     }
   };
 

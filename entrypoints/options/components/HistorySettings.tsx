@@ -37,7 +37,7 @@ export default function HistorySettings() {
       });
       setStatus({ message: t("options.history.saved"), type: "success" });
     } catch (error) {
-      setStatus({ message: `保存失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("common.saveFailed")}: ${error}`, type: "error" });
     }
   };
 
@@ -60,10 +60,13 @@ export default function HistorySettings() {
         });
         setLastSync(new Date().toLocaleString());
       } else {
-        setStatus({ message: `同步失败: ${result.error}`, type: "error" });
+        setStatus({ message: `${t("common.syncFailed")}: ${result.error}`, type: "error" });
       }
     } catch (error) {
-      setStatus({ message: `通信错误: ${error}`, type: "error" });
+      setStatus({
+        message: `${t("common.communicationError")}: ${error}`,
+        type: "error",
+      });
     } finally {
       setIsSyncing(false);
     }

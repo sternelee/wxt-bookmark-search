@@ -12,6 +12,26 @@ import StatsGrid from "./components/StatsGrid";
 import RecentList from "./components/RecentList";
 import IndexingHUD from "./components/IndexingHUD";
 
+type BookmarkTreeNode = {
+  url?: string;
+  children?: BookmarkTreeNode[];
+};
+
+function countBrowserBookmarks(
+  nodes: BookmarkTreeNode[],
+): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.url) {
+      count += 1;
+    }
+    if (node.children) {
+      count += countBrowserBookmarks(node.children);
+    }
+  }
+  return count;
+}
+
 function App() {
   const { t } = useI18n();
   const [isConfigured, setIsConfigured] = createSignal(false);
@@ -28,9 +48,12 @@ function App() {
   const [quickQuery, setQuickQuery] = createSignal("");
 
   const fetchStats = async () => {
-    const stats = await getIndexStats();
+    const [stats, tree] = await Promise.all([
+      getIndexStats(),
+      browser.bookmarks.getTree(),
+    ]);
     setIndexed(stats.indexed);
-    setTotal(stats.total);
+    setTotal(countBrowserBookmarks(tree));
   };
 
   onMount(async () => {

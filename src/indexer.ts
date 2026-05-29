@@ -9,6 +9,7 @@ import {
   upsertBookmarks,
   updateBookmark,
   getIndexedBookmarks,
+  getIndexedBookmarkIds,
   getIndexStats,
   getIndexedUrls,
   getFailedBookmarks,
@@ -20,7 +21,7 @@ import { getLLMProvider } from "./ai-providers/llm-base";
 import {
   upsertSearchEngineBatch,
   removeFromSearchEngine,
-  scheduleSaveSearchEngine,
+  flushSaveSearchEngine,
 } from "./search-engine";
 
 /** 索引任务状态 */
@@ -37,7 +38,10 @@ let isProcessing = false;
 let isPaused = false; // 暂停标志
 let totalToProcess = 0; // 总待处理数
 let processedCount = 0; // 已处理数
+let queueGeneration = 0;
+let activeProcessingGeneration = 0;
 const MAX_RETRIES = 2;
+const CONTENT_FETCH_CONCURRENCY = 3;
 
 /** 自适应限流器 */
 class RateLimiter {
@@ -450,6 +454,94 @@ async function persistEnrichmentQueue(): Promise<void> {
   }
 }
 
+function isQueueRunStale(runGeneration: number): boolean {
+  return runGeneration !== queueGeneration;
+}
+
+function finishQueueRun(runGeneration: number): void {
+  if (activeProcessingGeneration === runGeneration) {
+    isProcessing = false;
+  }
+}
+
+/** 重置索引器运行态，避免清库后旧批次继续写回。 */
+export async function resetIndexerState(): Promise<void> {
+  queueGeneration++;
+  activeProcessingGeneration = queueGeneration;
+  queue.length = 0;
+  enrichmentQueue.length = 0;
+  isProcessing = false;
+  isPaused = false;
+  totalToProcess = 0;
+  processedCount = 0;
+  await Promise.all([
+    db.indexQueue.clear(),
+    browser.storage.local.remove(ENRICHMENT_QUEUE_KEY),
+  ]);
+}
+
+async function persistQueueJobs(jobs: IndexJob[]): Promise<void> {
+  if (jobs.length === 0) return;
+
+  try {
+    const enqueuedAt = Date.now();
+    await db.indexQueue.bulkPut(
+      jobs.map((job) => ({
+        bookmarkId: job.bookmarkId,
+        url: job.url,
+        title: job.title,
+        retryCount: job.retryCount,
+        enqueuedAt,
+      })),
+    );
+  } catch (err) {
+    console.warn("[indexer] Failed to persist queue batch:", err);
+  }
+}
+
+async function enqueueIndexJobs(
+  jobs: IndexJob[],
+  options: { front?: boolean } = {},
+): Promise<void> {
+  if (jobs.length === 0) return;
+
+  if (options.front) {
+    queue.unshift(...jobs);
+  } else {
+    queue.push(...jobs);
+  }
+
+  await persistQueueJobs(jobs);
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, items.length) },
+      () => worker(),
+    ),
+  );
+
+  return results;
+}
+
 /** 从 storage 恢复 enrichment 队列 */
 async function restoreEnrichmentQueue(): Promise<void> {
   try {
@@ -626,11 +718,12 @@ export async function syncGithubStars(): Promise<{
       await upsertBookmarks(records);
       totalQueued += records.length;
 
-      upsertSearchEngineBatch(records)
-        .then(() => scheduleSaveSearchEngine())
-        .catch((e) => {
-          console.warn("[indexer] Search engine sync failed:", e);
-        });
+      try {
+        await upsertSearchEngineBatch(records);
+        await flushSaveSearchEngine();
+      } catch (e) {
+        console.warn("[indexer] Search engine sync failed:", e);
+      }
 
       // 把成功快速索引的 repos 加入 enrichment 队列（后台慢慢补 README）
       for (const repo of pageRepos) {
@@ -657,7 +750,7 @@ export async function syncGithubStars(): Promise<{
           retryCount: 0,
         }));
       if (failedJobs.length > 0) {
-        queue.push(...failedJobs);
+        await enqueueIndexJobs(failedJobs);
         processQueue();
       }
 
@@ -689,6 +782,55 @@ function getUrlDomain(url: string): string {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return "";
+  }
+}
+
+function isPrivateIpv4Host(hostname: string): boolean {
+  const parts = hostname.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 192 && b === 168 ||
+    a === 169 && b === 254 ||
+    a === 172 && b >= 16 && b <= 31
+  );
+}
+
+function isPrivateReaderHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::1" ||
+    normalized === "[::1]" ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal") ||
+    isPrivateIpv4Host(normalized)
+  );
+}
+
+function getSafeJinaReaderUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    if (isPrivateReaderHost(parsed.hostname)) {
+      return null;
+    }
+
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    return `https://r.jina.ai/${encodeURIComponent(parsed.toString())}`;
+  } catch {
+    return null;
   }
 }
 
@@ -827,8 +969,15 @@ export async function fetchPageContent(
 
     const jinaPromise = (async () => {
       try {
+        const readerUrl = getSafeJinaReaderUrl(url);
+        if (!readerUrl) {
+          console.warn(
+            `[indexer] Strategy 3: Skipping Jina Reader for private or unsupported URL: ${url}`,
+          );
+          return null;
+        }
+
         console.log(`[indexer] Strategy 3: Requesting Jina Reader for ${url}`);
-        const readerUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
         const jinaResponse = await fetch(readerUrl, {
           headers: { Accept: "text/markdown" },
           signal: AbortSignal.timeout(8000),
@@ -915,6 +1064,8 @@ const BATCH_SIZE = 10; // 每批处理 10 个书签
 async function processQueue(): Promise<void> {
   if (isProcessing || queue.length === 0) return;
 
+  const runGeneration = queueGeneration;
+  activeProcessingGeneration = runGeneration;
   isProcessing = true;
   totalToProcess = queue.length;
   processedCount = 0;
@@ -923,7 +1074,7 @@ async function processQueue(): Promise<void> {
 
   if (!settings.openaiApiKey) {
     console.warn("[indexer] No API key, skipping queue processing");
-    isProcessing = false;
+    finishQueueRun(runGeneration);
     notifyProgress({
       total: 0,
       processed: 0,
@@ -939,7 +1090,12 @@ async function processQueue(): Promise<void> {
   notifyProgress({ total: totalToProcess, processed: 0, status: "processing" });
 
   while (queue.length > 0) {
+    if (isQueueRunStale(runGeneration)) {
+      finishQueueRun(runGeneration);
+      return;
+    }
     if (isPaused) {
+      finishQueueRun(runGeneration);
       notifyProgress({
         total: totalToProcess,
         processed: processedCount,
@@ -966,8 +1122,10 @@ async function processQueue(): Promise<void> {
     });
 
     // 2. 并发提取内容（IO 密集型）
-    const contents = await Promise.all(
-      batch.map(async (job) => {
+    const contents = await mapWithConcurrency(
+      batch,
+      CONTENT_FETCH_CONCURRENCY,
+      async (job) => {
         try {
           const content = await fetchPageContent(job.url, settings);
           let text: string;
@@ -1053,8 +1211,12 @@ async function processQueue(): Promise<void> {
             llmEnhanced: false,
           };
         }
-      }),
+      },
     );
+    if (isQueueRunStale(runGeneration)) {
+      finishQueueRun(runGeneration);
+      return;
+    }
 
     // 3. 批量嵌入（单次 API 调用）
     const texts = contents.map((c) => c.text);
@@ -1076,10 +1238,10 @@ async function processQueue(): Promise<void> {
       if (isRateLimitError(errorMessage)) {
         onRateLimit();
         // 失败的任务重新入队
+        const retryJobs: IndexJob[] = [];
         for (const { job } of contents) {
           if (job.retryCount < MAX_RETRIES) {
-            queue.unshift({ ...job, retryCount: job.retryCount + 1 });
-            totalToProcess++;
+            retryJobs.push({ ...job, retryCount: job.retryCount + 1 });
           } else {
             await updateBookmark(job.bookmarkId, {
               status: "failed",
@@ -1087,17 +1249,23 @@ async function processQueue(): Promise<void> {
             });
           }
         }
+        await enqueueIndexJobs(retryJobs, { front: true });
+        totalToProcess += retryJobs.length;
 
         const delay = calculateDelay();
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
+      if (isQueueRunStale(runGeneration)) {
+        finishQueueRun(runGeneration);
+        return;
+      }
 
       // 非限流错误，标记失败
+      const retryJobs: IndexJob[] = [];
       for (const { job } of contents) {
         if (job.retryCount < MAX_RETRIES) {
-          queue.push({ ...job, retryCount: job.retryCount + 1 });
-          totalToProcess++;
+          retryJobs.push({ ...job, retryCount: job.retryCount + 1 });
         } else {
           await updateBookmark(job.bookmarkId, {
             status: "failed",
@@ -1105,35 +1273,54 @@ async function processQueue(): Promise<void> {
           });
         }
       }
+      await enqueueIndexJobs(retryJobs);
+      totalToProcess += retryJobs.length;
 
       processedCount += batch.length;
       continue;
     }
 
+    const existingRecords = await db.bookmarks.bulkGet(
+      batch.map((item) => item.bookmarkId),
+    );
+    const existingById = new Map<string, BookmarkRecord>();
+    for (const record of existingRecords) {
+      if (record) {
+        existingById.set(record.id, record);
+      }
+    }
+
     // 4. 批量写入 DB
     const records: BookmarkRecord[] = contents.map(
-      ({ job, content, summary, tags, llmEnhanced }, i) => ({
-        id: job.bookmarkId,
-        url: job.url,
-        title: content?.title || job.title,
-        summary,
-        tags,
-        embedding: embeddings[i],
-        status: "indexed" as const,
-        indexedAt: Date.now(),
-        llmEnhanced,
-      }),
+      ({ job, content, summary, tags, llmEnhanced }, i) => {
+        const existing = existingById.get(job.bookmarkId);
+        return {
+          ...existing,
+          id: job.bookmarkId,
+          url: job.url,
+          title: content?.title || existing?.title || job.title,
+          summary: summary || existing?.summary || "",
+          tags: tags.length > 0 ? tags : existing?.tags || [],
+          embedding: embeddings[i],
+          status: "indexed" as const,
+          indexedAt: Date.now(),
+          error: undefined,
+          llmEnhanced: llmEnhanced || existing?.llmEnhanced || false,
+          source: existing?.source || "bookmark",
+        };
+      },
     );
 
     try {
       await upsertBookmarks(records);
       console.log(`[indexer] Batch indexed: ${batch.length} items`);
 
-      upsertSearchEngineBatch(records)
-        .then(() => scheduleSaveSearchEngine())
-        .catch((e) => {
-          console.warn("[indexer] Search engine sync failed:", e);
-        });
+      try {
+        await upsertSearchEngineBatch(records);
+        await flushSaveSearchEngine();
+      } catch (e) {
+        console.warn("[indexer] Search engine sync failed:", e);
+      }
       processedCount += batch.length;
 
       notifyProgress({
@@ -1144,10 +1331,10 @@ async function processQueue(): Promise<void> {
     } catch (error) {
       console.error("[indexer] Failed to upsert batch:", error);
       // 写入失败，重新入队
+      const retryJobs: IndexJob[] = [];
       for (const { job } of contents) {
         if (job.retryCount < MAX_RETRIES) {
-          queue.push({ ...job, retryCount: job.retryCount + 1 });
-          totalToProcess++;
+          retryJobs.push({ ...job, retryCount: job.retryCount + 1 });
         } else {
           await updateBookmark(job.bookmarkId, {
             status: "failed",
@@ -1155,6 +1342,8 @@ async function processQueue(): Promise<void> {
           });
         }
       }
+      await enqueueIndexJobs(retryJobs);
+      totalToProcess += retryJobs.length;
     }
 
     // 限流延迟
@@ -1162,7 +1351,7 @@ async function processQueue(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  isProcessing = false;
+  finishQueueRun(runGeneration);
 
   if (isPaused) return;
 
@@ -1185,39 +1374,45 @@ export async function enqueueBookmark(bookmark: {
   title: string;
 }): Promise<boolean> {
   // 检查是否已在队列中
-  const existsInQueue = queue.some((j) => j.url === bookmark.url);
+  const existsInQueue = queue.some((j) => j.bookmarkId === bookmark.id);
   if (existsInQueue) return false;
 
-  // 检查是否已索引
-  const indexedUrls = await getIndexedUrls([bookmark.url]);
-  if (indexedUrls.has(bookmark.url)) {
-    console.log(`[indexer] Skip already indexed: ${bookmark.url}`);
+  // 检查该书签 ID 是否已索引。相同 URL 的其他书签不应阻止当前书签入队。
+  const indexedIds = await getIndexedBookmarkIds([bookmark.id]);
+  if (indexedIds.has(bookmark.id)) {
+    console.log(`[indexer] Skip already indexed bookmark: ${bookmark.id}`);
     return false;
   }
 
-  queue.push({
+  await enqueueIndexJobs([{
     bookmarkId: bookmark.id,
     url: bookmark.url,
     title: bookmark.title,
     retryCount: 0,
-  });
-
-  // 持久化到 IndexedDB
-  try {
-    await db.indexQueue.put({
-      bookmarkId: bookmark.id,
-      url: bookmark.url,
-      title: bookmark.title,
-      retryCount: 0,
-      enqueuedAt: Date.now(),
-    });
-  } catch (err) {
-    console.warn("[indexer] Failed to persist queue item:", err);
-  }
+  }]);
 
   // 触发队列处理
   processQueue();
   return true;
+}
+
+/** 将现有记录直接重新入队，用于 embedding 配置变更后的重建。 */
+export async function enqueueBookmarksForReindex(
+  bookmarks: Array<{ id: string; url: string; title: string }>,
+): Promise<number> {
+  if (bookmarks.length === 0) return 0;
+
+  await enqueueIndexJobs(
+    bookmarks.map((bookmark) => ({
+      bookmarkId: bookmark.id,
+      url: bookmark.url,
+      title: bookmark.title,
+      retryCount: 0,
+    })),
+  );
+
+  processQueue();
+  return bookmarks.length;
 }
 
 /**
@@ -1229,46 +1424,28 @@ export async function enqueueBookmarks(
 ): Promise<number> {
   if (bookmarks.length === 0) return 0;
 
-  // 批量查询已索引的 URL
-  const urls = bookmarks.map((b) => b.url);
-  const indexedUrls = await getIndexedUrls(urls);
+  // 批量查询已索引的书签 ID，同 URL 的不同书签仍需单独索引。
+  const ids = bookmarks.map((b) => b.id);
+  const indexedIds = await getIndexedBookmarkIds(ids);
 
   // 过滤出未索引的书签
-  const toIndex = bookmarks.filter((b) => !indexedUrls.has(b.url));
+  const toIndex = bookmarks.filter((b) => !indexedIds.has(b.id));
 
   // 过滤已在队列中的
-  const queuedUrls = new Set(queue.map((j) => j.url));
-  const newBookmarks = toIndex.filter((b) => !queuedUrls.has(b.url));
+  const queuedIds = new Set(queue.map((j) => j.bookmarkId));
+  const newBookmarks = toIndex.filter((b) => !queuedIds.has(b.id));
 
-  // 加入队列
-  for (const bookmark of newBookmarks) {
-    queue.push({
+  await enqueueIndexJobs(
+    newBookmarks.map((bookmark) => ({
       bookmarkId: bookmark.id,
       url: bookmark.url,
       title: bookmark.title,
       retryCount: 0,
-    });
-  }
-
-  // 持久化到 IndexedDB
-  if (newBookmarks.length > 0) {
-    try {
-      await db.indexQueue.bulkPut(
-        newBookmarks.map((b) => ({
-          bookmarkId: b.id,
-          url: b.url,
-          title: b.title,
-          retryCount: 0,
-          enqueuedAt: Date.now(),
-        })),
-      );
-    } catch (err) {
-      console.warn("[indexer] Failed to persist queue batch:", err);
-    }
-  }
+    })),
+  );
 
   console.log(
-    `[indexer] ${bookmarks.length} total, ${indexedUrls.size} indexed, ${newBookmarks.length} to queue`,
+    `[indexer] ${bookmarks.length} total, ${indexedIds.size} indexed, ${newBookmarks.length} to queue`,
   );
 
   // 触发队列处理
@@ -1521,15 +1698,14 @@ export async function retryFailed(): Promise<number> {
     .equals("failed")
     .modify({ status: "pending" });
 
-  // 加入队列
-  for (const bookmark of toRetry) {
-    queue.push({
+  await enqueueIndexJobs(
+    toRetry.map((bookmark) => ({
       bookmarkId: bookmark.id,
       url: bookmark.url,
       title: bookmark.title,
       retryCount: 0,
-    });
-  }
+    })),
+  );
 
   processQueue();
   return toRetry.length;
@@ -1543,14 +1719,14 @@ export async function initIndexer(): Promise<void> {
   try {
     const persistedQueue = await db.indexQueue.toArray();
     if (persistedQueue.length > 0) {
-      // 获取已索引的 URL，跳过已完成的条目
-      const urlsToCheck = persistedQueue.map((i) => i.url);
-      const indexedUrls = await getIndexedUrls(urlsToCheck);
+      // 获取已索引的书签 ID，跳过真正已经完成的相同书签。
+      const idsToCheck = persistedQueue.map((i) => i.bookmarkId);
+      const indexedIds = await getIndexedBookmarkIds(idsToCheck);
 
       let restored = 0;
       const staleIds: string[] = [];
       for (const item of persistedQueue) {
-        if (indexedUrls.has(item.url)) {
+        if (indexedIds.has(item.bookmarkId)) {
           // 已索引，不需要重新入队
           staleIds.push(item.bookmarkId);
         } else if (!queue.some((j) => j.bookmarkId === item.bookmarkId)) {
@@ -1616,7 +1792,7 @@ export async function initIndexer(): Promise<void> {
     const { deleteBookmark } = await import("./db");
     await deleteBookmark(id);
     await removeFromSearchEngine(id).catch(() => {});
-    scheduleSaveSearchEngine();
+    await flushSaveSearchEngine();
   });
 
   // === 恢复 enrichment 队列 ===
@@ -1834,11 +2010,12 @@ export async function syncTwitterBookmarks(): Promise<{
       await upsertBookmarks(records);
       totalCount += bookmarks.length;
 
-      upsertSearchEngineBatch(records)
-        .then(() => scheduleSaveSearchEngine())
-        .catch((e) => {
-          console.warn("[indexer] Search engine sync failed:", e);
-        });
+      try {
+        await upsertSearchEngineBatch(records);
+        await flushSaveSearchEngine();
+      } catch (e) {
+        console.warn("[indexer] Search engine sync failed:", e);
+      }
 
       // LLM 增强（如果启用）
       if (settings.enableLLMEnrichment) {

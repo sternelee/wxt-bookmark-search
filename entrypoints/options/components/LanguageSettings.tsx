@@ -18,6 +18,10 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
   { value: "ko", label: "한국어" },
 ];
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function LanguageSettings() {
   const { t, setLocale } = useI18n();
   const [locale, setLocaleSignal] = createSignal<Locale>("zh-CN");
@@ -36,10 +40,10 @@ export default function LanguageSettings() {
     try {
       await saveSettings({ language: locale() });
       setLocale(locale());
-      setStatus({ message: t("options.search.applied"), type: "success" });
+      setStatus({ message: t("options.language.saved"), type: "success" });
     } catch (error) {
       setStatus({
-        message: `${t("common.error")}: ${error}`,
+        message: `${t("common.saveFailed")}: ${formatErrorMessage(error)}`,
         type: "error",
       });
     }
@@ -48,15 +52,15 @@ export default function LanguageSettings() {
   return (
     <Card class="mb-6">
       <CardHeader>
-        <CardTitle>🌐 {t("common.language") || "语言设置"}</CardTitle>
+        <CardTitle>🌐 {t("options.language.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Select
-          label={t("common.language") || "界面语言"}
+          label={t("options.language.label")}
           value={locale()}
           onChange={(e) => setLocaleSignal(e.currentTarget.value as Locale)}
           options={LOCALE_OPTIONS}
-          hint="切换后需保存设置，部分文本可能需刷新页面生效"
+          hint={t("options.language.hint")}
         />
 
         <Button onClick={handleApply} class="mt-4">

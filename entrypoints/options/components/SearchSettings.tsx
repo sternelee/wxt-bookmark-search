@@ -27,7 +27,10 @@ export default function SearchSettings() {
       });
       setStatus({ message: t("options.search.applied"), type: "success" });
     } catch (error) {
-      setStatus({ message: `应用失败: ${error}`, type: "error" });
+      setStatus({
+        message: `${t("options.search.applyFailed")}: ${error}`,
+        type: "error",
+      });
     }
   };
 

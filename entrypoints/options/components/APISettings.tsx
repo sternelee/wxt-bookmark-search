@@ -52,6 +52,17 @@ export default function APISettings() {
 
     setIsSaving(true);
     try {
+      const currentSettings = await getSettings();
+      const nextBaseURL = (baseURL() || "").trim().replace(/\/+$/, "");
+      const nextEmbeddingModel = (embeddingModel() || "").trim();
+      const currentBaseURL = (currentSettings.baseURL || "")
+        .trim()
+        .replace(/\/+$/, "");
+      const currentEmbeddingModel = (currentSettings.embeddingModel || "").trim();
+      const shouldReindexEmbeddings =
+        nextBaseURL !== currentBaseURL ||
+        nextEmbeddingModel !== currentEmbeddingModel;
+
       await saveSettings({
         openaiApiKey: apiKey(),
         baseURL: baseURL() || undefined,
@@ -60,9 +71,30 @@ export default function APISettings() {
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
       });
-      setStatus({ message: t("options.api.saved"), type: "success" });
+
+      if (shouldReindexEmbeddings) {
+        const response = await browser.runtime.sendMessage({
+          type: "REINDEX_STORED_EMBEDDINGS",
+        });
+        if (!response?.success) {
+          throw new Error(
+            response?.error || t("options.api.reindexFailedGeneric"),
+          );
+        }
+        setStatus({
+          message:
+            response.queued > 0
+              ? t("options.api.savedAndReindexing", {
+                  count: response.queued,
+                })
+              : t("options.api.saved"),
+          type: "success",
+        });
+      } else {
+        setStatus({ message: t("options.api.saved"), type: "success" });
+      }
     } catch (error) {
-      setStatus({ message: `保存失败: ${error}`, type: "error" });
+      setStatus({ message: `${t("common.saveFailed")}: ${error}`, type: "error" });
     } finally {
       setIsSaving(false);
     }

@@ -63,6 +63,7 @@ type BookmarkDocument = {
 };
 
 let engine: AnyOrama | null = null;
+export const ORAMA_INDEX_STORAGE_KEY = "orama_index";
 
 /** 初始化搜索引擎 */
 export async function initSearchEngine(): Promise<void> {
@@ -241,14 +242,34 @@ export function registerSaveFn(fn: SaveFn): void {
   _saveFn = fn;
 }
 
+function clearPendingSaveTimer(): void {
+  if (_saveTimer) {
+    clearTimeout(_saveTimer);
+    _saveTimer = null;
+  }
+}
+
 /** 调度搜索引擎持久化（5s 去抖） */
 export function scheduleSaveSearchEngine(): void {
   if (!_saveFn) return;
-  if (_saveTimer) clearTimeout(_saveTimer);
+  clearPendingSaveTimer();
   _saveTimer = setTimeout(() => {
     _saveFn!().catch(() => {});
     _saveTimer = null;
   }, 5000);
+}
+
+/** 立即持久化当前搜索引擎并清空待执行的去抖保存。 */
+export async function flushSaveSearchEngine(): Promise<void> {
+  if (!_saveFn) return;
+  clearPendingSaveTimer();
+  await _saveFn();
+}
+
+/** 重置内存中的搜索引擎状态，并取消任何待执行的保存。 */
+export async function resetSearchEngine(): Promise<void> {
+  clearPendingSaveTimer();
+  await initSearchEngine();
 }
 
 /** 混合搜索 */
@@ -324,15 +345,27 @@ export async function searchVector(
 /** 纯全文搜索（无 API key 时的 fallback） */
 export async function searchKeyword(
   query: string,
-  limit: number = 9,
+  options: {
+    limit?: number;
+    sourceFilter?: BookmarkRecord["source"];
+    idFilter?: string[];
+  } = {},
 ): Promise<BookmarkRecord[]> {
   if (!engine) return [];
+  const where: { source?: BookmarkRecord["source"]; id?: string[] } = {};
+  if (options.sourceFilter) {
+    where.source = options.sourceFilter;
+  }
+  if (options.idFilter && options.idFilter.length > 0) {
+    where.id = options.idFilter;
+  }
 
   const results = await search(engine, {
     term: query,
-    limit,
+    limit: options.limit || 9,
     properties: ["url", "title", "summary", "tags"],
     tolerance: 1,
+    ...(Object.keys(where).length > 0 ? ({ where } as any) : {}),
   });
 
   return applyFreqBoost(results.hits);
