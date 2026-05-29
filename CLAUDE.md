@@ -57,7 +57,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `twitter-cookies.ts` | Auto-extraction of Twitter cookies via `browser.cookies` API |
 | `history.ts` | Browser history sync via `browser.history` API |
 | `gist-sync.ts` | GitHub Gist multi-device bookmark sync with union merge + deletion tracking (30-day TTL, 900 KB size guard) |
-| `cloud-sync/` | Cloud-drive sync for full BookmarkRecord + Orama vector index. Provider-abstracted: Google Drive (`google-drive.ts`) and Dropbox (`dropbox.ts`), with `blob.ts` (gzip serialization via native `CompressionStream`) and `index.ts` (orchestration). Manual Access Token auth; auto-upload via `browser.alarms`; download always manual (full replace). |
+| `cloud-sync/` | Cloud-drive sync for full BookmarkRecord + Orama vector index. Providers: Google Drive (`google-drive.ts`), Dropbox (`dropbox.ts`), WebDAV (`webdav.ts`), with `blob.ts` (gzip serialization via native `CompressionStream`), `bookmark-sync.ts` (content toggles), `types.ts`, and `index.ts` (orchestration). Manual Access Token auth; auto-upload via `browser.alarms`; download always manual (full replace). |
 | `health.ts` | Link health checker — concurrent `HEAD` requests (CONCURRENCY=5, timeout 8 s), broadcasts `LINK_CHECK_PROGRESS` messages |
 | `dedup.ts` | Duplicate bookmark detection (URL grouping) + resolution helper |
 | `categorize.ts` | AI auto-categorization via LLM into a fixed taxonomy (Frontend/Backend/Rust/etc.); two-phase dry-run → apply with folder creation |
@@ -88,11 +88,11 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 Synchronous: `GET_INDEXING_STATUS`
 
 Async:
-- **Search & indexing:** `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`
+- **Search & indexing:** `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `GET_ALL_INDEXED`
 - **External sources:** `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY`
 - **Cache:** `GET_CACHE_STATS`, `CLEAR_EMBEDDING_CACHE`
 - **Gist:** `GIST_SYNC`, `GIST_CREATE`, `GIST_LINK`, `GIST_UPLOAD`, `GIST_DOWNLOAD`
-- **Cloud sync:** `CLOUD_SYNC_TEST_CONNECTION`, `CLOUD_SYNC_GET_STATUS`, `CLOUD_SYNC_UPLOAD`, `CLOUD_SYNC_DOWNLOAD`, `CLOUD_SYNC_DELETE`, `CLOUD_SYNC_REFRESH_ALARM`
+- **Cloud sync:** `CLOUD_SYNC_TEST_CONNECTION`, `CLOUD_SYNC_GET_STATUS`, `CLOUD_SYNC_UPLOAD`, `CLOUD_SYNC_DOWNLOAD`, `CLOUD_SYNC_DELETE`, `CLOUD_SYNC_REFRESH_ALARM`, `CLOUD_SYNC_BOOKMARK_SYNC`, `CLOUD_SYNC_BOOKMARK_UPLOAD`, `CLOUD_SYNC_BOOKMARK_DOWNLOAD`
 - **Link health:** `CHECK_LINKS`, `GET_LINK_STATS`, `GET_DEAD_LINKS`
 - **Dedup:** `FIND_DUPLICATES`, `RESOLVE_DUPLICATES`
 - **Categorize:** `GET_CATEGORY_SUGGESTIONS`, `APPLY_CATEGORIES`, `GET_CATEGORY_FOLDERS`
