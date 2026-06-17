@@ -48,18 +48,20 @@ function detectContentType(url: string, text: string): string {
   return "article";
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(uiLanguage: string): string {
   return `You are an expert bookmark analysis assistant. Analyze the provided web content and return a structured JSON object.
 
+All natural-language text fields (summary, quickSummary, keyPoints, tags) MUST be written in the user's interface language: **${uiLanguage}**.
+
 Required fields:
-1. 'summary': A 2-3 sentence summary in the original language. CRITICAL: preserve key technical terms, product names, framework names. Do NOT over-generalize.
-2. 'tags': 4-6 specific keywords/tags in the original language.
-3. 'quickSummary': A ONE-line summary (max 15 words) that captures the essence. Must be in the original language.
+1. 'summary': A 2-3 sentence summary in the user's interface language. CRITICAL: preserve key technical terms, product names, framework names, and code identifiers in their original form regardless of UI language. Do NOT over-generalize or translate proper nouns.
+2. 'tags': 4-6 specific keywords/tags in the user's interface language.
+3. 'quickSummary': A ONE-line summary (max 15 words) that captures the essence. Must be in the user's interface language.
 4. 'contentType': One of "article" | "repo" | "tweet" | "doc" | "video" | "tool" | "other"
-5. 'keyPoints': 3-5 bullet points of the most important takeaways. Each point should be concise (max 30 words). In the original language.
+5. 'keyPoints': 3-5 bullet points of the most important takeaways. Each point should be concise (max 30 words). In the user's interface language.
 6. 'readingTime': Estimated reading time in minutes (integer).
 7. 'difficulty': One of "beginner" | "intermediate" | "advanced" — based on assumed prior knowledge.
-8. 'technologies': List of specific technologies, frameworks, languages, or tools mentioned (e.g. ["React", "TypeScript", "Docker"]).
+8. 'technologies': List of specific technologies, frameworks, languages, or tools mentioned (e.g. ["React", "TypeScript", "Docker"]). These stay in their canonical form.
 
 Content-type specific guidelines:
 - For repos: Focus on what it does, tech stack, and why it matters. Key points should highlight unique features.
@@ -71,15 +73,17 @@ Content-type specific guidelines:
 Output MUST be a valid JSON object with ALL required fields.`;
 }
 
-function buildKnowledgeExtractionPrompt(): string {
+function buildKnowledgeExtractionPrompt(uiLanguage: string): string {
   return `You are a knowledge extraction expert. Analyze the provided web content and extract structured knowledge.
 
+All natural-language text fields (summary, quickSummary, keyPoints, concepts.name, concepts.definition, claims.text, dataPoints.fact, dataPoints.context) MUST be written in the user's interface language: **${uiLanguage}**.
+
 Required fields:
-1. 'summary': A 2-3 sentence summary in the original language.
+1. 'summary': A 2-3 sentence summary in the user's interface language.
 2. 'quickSummary': A ONE-line summary (max 15 words).
 3. 'keyPoints': 3-5 bullet points of the most important takeaways.
 4. 'concepts': Array of key concepts mentioned, each with:
-   - 'name': Concept name (in original language)
+   - 'name': Concept name (in the user's interface language)
    - 'definition': Brief definition (1-2 sentences)
    - 'category': One of "技术" | "理论" | "方法论" | "工具" | "其他"
    - 'relatedConcepts': Array of related concept names
@@ -90,17 +94,18 @@ Required fields:
 6. 'dataPoints': Array of key facts/data, each with:
    - 'fact': The fact or data point
    - 'context': Why this matters
-7. 'technologies': List of specific technologies mentioned.
+7. 'technologies': List of specific technologies mentioned (canonical form, not translated).
 8. 'contentType': One of "article" | "repo" | "tweet" | "doc" | "video" | "tool" | "other"
 9. 'difficulty': "beginner" | "intermediate" | "advanced"
 10. 'readingTime': Estimated reading time in minutes (integer).
-11. 'language': ISO 639-1 language code (e.g. "en", "zh", "ja")
+11. 'language': ISO 639-1 code of the **source content's** original language (e.g. "en", "zh", "ja"), distinct from the UI language used in field values.
 
 Guidelines:
 - Extract 3-8 concepts that are central to understanding the content
 - Claims should be the main arguments or insights, not minor points
 - DataPoints should be specific numbers, statistics, or concrete facts
 - Related concepts should capture how ideas connect
+- Preserve proper nouns, product names, framework names in their original form
 
 Output MUST be a valid JSON object.`;
 }
@@ -110,9 +115,11 @@ export function createRemoteLLMProvider(
   apiKey: string,
   model: string,
   baseURL: string,
+  uiLanguage: string = "English",
 ): LLMProvider {
   const endpoint = `${baseURL}/v1/chat/completions`;
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(uiLanguage);
+  const knowledgePrompt = buildKnowledgeExtractionPrompt(uiLanguage);
 
   return {
     name: "Remote (OpenAI-compatible)",
@@ -239,7 +246,6 @@ export function createRemoteLLMProvider(
         ? `\nSource URL: ${url}\nDetected type: ${detectContentType(url, text)}`
         : "";
       const userPrompt = `Content to analyze:${contentHint}\n\n${text.slice(0, 10000)}`;
-      const knowledgePrompt = buildKnowledgeExtractionPrompt();
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {

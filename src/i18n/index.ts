@@ -123,6 +123,22 @@ export function useI18n() {
   return { t, locale: localeSignal, setLocale: setReactiveLocale };
 }
 
+/** Locale → 人类可读语言名（用于 LLM prompt 注入） */
+const LOCALE_LANGUAGE_NAMES: Record<Locale, string> = {
+  "zh-CN": "Simplified Chinese (简体中文)",
+  en: "English",
+  ja: "Japanese (日本語)",
+  ko: "Korean (한국어)",
+};
+
+/** 获取当前 UI 语言的人类可读名称，缺省回退到 English */
+export function getLanguageName(locale?: string | null): string {
+  if (locale && locale in LOCALE_LANGUAGE_NAMES) {
+    return LOCALE_LANGUAGE_NAMES[locale as Locale];
+  }
+  return "English";
+}
+
 /** 浏览器语言到支持的 locale 的映射 */
 export function detectBrowserLocale(): Locale {
   const lang = navigator.language || (navigator as any).userLanguage || "zh-CN";

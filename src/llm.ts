@@ -27,10 +27,11 @@ export async function generateDeepContent(
   apiKey: string,
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
+  uiLanguage: string = "English",
 ): Promise<LLMResult> {
   const systemPrompt = `You are a helpful bookmark assistant. Analyze the provided web content and return a JSON object containing:
-1. 'summary': A 2-3 sentence summary in the original language of the text. CRITICAL: preserve key technical terms, product names, framework names, and distinguishing concepts. Do NOT over-generalize. If the text compares "React" and "React Native", the summary must mention BOTH terms, not just "React frameworks".
-2. 'tags': 4-6 specific keywords/tags in the original language of the text. Include the main topic, key technologies mentioned, and any frameworks or libraries.
+1. 'summary': A 2-3 sentence summary in the user's interface language: **${uiLanguage}**. CRITICAL: preserve key technical terms, product names, framework names, and distinguishing concepts in their original form regardless of UI language. Do NOT over-generalize. If the text compares "React" and "React Native", the summary must mention BOTH terms, not just "React frameworks".
+2. 'tags': 4-6 specific keywords/tags in the user's interface language. Include the main topic, key technologies mentioned, and any frameworks or libraries (proper nouns stay canonical).
 
 The output MUST be a valid JSON object. Example:
 {

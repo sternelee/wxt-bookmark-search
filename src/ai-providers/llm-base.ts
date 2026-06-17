@@ -2,6 +2,7 @@ import type { LLMProvider } from "./types";
 import type { Settings } from "../types";
 import { createRemoteLLMProvider } from "./llm-remote";
 import { resolveLLMConfig } from "../service-config";
+import { getLanguageName } from "../i18n";
 
 let _provider: LLMProvider | null = null;
 
@@ -34,6 +35,7 @@ export async function autoCreateLLMProvider(
       llm.apiKey,
       llm.model || "gpt-4o-mini",
       llm.baseURL,
+      getLanguageName(settings.language),
     );
   }
 
