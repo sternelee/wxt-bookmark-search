@@ -1131,6 +1131,11 @@ async function processQueue(): Promise<void> {
           let text: string;
           let summary = content?.summary || "";
           let tags: string[] = [];
+          let quickSummary = "";
+          let keyPoints: string[] = [];
+          let readingTime = 0;
+          let technologies: string[] = [];
+          let knowledgeEntry: import("./ai-providers/types").KnowledgeEntry | null = null;
 
           // LLM 增强（如果启用且有足够内容）
           if (
@@ -1141,11 +1146,34 @@ async function processQueue(): Promise<void> {
             try {
               const provider = getLLMProvider();
               if (provider) {
-                const llmResult = await provider.generateDeepContent(
-                  content.markdown.slice(0, 4000),
-                );
+                // 并行执行基础摘要和知识提取
+                const [llmResult, knowledge] = await Promise.all([
+                  provider.generateDeepContent(
+                    content.markdown.slice(0, 8000),
+                    undefined,
+                    job.url,
+                  ),
+                  // 仅对较长内容进行知识提取
+                  content.markdown.length > 300
+                    ? provider.extractKnowledge(
+                        content.markdown.slice(0, 10000),
+                        undefined,
+                        job.url,
+                      ).catch((e) => {
+                        console.warn(`[indexer] Knowledge extraction failed for ${job.url}:`, e);
+                        return null;
+                      })
+                    : Promise.resolve(null),
+                ]);
+
                 summary = llmResult.summary;
                 tags = llmResult.tags;
+                quickSummary = llmResult.quickSummary || "";
+                keyPoints = llmResult.keyPoints || [];
+                readingTime = llmResult.readingTime || 0;
+                technologies = llmResult.technologies || [];
+                knowledgeEntry = knowledge;
+
                 text = buildEmbeddingText(
                   content.title || job.title,
                   summary,
@@ -1195,8 +1223,14 @@ async function processQueue(): Promise<void> {
             text,
             summary,
             tags,
+            quickSummary,
+            keyPoints,
+            readingTime,
+            technologies,
+            knowledgeEntry,
             llmEnhanced: tags.length > 0,
           };
+
         } catch (error) {
           console.warn(
             `[indexer] Failed to fetch content for ${job.url}:`,
@@ -1208,6 +1242,11 @@ async function processQueue(): Promise<void> {
             text: job.title,
             summary: "",
             tags: [],
+            quickSummary: "",
+            keyPoints: [],
+            readingTime: 0,
+            technologies: [],
+            knowledgeEntry: null,
             llmEnhanced: false,
           };
         }
@@ -1292,7 +1331,7 @@ async function processQueue(): Promise<void> {
 
     // 4. 批量写入 DB
     const records: BookmarkRecord[] = contents.map(
-      ({ job, content, summary, tags, llmEnhanced }, i) => {
+      ({ job, content, summary, tags, quickSummary, keyPoints, readingTime, technologies, llmEnhanced }, i) => {
         const existing = existingById.get(job.bookmarkId);
         return {
           ...existing,
@@ -1307,6 +1346,10 @@ async function processQueue(): Promise<void> {
           error: undefined,
           llmEnhanced: llmEnhanced || existing?.llmEnhanced || false,
           source: existing?.source || "bookmark",
+          quickSummary: quickSummary || existing?.quickSummary,
+          keyPoints: keyPoints.length > 0 ? keyPoints : existing?.keyPoints,
+          readingTime: readingTime || existing?.readingTime,
+          technologies: technologies.length > 0 ? technologies : existing?.technologies,
         };
       },
     );
@@ -1321,6 +1364,29 @@ async function processQueue(): Promise<void> {
       } catch (e) {
         console.warn("[indexer] Search engine sync failed:", e);
       }
+
+      // 存储提取的知识概念
+      try {
+        const { upsertConcepts } = await import("./db");
+        for (const { job, knowledgeEntry } of contents) {
+          if (knowledgeEntry && knowledgeEntry.concepts.length > 0) {
+            await upsertConcepts(
+              knowledgeEntry.concepts.map((c) => ({
+                name: c.name,
+                definition: c.definition,
+                category: c.category,
+                relatedConcepts: c.relatedConcepts,
+                bookmarkId: job.bookmarkId,
+                context: knowledgeEntry.quickSummary || knowledgeEntry.summary.slice(0, 100),
+              })),
+            );
+          }
+        }
+        console.log(`[indexer] Concepts stored for batch`);
+      } catch (e) {
+        console.warn("[indexer] Concept storage failed:", e);
+      }
+
       processedCount += batch.length;
 
       notifyProgress({

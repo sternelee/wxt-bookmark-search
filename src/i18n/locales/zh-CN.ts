@@ -462,6 +462,7 @@ export default {
     summarizing: "正在生成摘要...",
     summaryFailed: "摘要生成失败",
     summaryEmpty: "无内容可摘要",
+    showExcerpt: "显示摘录",
     askPlaceholder: "向 AI 提问你的书签...",
     askButton: "提问",
     asking: "思考中...",

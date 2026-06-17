@@ -172,6 +172,15 @@ function App() {
           summary: resp.summary,
           tags: resp.tags || [],
           excerpt: resp.excerpt || "",
+          quickSummary: resp.quickSummary,
+          contentType: resp.contentType,
+          keyPoints: resp.keyPoints || [],
+          readingTime: resp.readingTime,
+          difficulty: resp.difficulty,
+          technologies: resp.technologies || [],
+          concepts: resp.concepts || [],
+          claims: resp.claims || [],
+          dataPoints: resp.dataPoints || [],
         });
       } else {
         setSummaryResult({

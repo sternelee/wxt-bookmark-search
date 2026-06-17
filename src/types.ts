@@ -1,3 +1,5 @@
+import type { ContentType, DifficultyLevel, LLMProviderType, Concept, Claim, DataPoint } from "./ai-providers/types";
+
 export interface ChromeBookmark {
   id: string;
   title: string;
@@ -25,6 +27,15 @@ export interface BookmarkRecord {
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
   llmEnhanced?: boolean; // 是否经过 LLM 增强
   source?: "github" | "twitter" | "bookmark" | "history";
+
+  /** 一句话快速摘要 */
+  quickSummary?: string;
+  /** 关键要点 */
+  keyPoints?: string[];
+  /** 预估阅读时间（分钟） */
+  readingTime?: number;
+  /** 技术栈 */
+  technologies?: string[];
 
   /** 预计算的 embedding 向量模长（内存缓存专用，不持久化到 DB） */
   _embeddingNorm?: number;
@@ -62,6 +73,14 @@ export interface SearchResult {
   tags: string[];
   source: "github" | "twitter" | "bookmark" | "history";
   indexed: boolean;
+  /** 一句话快速摘要 */
+  quickSummary?: string;
+  /** 关键要点 */
+  keyPoints?: string[];
+  /** 预估阅读时间（分钟） */
+  readingTime?: number;
+  /** 技术栈 */
+  technologies?: string[];
 }
 
 /** 搜索模式 */
@@ -140,7 +159,7 @@ export interface Settings {
   language?: string; // 界面语言: 'zh-CN' | 'en' | 'ja' | 'ko'
 
   /** AI 摘要提供者: "remote" | "disabled" */
-  aiProvider?: import("./ai-providers/types").LLMProviderType;
+  aiProvider?: LLMProviderType;
 
   /** GitHub README 向量化版本号（用于存量重建触发），当前目标值 = 1 */
   githubReadmeVersion?: number;
@@ -223,14 +242,30 @@ export interface CategorySuggestion {
   confidence: "high" | "medium" | "low";
   reasoning: string;
 }
-
-/** 按需摘要结果 */
 export interface SummarizeResult {
   url: string;
   title: string;
   summary: string;
   tags: string[];
   excerpt: string;
+  /** 一句话快速摘要 */
+  quickSummary?: string;
+  /** 内容类型 */
+  contentType?: ContentType;
+  /** 关键要点 */
+  keyPoints?: string[];
+  /** 预估阅读时间（分钟） */
+  readingTime?: number;
+  /** 难度等级 */
+  difficulty?: DifficultyLevel;
+  /** 技术栈 */
+  technologies?: string[];
+  /** 提取的概念 */
+  concepts?: Concept[];
+  /** 核心论点 */
+  claims?: Claim[];
+  /** 关键数据点 */
+  dataPoints?: DataPoint[];
 }
 
 /** RAG 问答结果 */

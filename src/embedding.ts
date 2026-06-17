@@ -182,7 +182,6 @@ export async function getEmbedding(
     body: JSON.stringify({
       model,
       input: truncatedText,
-      encoding_format: "float",
     }),
     signal,
   });
@@ -274,7 +273,6 @@ export async function batchEmbedTexts(
       body: JSON.stringify({
         model,
         input: chunkTexts,
-        encoding_format: "float",
       }),
     });
 

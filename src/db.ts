@@ -8,9 +8,51 @@ import type { BookmarkRecord, IndexQueueRecord, Settings } from "./types";
 
 const SETTINGS_KEY = "settings";
 
+/** 概念记录 */
+export interface ConceptRecord {
+  id: string; // hash of name
+  name: string;
+  definition: string;
+  category: string;
+  embedding?: number[];
+  occurrences: { bookmarkId: string; context: string }[];
+  relatedConcepts: string[];
+  firstSeen: number;
+  lastSeen: number;
+  frequency: number;
+}
+
+/** 概念关系 */
+export interface ConceptRelation {
+  id?: number;
+  sourceId: string;
+  targetId: string;
+  relationType: "extends" | "contradicts" | "related" | "implements" | "cites";
+  strength: number;
+  evidence: string[];
+}
+
+/** 每日简报 */
+export interface DailyDigest {
+  date: string; // YYYY-MM-DD
+  generatedAt: number;
+  stats: {
+    pagesIndexed: number;
+    readingTime: number;
+    domains: string[];
+  };
+  headlineInsight: string;
+  newConcepts: { name: string; definition: string; source: string; importance: string }[];
+  connections: { description: string; sourceA: string; sourceB: string; relation: string }[];
+  bookmarks: { title: string; url: string; quickSummary: string; contentType: string }[];
+}
+
 class BookmarkDB extends Dexie {
   bookmarks!: Table<BookmarkRecord, string>;
   indexQueue!: Table<IndexQueueRecord, string>;
+  concepts!: Table<ConceptRecord, string>;
+  conceptRelations!: Table<ConceptRelation, number>;
+  dailyDigests!: Table<DailyDigest, string>;
 
   constructor() {
     super("FlowSearch");
@@ -74,6 +116,14 @@ class BookmarkDB extends Dexie {
           console.warn("[db] v6 migration skipped:", e);
         }
       });
+    // v7: add concepts, conceptRelations, dailyDigests for knowledge base
+    this.version(7).stores({
+      bookmarks: "id, url, status, indexedAt, *tags, source",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+      concepts: "id, name, category, frequency, lastSeen",
+      conceptRelations: "++id, sourceId, targetId, relationType",
+      dailyDigests: "date",
+    });
   }
 }
 
@@ -349,4 +399,124 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
 export async function hasApiKey(): Promise<boolean> {
   const settings = await getSettings();
   return !!settings.openaiApiKey;
+}
+
+// === 知识库管理 ===
+
+/** 生成概念ID (SubtleCrypto, collision-free) */
+async function conceptId(name: string): Promise<string> {
+  const data = new TextEncoder().encode(name.toLowerCase().trim());
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
+/** 保存概念（增量更新，批量事务） */
+export async function upsertConcepts(
+  concepts: Array<{
+    name: string;
+    definition: string;
+    category: string;
+    relatedConcepts: string[];
+    bookmarkId: string;
+    context: string;
+  }>,
+): Promise<void> {
+  const MAX_OCCURRENCES = 50;
+  const now = Date.now();
+
+  // 生成所有 ID（并行）
+  const ids = await Promise.all(concepts.map((c) => conceptId(c.name)));
+
+  // 批量读取已有概念
+  const existingMap = new Map<string, ConceptRecord>();
+  const existing = await db.concepts.bulkGet(ids);
+  for (const rec of existing) {
+    if (rec) existingMap.set(rec.id, rec);
+  }
+
+  const toPut: ConceptRecord[] = [];
+
+  for (let i = 0; i < concepts.length; i++) {
+    const c = concepts[i];
+    const id = ids[i];
+    const prev = existingMap.get(id);
+
+    if (prev) {
+      const occurrences = [...prev.occurrences, { bookmarkId: c.bookmarkId, context: c.context }];
+      const relatedSet = new Set([...prev.relatedConcepts, ...c.relatedConcepts]);
+      toPut.push({
+        ...prev,
+        occurrences: occurrences.slice(-MAX_OCCURRENCES),
+        lastSeen: now,
+        frequency: occurrences.length,
+        relatedConcepts: [...relatedSet].slice(0, 20),
+      });
+    } else {
+      toPut.push({
+        id,
+        name: c.name,
+        definition: c.definition,
+        category: c.category,
+        occurrences: [{ bookmarkId: c.bookmarkId, context: c.context }],
+        relatedConcepts: c.relatedConcepts.slice(0, 20),
+        firstSeen: now,
+        lastSeen: now,
+        frequency: 1,
+      });
+    }
+  }
+
+  if (toPut.length > 0) {
+    await db.concepts.bulkPut(toPut);
+  }
+}
+
+/** 按频率获取热门概念 */
+export async function getTopConcepts(limit = 50): Promise<ConceptRecord[]> {
+  return db.concepts.orderBy("frequency").reverse().limit(limit).toArray();
+}
+
+/** 搜索概念 */
+export async function searchConcepts(query: string): Promise<ConceptRecord[]> {
+  const lower = query.toLowerCase();
+  return db.concepts
+    .filter((c) => c.name.toLowerCase().includes(lower) || c.definition.toLowerCase().includes(lower))
+    .toArray();
+}
+
+/** 保存概念关系 */
+export async function saveConceptRelations(
+  relations: Omit<ConceptRelation, "id">[],
+): Promise<void> {
+  await db.conceptRelations.bulkAdd(relations as ConceptRelation[]);
+}
+
+/** 获取概念的关系 */
+export async function getConceptRelations(conceptId: string): Promise<ConceptRelation[]> {
+  return db.conceptRelations
+    .where("sourceId").equals(conceptId)
+    .or("targetId").equals(conceptId)
+    .toArray();
+}
+
+/** 保存每日简报 */
+export async function saveDailyDigest(digest: DailyDigest): Promise<void> {
+  await db.dailyDigests.put(digest);
+}
+
+/** 获取每日简报 */
+export async function getDailyDigest(date: string): Promise<DailyDigest | undefined> {
+  return db.dailyDigests.get(date);
+}
+
+/** 获取最近N天的简报 */
+export async function getRecentDigests(days = 7): Promise<DailyDigest[]> {
+  const dates: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return db.dailyDigests.bulkGet(dates).then((r) => r.filter(Boolean) as DailyDigest[]);
 }

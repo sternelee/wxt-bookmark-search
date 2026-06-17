@@ -160,6 +160,10 @@ function toSearchResult(record: BookmarkRecord): SearchResult {
     tags: record.tags ?? [],
     source,
     indexed: record.status === "indexed",
+    quickSummary: record.quickSummary,
+    keyPoints: record.keyPoints,
+    readingTime: record.readingTime,
+    technologies: record.technologies,
   };
 }
 
@@ -495,6 +499,7 @@ export default defineBackground(() => {
 
   // 初始化云盘同步定时任务
   initCloudSyncAlarm();
+  initDailyDigestAlarm();
 
   // 首次启动时检查是否需要索引
   hasApiKey().then((hasKey) => {
@@ -591,6 +596,41 @@ export default defineBackground(() => {
       console.log(
         `[FlowSearch] Cloud sync alarm set: every ${settings.cloudSyncInterval}h (${settings.cloudSyncProvider})`,
       );
+    }
+  }
+
+  // === 每日知识简报 ===
+
+  async function initDailyDigestAlarm(): Promise<void> {
+    browser.alarms.create("daily-digest", {
+      periodInMinutes: 24 * 60,
+    });
+    console.log("[FlowSearch] Daily digest alarm set");
+  }
+
+  async function handleDailyDigest(): Promise<void> {
+    try {
+      const { generateDailyDigest, hasDigestForDate } = await import("../src/daily-digest");
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+      if (await hasDigestForDate(yesterday)) {
+        console.log("[FlowSearch] Digest already exists for", yesterday);
+        return;
+      }
+
+      const provider = getLLMProvider();
+      const digest = await generateDailyDigest(provider || undefined, yesterday);
+
+      if (digest) {
+        browser.notifications.create("daily-digest", {
+          type: "basic",
+          iconUrl: "/icon/128.png",
+          title: "📚 今日知识简报已生成",
+          message: `昨天你阅读了 ${digest.stats.pagesIndexed} 篇内容，发现 ${digest.newConcepts.length} 个新概念`,
+        });
+      }
+    } catch (err) {
+      console.error("[FlowSearch] Daily digest failed:", err);
     }
   }
 
@@ -1296,6 +1336,10 @@ export default defineBackground(() => {
         console.error("[FlowSearch] Scheduled cloud sync failed:", error);
       }
     }
+    if (alarm.name === "daily-digest") {
+      console.log("[FlowSearch] Running daily digest generation...");
+      await handleDailyDigest();
+    }
   });
 
   // 监听来自 Options 页面的消息
@@ -1640,9 +1684,37 @@ export default defineBackground(() => {
               };
             }
             try {
-              const result = await provider.generateDeepContent(
-                content.markdown.slice(0, 4000),
-              );
+              // 并行执行摘要和知识提取
+              const [result, knowledge] = await Promise.all([
+                provider.generateDeepContent(
+                  content.markdown.slice(0, 8000),
+                  undefined,
+                  message.url,
+                ),
+                content.markdown.length > 300
+                  ? provider.extractKnowledge(
+                      content.markdown.slice(0, 10000),
+                      undefined,
+                      message.url,
+                    ).catch(() => null)
+                  : Promise.resolve(null),
+              ]);
+
+              // 异步存储概念（不阻塞响应）
+              if (knowledge && knowledge.concepts.length > 0) {
+                const { upsertConcepts } = await import("../src/db");
+                upsertConcepts(
+                  knowledge.concepts.map((c) => ({
+                    name: c.name,
+                    definition: c.definition,
+                    category: c.category,
+                    relatedConcepts: c.relatedConcepts,
+                    bookmarkId: `summarize-${Date.now()}`,
+                    context: knowledge.quickSummary || knowledge.summary.slice(0, 100),
+                  })),
+                ).catch((e) => console.warn("[background] Concept storage failed:", e));
+              }
+
               return {
                 success: true,
                 url: message.url,
@@ -1650,6 +1722,15 @@ export default defineBackground(() => {
                 summary: result.summary,
                 tags: result.tags,
                 excerpt: content.markdown.slice(0, 200),
+                quickSummary: result.quickSummary,
+                contentType: result.contentType,
+                keyPoints: result.keyPoints,
+                readingTime: result.readingTime,
+                difficulty: result.difficulty,
+                technologies: result.technologies,
+                concepts: knowledge?.concepts || [],
+                claims: knowledge?.claims || [],
+                dataPoints: knowledge?.dataPoints || [],
               };
             } catch {
               const fallback = (content.summary || content.markdown).slice(
@@ -1819,6 +1900,118 @@ export default defineBackground(() => {
             const { getAllIndexedRecords } = await import("../src/db");
             const records = await getAllIndexedRecords();
             return { success: true, records };
+          }
+          case "GET_DAILY_DIGESTS": {
+            const { getRecentDigests } = await import("../src/daily-digest");
+            const digests = await getRecentDigests(message.days || 7);
+            return { success: true, digests };
+          }
+          case "GENERATE_DAILY_DIGEST": {
+            const { generateDailyDigest } = await import("../src/daily-digest");
+            const provider = getLLMProvider();
+            const digest = await generateDailyDigest(
+              provider || undefined,
+              message.date,
+            );
+            return { success: true, digest };
+          }
+          case "GET_CONCEPTS": {
+            const { getTopConcepts, searchConcepts } = await import("../src/db");
+            if (message.query) {
+              const concepts = await searchConcepts(message.query);
+              return { success: true, concepts };
+            }
+            const concepts = await getTopConcepts(message.limit || 50);
+            return { success: true, concepts };
+          }
+          case "SERENDIPITY_SEARCH": {
+            const { keywords, url } = message;
+            if (!keywords || keywords.length === 0) {
+              return { success: true, matches: [] };
+            }
+
+            // 搜索相关概念
+            const { searchConcepts, db: searchDb } = await import("../src/db");
+            const query = keywords.join(" ");
+            const matchedConcepts = await searchConcepts(query);
+
+            if (matchedConcepts.length === 0) {
+              return { success: true, matches: [] };
+            }
+
+            // 从概念 occurrences 收集书签 ID，批量查询
+            const bookmarkIds = new Set<string>();
+            for (const concept of matchedConcepts) {
+              for (const occ of concept.occurrences) {
+                bookmarkIds.add(occ.bookmarkId);
+              }
+            }
+
+            if (bookmarkIds.size === 0) {
+              return { success: true, matches: [] };
+            }
+
+            const ids = [...bookmarkIds].slice(0, 30);
+            const records = await searchDb.bookmarks.bulkGet(ids);
+            const currentDomain = new URL(url).hostname;
+
+            // 计算相关性分数
+            const bookmarkScores = new Map<string, { record: NonNullable<typeof records[0]>; score: number; concepts: string[] }>();
+
+            for (const concept of matchedConcepts) {
+              for (const occ of concept.occurrences) {
+                const record = records.find((r: typeof records[0]) => r && r.id === occ.bookmarkId);
+                if (!record) continue;
+
+                try {
+                  if (new URL(record.url).hostname === currentDomain) continue;
+                } catch {
+                  continue;
+                }
+
+                const existing = bookmarkScores.get(record.id);
+                if (existing) {
+                  existing.score += 1;
+                  if (!existing.concepts.includes(concept.name)) {
+                    existing.concepts.push(concept.name);
+                  }
+                } else {
+                  bookmarkScores.set(record.id, { record, score: 1, concepts: [concept.name] });
+                }
+              }
+            }
+
+            const matches = [...bookmarkScores.values()]
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 5)
+              .map((item) => ({
+                title: item.record.title,
+                url: item.record.url,
+                quickSummary: item.record.quickSummary || item.record.summary.slice(0, 100),
+                readAt: item.record.indexedAt || 0,
+                concepts: item.concepts.slice(0, 3),
+                relevance: Math.min(item.score / matchedConcepts.length, 1),
+              }));
+
+            return { success: true, matches };
+          }
+          case "RESEARCH": {
+            const { conductResearch, saveResearchToHistory } = await import("../src/research");
+            try {
+              const controller = new AbortController();
+              setTimeout(() => controller.abort(), 5 * 60 * 1000);
+              const report = await conductResearch(message.question, controller.signal);
+              await saveResearchToHistory(report);
+              return { success: true, report };
+            } catch (err) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              return { success: false, error: errMsg };
+            }
+          }
+          case "GET_RESEARCH_HISTORY": {
+            const { getResearchHistory } = await import("../src/research");
+            const history = await getResearchHistory(message.limit || 10);
+            return { success: true, history };
           }
           default:
             return { success: false, error: "Unknown message type" };
