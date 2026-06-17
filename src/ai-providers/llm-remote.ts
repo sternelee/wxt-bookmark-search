@@ -7,6 +7,36 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status < 600);
 }
 
+/**
+ * 从 LLM 响应中提取 JSON 对象。LLM 经常不遵守 response_format 协议，
+ * 返回 ```json ... ``` 包裹或带前后说明文字的内容。这里做容错解析。
+ */
+export function extractJSONObject<T = unknown>(raw: string): T | null {
+  if (!raw) return null;
+  let text = raw.trim();
+
+  // 去除 ```json / ``` 代码块围栏
+  const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/i);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  }
+
+  // 提取首个完整的 {...} 区间（处理前后有说明文字的情况）
+  if (!text.startsWith("{")) {
+    const first = text.indexOf("{");
+    const last = text.lastIndexOf("}");
+    if (first !== -1 && last > first) {
+      text = text.slice(first, last + 1);
+    }
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 /** 内容类型检测：基于 URL 和文本特征推断 */
 function detectContentType(url: string, text: string): string {
   const urlLower = url.toLowerCase();
@@ -147,7 +177,20 @@ export function createRemoteLLMProvider(
 
           const data = await response.json();
           const content = data.choices[0].message.content;
-          const result = JSON.parse(content) as LLMResult;
+          const result = extractJSONObject<LLMResult>(content);
+          if (!result) {
+            console.warn(
+              "[LLM-remote] Response is not valid JSON, retrying:",
+              content.slice(0, 200),
+            );
+            if (attempt < MAX_RETRIES) {
+              const { promise, resolve } = Promise.withResolvers<void>();
+              setTimeout(resolve, RETRY_BASE_MS);
+              await promise;
+              continue;
+            }
+            break;
+          }
           // 清理和验证字段
           result.tags = (result.tags || [])
             .map((t: string) => t.trim())
@@ -234,7 +277,20 @@ export function createRemoteLLMProvider(
 
           const data = await response.json();
           const content = data.choices[0].message.content;
-          const result = JSON.parse(content) as import("./types").KnowledgeEntry;
+          const result = extractJSONObject<import("./types").KnowledgeEntry>(content);
+          if (!result) {
+            console.warn(
+              "[LLM-remote] extractKnowledge: response is not valid JSON, retrying:",
+              content.slice(0, 200),
+            );
+            if (attempt < MAX_RETRIES) {
+              const { promise, resolve } = Promise.withResolvers<void>();
+              setTimeout(resolve, RETRY_BASE_MS);
+              await promise;
+              continue;
+            }
+            break;
+          }
           // 清理字段
           result.concepts = (result.concepts || []).slice(0, 8);
           result.claims = (result.claims || []).slice(0, 5);

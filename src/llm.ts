@@ -89,8 +89,30 @@ The output MUST be a valid JSON object. Example:
       const data = await response.json();
       const content = data.choices[0].message.content;
 
-      // 解析 JSON
-      const result = JSON.parse(content) as LLMResult;
+      // 解析 JSON：处理 ```json 围栏或前后说明文字
+      const fenceMatch = content
+        .trim()
+        .match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/i);
+      let jsonText = fenceMatch ? fenceMatch[1].trim() : content;
+      if (!jsonText.startsWith("{")) {
+        const first = jsonText.indexOf("{");
+        const last = jsonText.lastIndexOf("}");
+        if (first !== -1 && last > first) jsonText = jsonText.slice(first, last + 1);
+      }
+      let result: LLMResult;
+      try {
+        result = JSON.parse(jsonText) as LLMResult;
+      } catch (parseErr) {
+        console.warn(
+          "[LLM] Response is not valid JSON, retrying:",
+          content.slice(0, 200),
+        );
+        if (attempt >= MAX_LLM_RETRIES) {
+          throw parseErr;
+        }
+        await new Promise((r) => setTimeout(r, LLM_RETRY_BASE_MS));
+        continue;
+      }
 
       // 清理标签：去除引号、空格等
       result.tags = (result.tags || [])
