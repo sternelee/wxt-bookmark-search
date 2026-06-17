@@ -257,7 +257,6 @@ export interface SummarizeResult {
   title: string;
   summary: string;
   tags: string[];
-  excerpt: string;
   /** 一句话快速摘要 */
   quickSummary?: string;
   /** 内容类型 */

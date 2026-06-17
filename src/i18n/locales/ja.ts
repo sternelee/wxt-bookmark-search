@@ -432,7 +432,6 @@ export default {
     summarizing: "要約を生成中...",
     summaryFailed: "要約に失敗しました",
     summaryEmpty: "要約するコンテンツがありません",
-    showExcerpt: "抜粋を表示",
     askPlaceholder: "ブックマークについてAIに質問...",
     askButton: "質問",
     asking: "回答を生成中...",

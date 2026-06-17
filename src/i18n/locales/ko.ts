@@ -424,7 +424,6 @@ export default {
     summarizing: "요약 생성 중...",
     summaryFailed: "요약 실패",
     summaryEmpty: "요약할 콘텐츠가 없습니다",
-    showExcerpt: "발췌 보기",
     askPlaceholder: "북마크에 대해 AI에게 질문...",
     askButton: "질문",
     asking: "답변 생성 중...",

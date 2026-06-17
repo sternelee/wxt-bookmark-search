@@ -239,18 +239,6 @@ export default function SummarizePanel(props: Props) {
         <div class="text-sm leading-relaxed text-foreground whitespace-pre-wrap border-t border-border pt-3 mt-3">
           {props.result!.summary}
         </div>
-
-        {/* Excerpt */}
-        <Show when={props.result!.excerpt}>
-          <details class="mt-3">
-            <summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-              Show excerpt
-            </summary>
-            <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-              {props.result!.excerpt}
-            </p>
-          </details>
-        </Show>
       </Show>
 
       <Show when={!props.loading && !props.result}>

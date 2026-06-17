@@ -492,7 +492,6 @@ export default {
     summarizing: "Generating summary...",
     summaryFailed: "Summary failed",
     summaryEmpty: "No content to summarize",
-    showExcerpt: "Show excerpt",
     askPlaceholder: "Ask AI about your bookmarks...",
     askButton: "Ask",
     asking: "Asking...",

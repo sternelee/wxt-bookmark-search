@@ -171,7 +171,6 @@ function App() {
           title: resp.title,
           summary: resp.summary,
           tags: resp.tags || [],
-          excerpt: resp.excerpt || "",
           quickSummary: resp.quickSummary,
           contentType: resp.contentType,
           keyPoints: resp.keyPoints || [],
@@ -188,7 +187,6 @@ function App() {
           title,
           summary: resp?.error || t("search.summaryFailed"),
           tags: [],
-          excerpt: "",
         });
       }
     } catch (e: any) {
@@ -197,7 +195,6 @@ function App() {
         title,
         summary: e?.message || t("search.summaryFailed"),
         tags: [],
-        excerpt: "",
       });
     } finally {
       setSummaryLoading(false);

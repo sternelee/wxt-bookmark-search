@@ -1683,7 +1683,6 @@ export default defineBackground(() => {
                 title: content.title || message.url,
                 summary: fallback,
                 tags: [],
-                excerpt: content.markdown.slice(0, 200),
               };
             }
             try {
@@ -1724,7 +1723,6 @@ export default defineBackground(() => {
                 title: content.title || message.url,
                 summary: result.summary,
                 tags: result.tags,
-                excerpt: content.markdown.slice(0, 200),
                 quickSummary: result.quickSummary,
                 contentType: result.contentType,
                 keyPoints: result.keyPoints,
@@ -1746,7 +1744,6 @@ export default defineBackground(() => {
                 title: content.title || message.url,
                 summary: fallback,
                 tags: [],
-                excerpt: content.markdown.slice(0, 200),
               };
             }
           }
