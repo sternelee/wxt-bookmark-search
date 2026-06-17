@@ -29,7 +29,7 @@ const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function SummarizePanel(props: Props) {
   return (
-    <aside class="w-96 shrink-0 border-l border-border pl-4 py-4 overflow-y-auto max-h-[calc(100vh-6rem)] sticky top-39.5 self-start">
+    <aside class="w-96 shrink-0 border-l border-border pl-4 py-4 overflow-y-auto max-h-[calc(100vh-11rem)] sticky top-40 self-start">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-sm">
           ✨ {t("search.summarize").replace("✨ ", "")}

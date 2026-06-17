@@ -45,7 +45,7 @@ export default function DigestPanel(props: Props) {
   };
 
   return (
-    <aside class="w-96 shrink-0 border-l border-border pl-4 overflow-y-auto max-h-[calc(100vh-6rem)] sticky top-39.5 py-4 self-start">
+    <aside class="w-96 shrink-0 border-l border-border pl-4 overflow-y-auto max-h-[calc(100vh-11rem)] sticky top-40 py-4 self-start">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-sm">📚 Daily Knowledge Digest</h3>
         <button
