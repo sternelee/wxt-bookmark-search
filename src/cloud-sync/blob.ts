@@ -40,6 +40,8 @@ function extractSyncableSettings(
     embeddingModel: settings.embeddingModel,
     llmModel: settings.llmModel,
     baseURL: settings.baseURL,
+    embedBaseURL: settings.embedBaseURL,
+    llmBaseURL: settings.llmBaseURL,
     selectedFolderIds: settings.selectedFolderIds,
     categoryFolderMap: settings.categoryFolderMap,
     categoryRules: settings.categoryRules,

@@ -1,6 +1,7 @@
 import type { LLMProvider } from "./types";
 import type { Settings } from "../types";
 import { createRemoteLLMProvider } from "./llm-remote";
+import { resolveLLMConfig } from "../service-config";
 
 let _provider: LLMProvider | null = null;
 
@@ -26,12 +27,13 @@ export async function autoCreateLLMProvider(
     return null;
   }
 
-  // 创建远程 API provider（需要 apiKey）
-  if (settings.openaiApiKey) {
+  // 创建远程 API provider（需要 apiKey）— 使用 per-service override 或 shared
+  const llm = resolveLLMConfig(settings);
+  if (llm.apiKey) {
     return createRemoteLLMProvider(
-      settings.openaiApiKey,
-      settings.llmModel || "gpt-4o-mini",
-      settings.baseURL || "https://api.openai.com",
+      llm.apiKey,
+      llm.model || "gpt-4o-mini",
+      llm.baseURL,
     );
   }
 

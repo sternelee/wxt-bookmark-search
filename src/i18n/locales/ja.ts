@@ -97,10 +97,29 @@ export default {
         "設定は保存されましたが、再インデックスを開始できませんでした。",
       testSuccess: "✓ API キーは有効です、接続成功",
       testFail: "✗ API キーが無効です",
+      testServiceEmbed: "Embedding サービス",
+      testServiceLLM: "LLM サービス",
+      testBothOk: "✓ 両サービスともに接続成功",
+      testBothFail:
+        "✗ 両サービスともに接続失敗。\n  • Embedding: {{embed}}\n  • LLM: {{llm}}",
+      testPartialFail: "✗ {{failedService}} 失敗: {{error}}",
       aiProvider: "AI 要約プロバイダー",
       aiProviderHint: "リモート API を使用してブックマークの要約を生成",
       aiProviderRemote: "リモート API",
       aiProviderDisabled: "無効",
+      perService: "LLM と Embedding で異なるサービスを使用",
+      perServiceHint:
+        "デフォルトでは両サービスとも上記の API キーと Base URL を共有します。有効にすると個別に設定できます。",
+      perServiceEmbedTitle: "Embedding サービスのオーバーライド",
+      perServiceLLMTitle: "LLM サービスのオーバーライド",
+      perServiceEmbedHint:
+        "空欄の場合、共有 API キーと Base URL にフォールバックします。",
+      perServiceLLMHint:
+        "空欄の場合、共有 API キーと Base URL にフォールバックします。",
+      perServiceInheritHint: "共有設定を継承: {{value}}",
+      perServiceApiKey: "API キー (オーバーライド)",
+      perServiceBaseURL: "Base URL (オーバーライド)",
+      perServiceModel: "モデル",
     },
 
     search: {

@@ -95,10 +95,27 @@ export default {
       reindexFailedGeneric: "设置已保存，但未能启动重建索引。",
       testSuccess: "✓ API Key 有效，连接成功",
       testFail: "✗ API Key 无效",
+      testServiceEmbed: "Embedding 服务",
+      testServiceLLM: "LLM 服务",
+      testBothOk: "✓ 两个服务连接均成功",
+      testBothFail:
+        "✗ 两个服务均连接失败。\n  • Embedding: {{embed}}\n  • LLM: {{llm}}",
+      testPartialFail: "✗ {{failedService}} 失败：{{error}}",
       aiProvider: "AI 摘要提供者",
       aiProviderHint: "使用远程 API 生成书签摘要",
       aiProviderRemote: "远程 API",
       aiProviderDisabled: "禁用",
+      perService: "为 LLM 和 Embedding 使用不同服务",
+      perServiceHint:
+        "默认两项服务共享上方的 API Key 和 Base URL。开启后可分别独立配置。",
+      perServiceEmbedTitle: "Embedding 服务覆写",
+      perServiceLLMTitle: "LLM 服务覆写",
+      perServiceEmbedHint: "留空时回退到共享的 API Key 和 Base URL。",
+      perServiceLLMHint: "留空时回退到共享的 API Key 和 Base URL。",
+      perServiceInheritHint: "继承共享配置：{{value}}",
+      perServiceApiKey: "API Key (覆写)",
+      perServiceBaseURL: "Base URL (覆写)",
+      perServiceModel: "模型",
     },
 
     search: {

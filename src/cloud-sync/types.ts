@@ -69,6 +69,8 @@ export interface CloudSyncSettingsSubset {
   embeddingModel?: string;
   llmModel?: string;
   baseURL?: string;
+  embedBaseURL?: string;
+  llmBaseURL?: string;
   selectedFolderIds?: string[];
   categoryFolderMap?: Record<string, string>;
   categoryRules?: string;

@@ -3,6 +3,7 @@
  */
 import type { CategorySuggestion } from "./types";
 import { db, getSettings } from "./db";
+import { resolveLLMConfig } from "./service-config";
 
 const BATCH_SIZE = 20;
 const MAX_CONTENT_LENGTH = 4000;
@@ -34,12 +35,13 @@ export async function getCategorySuggestions(
   signal?: AbortSignal,
 ): Promise<CategorySuggestion[]> {
   const settings = await getSettings();
-  if (!settings.openaiApiKey) {
+  const llmCfg = resolveLLMConfig(settings);
+  if (!llmCfg.apiKey) {
     throw new Error("API Key not configured");
   }
 
-  const baseURL = settings.baseURL || "https://api.openai.com";
-  const model = settings.llmModel || "gpt-4o-mini";
+  const baseURL = llmCfg.baseURL;
+  const model = llmCfg.model || "gpt-4o-mini";
   const customRules = settings.categoryRules || "";
 
   // 获取书签记录
@@ -60,7 +62,7 @@ export async function getCategorySuggestions(
     const suggestions = await categorizeBatch(
       batch,
       baseURL,
-      settings.openaiApiKey,
+      llmCfg.apiKey,
       model,
       customRules,
       signal,

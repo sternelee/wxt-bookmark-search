@@ -95,10 +95,29 @@ export default {
         "설정은 저장되었지만 재색인을 시작하지 못했습니다.",
       testSuccess: "✓ API 키가 유효합니다, 연결 성공",
       testFail: "✗ API 키가 유효하지 않습니다",
+      testServiceEmbed: "Embedding 서비스",
+      testServiceLLM: "LLM 서비스",
+      testBothOk: "✓ 두 서비스 모두 연결 성공",
+      testBothFail:
+        "✗ 두 서비스 모두 연결 실패.\n  • Embedding: {{embed}}\n  • LLM: {{llm}}",
+      testPartialFail: "✗ {{failedService}} 실패: {{error}}",
       aiProvider: "AI 요약 제공자",
       aiProviderHint: "원격 API를 사용하여 북마크 요약 생성",
       aiProviderRemote: "원격 API",
       aiProviderDisabled: "비활성화",
+      perService: "LLM과 Embedding에 다른 서비스 사용",
+      perServiceHint:
+        "기본적으로 두 서비스는 위의 API 키와 Base URL을 공유합니다. 활성화하면 독립적으로 설정할 수 있습니다.",
+      perServiceEmbedTitle: "Embedding 서비스 오버라이드",
+      perServiceLLMTitle: "LLM 서비스 오버라이드",
+      perServiceEmbedHint:
+        "비워두면 공유 API 키와 Base URL로 폴백합니다.",
+      perServiceLLMHint:
+        "비워두면 공유 API 키와 Base URL로 폴백합니다.",
+      perServiceInheritHint: "공유 설정 상속: {{value}}",
+      perServiceApiKey: "API 키 (오버라이드)",
+      perServiceBaseURL: "Base URL (오버라이드)",
+      perServiceModel: "모델",
     },
 
     search: {

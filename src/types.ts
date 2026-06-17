@@ -141,6 +141,16 @@ export interface Settings {
   embeddingModel?: string; // Embedding 模型名称
   llmModel?: string; // LLM 模型名称
 
+  // Per-service overrides (optional) — 为 LLM 和 Embedding 分别配置不同服务
+  /** Embedding 服务的独立 API Key（覆盖 openaiApiKey） */
+  embedApiKey?: string;
+  /** Embedding 服务的独立 Base URL（覆盖 baseURL） */
+  embedBaseURL?: string;
+  /** LLM 服务的独立 API Key（覆盖 openaiApiKey） */
+  llmApiKey?: string;
+  /** LLM 服务的独立 Base URL（覆盖 baseURL） */
+  llmBaseURL?: string;
+
   // Gist 同步配置
   gistSyncEnabled?: boolean; // 是否启用 Gist 书签同步
   gistId?: string; // Gist ID

@@ -99,10 +99,28 @@ export default {
         "Settings were saved, but reindexing could not be started.",
       testSuccess: "✓ API Key is valid, connection successful",
       testFail: "✗ API Key is invalid",
+      testServiceEmbed: "Embedding service",
+      testServiceLLM: "LLM service",
+      testBothOk: "✓ Both services connected successfully",
+      testBothFail: "✗ Both services failed.\n  • Embedding: {{embed}}\n  • LLM: {{llm}}",
+      testPartialFail: "✗ {{failedService}} failed: {{error}}",
       aiProvider: "AI Summary Provider",
       aiProviderHint: "Use remote API to generate bookmark summaries",
       aiProviderRemote: "Remote API",
       aiProviderDisabled: "Disabled",
+      perService: "Use different services for LLM & Embedding",
+      perServiceHint:
+        "By default both services share the API Key and Base URL above. Enable to configure them independently.",
+      perServiceEmbedTitle: "Embedding Service Override",
+      perServiceLLMTitle: "LLM Service Override",
+      perServiceEmbedHint:
+        "Leave empty to fall back to the shared API Key and Base URL.",
+      perServiceLLMHint:
+        "Leave empty to fall back to the shared API Key and Base URL.",
+      perServiceInheritHint: "Inherits shared: {{value}}",
+      perServiceApiKey: "API Key (override)",
+      perServiceBaseURL: "Base URL (override)",
+      perServiceModel: "Model",
     },
 
     search: {

@@ -355,6 +355,11 @@ const defaultSettings: Settings = {
   enableLLMEnrichment: true, // 默认启用 LLM 增强
   embeddingModel: "text-embedding-3-small", // 默认 embedding 模型
   llmModel: "gpt-4o-mini", // 默认 LLM 模型
+  // Per-service overrides: undefined = fall back to shared openaiApiKey/baseURL
+  embedApiKey: undefined,
+  embedBaseURL: undefined,
+  llmApiKey: undefined,
+  llmBaseURL: undefined,
   gistSyncEnabled: false,
   gistId: undefined,
   gistDeviceId: undefined,

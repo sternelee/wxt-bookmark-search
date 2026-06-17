@@ -2,6 +2,7 @@ import type { BookmarkRecord } from "./types";
 import type { DailyDigest, ConceptRecord } from "./db";
 import { db, getSettings, saveDailyDigest } from "./db";
 import type { LLMProvider } from "./ai-providers/types";
+import { resolveLLMConfig } from "./service-config";
 
 /** 获取指定日期范围内索引的书签 */
 async function getBookmarksInRange(start: number, end: number): Promise<BookmarkRecord[]> {
@@ -157,13 +158,14 @@ export async function generateDailyDigest(
 
   if (provider && provider.available) {
     const settings = await getSettings();
-    if (settings.openaiApiKey) {
+    const llmCfg = resolveLLMConfig(settings);
+    if (llmCfg.apiKey) {
       const result = await generateDigestContent(
         bookmarks,
         relevantConcepts,
-        settings.openaiApiKey,
-        settings.llmModel || "gpt-4o-mini",
-        settings.baseURL || "https://api.openai.com",
+        llmCfg.apiKey,
+        llmCfg.model || "gpt-4o-mini",
+        llmCfg.baseURL,
       );
       headlineInsight = result.headlineInsight;
       connections = result.connections;

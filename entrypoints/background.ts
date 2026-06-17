@@ -12,6 +12,7 @@ import {
   escapeXml,
 } from "../src/highlight";
 import { getSettings, hasApiKey, saveSettings } from "../src/db";
+import { resolveEmbedConfig, resolveLLMConfig } from "../src/service-config";
 import type {
   BookmarkRecord,
   SearchResult,
@@ -384,7 +385,8 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   }
 
   const mode = settings.searchMode || "hybrid";
-  if (mode === "keyword" || !settings.openaiApiKey) {
+  const embedCfg = resolveEmbedConfig(settings);
+  if (mode === "keyword" || !embedCfg.apiKey) {
     return buildKeywordSearchResults(query, valid, {
       limit: 20,
       allowedUrls,
@@ -395,10 +397,10 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   try {
     const queryVector = await getQueryEmbedding(
       query,
-      settings.openaiApiKey,
+      embedCfg.apiKey,
       undefined,
-      settings.embeddingModel,
-      settings.baseURL,
+      embedCfg.model,
+      embedCfg.baseURL,
     );
     let results: BookmarkRecord[];
 
@@ -1134,9 +1136,10 @@ export default defineBackground(() => {
     }
 
     const mode = settings.searchMode || "hybrid";
+    const embedCfg = resolveEmbedConfig(settings);
 
     // 2. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
-    if (mode === "keyword" || !settings.openaiApiKey) {
+    if (mode === "keyword" || !embedCfg.apiKey) {
       suggest(
         await buildKeywordSuggestions(query, valid, {
           limit: 9,
@@ -1154,7 +1157,7 @@ export default defineBackground(() => {
     const signal = searchAbortController.signal;
 
     // 查询向量已缓存时跳过 debounce 直接搜索
-    const debounceMs = hasCachedQuery(query, settings.embeddingModel) ? 0 : 300;
+    const debounceMs = hasCachedQuery(query, embedCfg.model) ? 0 : 300;
 
     if (debounceMs > 0) {
       browser.omnibox.setDefaultSuggestion({
@@ -1167,13 +1170,13 @@ export default defineBackground(() => {
     searchTimer = setTimeout(async () => {
       try {
         // 4. 生成查询向量
-        const apiKey = settings.openaiApiKey!;
+        const apiKey = embedCfg.apiKey;
         const queryVector = await getQueryEmbedding(
           query,
           apiKey,
           signal,
-          settings.embeddingModel,
-          settings.baseURL,
+          embedCfg.model,
+          embedCfg.baseURL,
         );
 
         // 如果已中止，直接返回
@@ -1749,7 +1752,9 @@ export default defineBackground(() => {
           }
           case "ASK_BOOKMARKS": {
             const askSettings = await getSettings();
-            if (!askSettings.openaiApiKey) {
+            const askEmbedCfg = resolveEmbedConfig(askSettings);
+            const askLLMCfg = resolveLLMConfig(askSettings);
+            if (!askEmbedCfg.apiKey || !askLLMCfg.apiKey) {
               return {
                 success: false,
                 error: t("background.apiKeyNotConfigured"),
@@ -1758,10 +1763,10 @@ export default defineBackground(() => {
             const { askBookmarks } = await import("../src/rag");
             const queryVector = await getQueryEmbedding(
               message.question,
-              askSettings.openaiApiKey,
+              askEmbedCfg.apiKey,
               undefined,
-              askSettings.embeddingModel,
-              askSettings.baseURL,
+              askEmbedCfg.model,
+              askEmbedCfg.baseURL,
             );
             const topK = message.topK || 8;
             const results = await searchVector(queryVector, { limit: topK });
@@ -1779,9 +1784,9 @@ export default defineBackground(() => {
                 url: r.url,
                 summary: r.summary,
               })),
-              askSettings.openaiApiKey,
-              askSettings.llmModel,
-              askSettings.baseURL,
+              askLLMCfg.apiKey,
+              askLLMCfg.model,
+              askLLMCfg.baseURL,
             );
             return { success: true, ...ragResult };
           }

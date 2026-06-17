@@ -1,6 +1,7 @@
 import type { BookmarkRecord } from "./types";
 import type { ConceptRecord } from "./db";
 import { db, getSettings } from "./db";
+import { resolveLLMConfig } from "./service-config";
 
 
 /** 研究报告 */
@@ -317,9 +318,10 @@ export async function conductResearch(
   signal?: AbortSignal,
 ): Promise<ResearchReport> {
   const settings = await getSettings();
-  const apiKey = settings.openaiApiKey;
-  const model = settings.llmModel || "gpt-4o-mini";
-  const baseURL = settings.baseURL || "https://api.openai.com";
+  const llmCfg = resolveLLMConfig(settings);
+  const apiKey = llmCfg.apiKey;
+  const model = llmCfg.model || "gpt-4o-mini";
+  const baseURL = llmCfg.baseURL;
 
   if (!apiKey) {
     throw new Error("API key not configured");

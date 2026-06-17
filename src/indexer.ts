@@ -18,6 +18,7 @@ import {
 } from "./db";
 import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
 import { getLLMProvider } from "./ai-providers/llm-base";
+import { resolveEmbedConfig } from "./service-config";
 import {
   upsertSearchEngineBatch,
   removeFromSearchEngine,
@@ -580,7 +581,8 @@ async function processEnrichmentQueue(): Promise<void> {
   isEnriching = true;
 
   const settings = await getSettings();
-  if (!settings.openaiApiKey) {
+  const embedCfg = resolveEmbedConfig(settings);
+  if (!embedCfg.apiKey) {
     isEnriching = false;
     return;
   }
@@ -625,10 +627,10 @@ async function processEnrichmentQueue(): Promise<void> {
         const textToEmbed = semanticContent.slice(0, 8000);
         const { embedding } = await getEmbedding(
           textToEmbed,
-          settings.openaiApiKey!,
+          embedCfg.apiKey,
           undefined,
-          settings.embeddingModel,
-          settings.baseURL,
+          embedCfg.model,
+          embedCfg.baseURL,
         );
         await updateBookmark(job.bookmarkId, {
           summary,
@@ -662,10 +664,11 @@ export async function syncGithubStars(): Promise<{
   queued: number;
 }> {
   const settings = await getSettings();
+  const embedCfg = resolveEmbedConfig(settings);
   if (!settings.githubToken) {
     throw new Error("GitHub Token not configured");
   }
-  if (!settings.openaiApiKey) {
+  if (!embedCfg.apiKey) {
     throw new Error("API Key not configured");
   }
 
@@ -688,9 +691,9 @@ export async function syncGithubStars(): Promise<{
       try {
         embeddings = await batchEmbedTexts(
           texts,
-          settings.openaiApiKey!,
-          settings.embeddingModel,
-          settings.baseURL,
+          embedCfg.apiKey,
+          embedCfg.model,
+          embedCfg.baseURL,
         );
       } catch (err) {
         console.warn(
@@ -1071,8 +1074,9 @@ async function processQueue(): Promise<void> {
   processedCount = 0;
 
   const settings = await getSettings();
+  const embedCfg = resolveEmbedConfig(settings);
 
-  if (!settings.openaiApiKey) {
+  if (!embedCfg.apiKey) {
     console.warn("[indexer] No API key, skipping queue processing");
     finishQueueRun(runGeneration);
     notifyProgress({
@@ -1264,9 +1268,9 @@ async function processQueue(): Promise<void> {
     try {
       embeddings = await batchEmbedTexts(
         texts,
-        settings.openaiApiKey,
-        settings.embeddingModel,
-        settings.baseURL,
+        embedCfg.apiKey,
+        embedCfg.model,
+        embedCfg.baseURL,
       );
       onSuccess(); // 成功则加速
     } catch (error) {
@@ -1863,7 +1867,7 @@ export async function initIndexer(): Promise<void> {
 
   // === 恢复 enrichment 队列 ===
   const settings = await getSettings();
-  if (settings.githubToken && settings.openaiApiKey) {
+  if (settings.githubToken && resolveEmbedConfig(settings).apiKey) {
     // 1. 先从 storage 恢复队列
     await restoreEnrichmentQueue();
 
@@ -1961,7 +1965,7 @@ export async function syncTwitterBookmarks(): Promise<{
   error?: string;
 }> {
   const settings = await getSettings();
-  if (!settings.openaiApiKey) {
+  if (!resolveEmbedConfig(settings).apiKey) {
     throw new Error("API Key 未配置");
   }
 
@@ -2028,13 +2032,14 @@ export async function syncTwitterBookmarks(): Promise<{
       // 尝试批量嵌入，失败时降级到单个嵌入
       let embeddings: (number[] | undefined)[] = new Array(texts.length);
       let batchFailed = false;
+      const tweetEmbedCfg = resolveEmbedConfig(settings);
 
       try {
         embeddings = await batchEmbedTexts(
           texts,
-          settings.openaiApiKey,
-          settings.embeddingModel,
-          settings.baseURL,
+          tweetEmbedCfg.apiKey,
+          tweetEmbedCfg.model,
+          tweetEmbedCfg.baseURL,
         );
       } catch (batchError) {
         console.warn(
@@ -2048,10 +2053,10 @@ export async function syncTwitterBookmarks(): Promise<{
           try {
             const { embedding } = await getEmbedding(
               texts[i],
-              settings.openaiApiKey!,
+              tweetEmbedCfg.apiKey,
               undefined,
-              settings.embeddingModel,
-              settings.baseURL,
+              tweetEmbedCfg.model,
+              tweetEmbedCfg.baseURL,
             );
             embeddings[i] = embedding;
           } catch (err) {
@@ -2103,10 +2108,10 @@ export async function syncTwitterBookmarks(): Promise<{
               );
               const { embedding } = await getEmbedding(
                 newText,
-                settings.openaiApiKey!,
+                tweetEmbedCfg.apiKey,
                 undefined,
-                settings.embeddingModel,
-                settings.baseURL,
+                tweetEmbedCfg.model,
+                tweetEmbedCfg.baseURL,
               );
               await updateBookmark(`tw-${bookmark.tweetId}`, {
                 summary: llmResult.summary,

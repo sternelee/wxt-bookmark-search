@@ -12,6 +12,7 @@ import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { testApiKey } from "../../../src/embedding";
 import { testLlmModel } from "../../../src/llm";
+import { isEmbedConfigChanged } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
 
 export default function APISettings() {
@@ -23,6 +24,12 @@ export default function APISettings() {
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [showAdvanced, setShowAdvanced] = createSignal(false);
+  // Per-service override: LLM / Embedding 可指向不同服务。默认收起隐藏。
+  const [showPerService, setShowPerService] = createSignal(false);
+  const [embedApiKey, setEmbedApiKey] = createSignal("");
+  const [embedBaseURL, setEmbedBaseURL] = createSignal("");
+  const [llmApiKey, setLLMApiKey] = createSignal("");
+  const [llmBaseURL, setLLMBaseURL] = createSignal("");
   const [status, setStatus] = createSignal<{
     message: string;
     type: "success" | "error" | "info";
@@ -42,6 +49,11 @@ export default function APISettings() {
     setAIProvider(
       provider === "disabled" ? "disabled" : "remote",
     );
+    // Per-service override 初始化
+    setEmbedApiKey(settings.embedApiKey || "");
+    setEmbedBaseURL(settings.embedBaseURL || "");
+    setLLMApiKey(settings.llmApiKey || "");
+    setLLMBaseURL(settings.llmBaseURL || "");
   });
 
   const handleSave = async () => {
@@ -55,13 +67,13 @@ export default function APISettings() {
       const currentSettings = await getSettings();
       const nextBaseURL = (baseURL() || "").trim().replace(/\/+$/, "");
       const nextEmbeddingModel = (embeddingModel() || "").trim();
-      const currentBaseURL = (currentSettings.baseURL || "")
-        .trim()
-        .replace(/\/+$/, "");
-      const currentEmbeddingModel = (currentSettings.embeddingModel || "").trim();
-      const shouldReindexEmbeddings =
-        nextBaseURL !== currentBaseURL ||
-        nextEmbeddingModel !== currentEmbeddingModel;
+      const nextEmbedBaseURL = (embedBaseURL() || "").trim().replace(/\/+$/, "");
+      const nextLLMBaseURL = (llmBaseURL() || "").trim().replace(/\/+$/, "");
+      const shouldReindexEmbeddings = isEmbedConfigChanged(currentSettings, {
+        baseURL: nextBaseURL || undefined,
+        embedBaseURL: nextEmbedBaseURL || undefined,
+        embeddingModel: nextEmbeddingModel || undefined,
+      });
 
       await saveSettings({
         openaiApiKey: apiKey(),
@@ -70,6 +82,10 @@ export default function APISettings() {
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
+        embedApiKey: embedApiKey() || undefined,
+        embedBaseURL: embedBaseURL() || undefined,
+        llmApiKey: llmApiKey() || undefined,
+        llmBaseURL: llmBaseURL() || undefined,
       });
 
       if (shouldReindexEmbeddings) {
@@ -107,13 +123,105 @@ export default function APISettings() {
         setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
         return;
       }
-      await testApiKey(apiKey(), embeddingModel() || undefined, baseURL());
 
-      if (enableLLMEnrichment() && aiProvider() === "remote") {
-        await testLlmModel(apiKey(), llmModel() || undefined, baseURL());
+      // Per-service override 生效判断：apiKey 或 baseURL 任一不同
+      const embedHasOverride = !!embedApiKey().trim() || !!embedBaseURL().trim();
+      const llmHasOverride = !!llmApiKey().trim() || !!llmBaseURL().trim();
+      const separateServices = embedHasOverride || llmHasOverride;
+
+      // Embedding 测试（始终跑，embedding 必需要）
+      const embedKey = (embedApiKey() || apiKey()).trim();
+      const embedBase = (embedBaseURL() || baseURL()).trim();
+      const embedP = testApiKey(
+        embedKey,
+        embeddingModel() || undefined,
+        embedBase,
+      ).then(
+        () => ({ ok: true as const }),
+        (err) => ({
+          ok: false as const,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+
+      // LLM 测试（按原条件跑）
+      const llmP =
+        enableLLMEnrichment() && aiProvider() === "remote"
+          ? testLlmModel(
+              (llmApiKey() || apiKey()).trim(),
+              llmModel() || undefined,
+              (llmBaseURL() || baseURL()).trim(),
+            ).then(
+              () => ({ ok: true as const }),
+              (err) => ({
+                ok: false as const,
+                message: err instanceof Error ? err.message : String(err),
+              }),
+            )
+          : Promise.resolve({ ok: true as const, skipped: true as const });
+
+      const [embedResult, llmResult] = await Promise.all([embedP, llmP]);
+
+      // 组装结果消息：服务分开时逐项报告，合并时只显示一个汇总
+      if (!separateServices) {
+        if (!embedResult.ok) {
+          setStatus({ message: embedResult.message, type: "error" });
+        } else if (!llmResult.ok) {
+          setStatus({ message: llmResult.message, type: "error" });
+        } else {
+          setStatus({
+            message: t("options.api.testSuccess"),
+            type: "success",
+          });
+        }
+        return;
       }
 
-      setStatus({ message: t("options.api.testSuccess"), type: "success" });
+      // separateServices 模式：逐项报告
+      const embedLabel = t("options.api.testServiceEmbed");
+      const llmLabel = t("options.api.testServiceLLM");
+      const lines: { label: string; ok: boolean; message?: string }[] = [];
+      lines.push({
+        label: embedLabel,
+        ok: embedResult.ok,
+        message: embedResult.ok ? undefined : embedResult.message,
+      });
+      if (!("skipped" in llmResult) || !llmResult.skipped) {
+        lines.push({
+          label: llmLabel,
+          ok: llmResult.ok,
+          message: llmResult.ok ? undefined : llmResult.message,
+        });
+      }
+
+      const allOk = lines.every((l) => l.ok);
+      const okCount = lines.filter((l) => l.ok).length;
+      const failCount = lines.length - okCount;
+
+      let message: string;
+      if (allOk) {
+        message = t("options.api.testBothOk");
+      } else if (failCount === lines.length) {
+        // 两项都失败
+        const embedErr = lines[0].message || "";
+        const llmErr = lines[1]?.message || "";
+        message = t("options.api.testBothFail", {
+          embed: embedErr,
+          llm: llmErr,
+        });
+      } else {
+        // 一项失败一项成功
+        const failed = lines.find((l) => !l.ok)!;
+        message = t("options.api.testPartialFail", {
+          failedService: failed.label,
+          error: failed.message || "",
+        });
+      }
+
+      setStatus({
+        message,
+        type: allOk ? "success" : "error",
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       setStatus({ message: msg, type: "error" });
@@ -171,6 +279,103 @@ export default function APISettings() {
                 onInput={(e) => setLLMModel(e.currentTarget.value)}
                 hint={t("options.api.llmModelHint")}
               />
+            </div>
+          </Show>
+        </div>
+
+        {/* Per-service override：默认收起隐藏 */}
+        <div class="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowPerService(!showPerService())}
+            class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          >
+            {showPerService() ? "▼" : "▶"}{" "}
+            <span class="font-medium">
+              {t("options.api.perService")}
+            </span>
+          </button>
+          <p class="text-xs text-muted-foreground mt-1">
+            {t("options.api.perServiceHint")}
+          </p>
+
+          <Show when={showPerService()}>
+            <div class="mt-3 space-y-4 pl-2 border-l-2 border-gray-200">
+              {/* Embedding service override */}
+              <div class="rounded-md border border-border p-3 space-y-3">
+                <div class="text-sm font-semibold">
+                  {t("options.api.perServiceEmbedTitle")}
+                </div>
+                <p class="text-xs text-muted-foreground -mt-2">
+                  {t("options.api.perServiceEmbedHint")}
+                </p>
+                <Input
+                  label={t("options.api.perServiceApiKey")}
+                  type="password"
+                  placeholder={
+                    apiKey()
+                      ? t("options.api.perServiceInheritHint", {
+                          value: "***",
+                        })
+                      : ""
+                  }
+                  value={embedApiKey()}
+                  onInput={(e) => setEmbedApiKey(e.currentTarget.value)}
+                />
+                <Input
+                  label={t("options.api.perServiceBaseURL")}
+                  placeholder={
+                    baseURL() ||
+                    "https://api.openai.com"
+                  }
+                  value={embedBaseURL()}
+                  onInput={(e) => setEmbedBaseURL(e.currentTarget.value)}
+                />
+                <Input
+                  label={t("options.api.perServiceModel")}
+                  placeholder="BAAI/bge-m3"
+                  value={embeddingModel()}
+                  onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
+                />
+              </div>
+
+              {/* LLM service override */}
+              <div class="rounded-md border border-border p-3 space-y-3">
+                <div class="text-sm font-semibold">
+                  {t("options.api.perServiceLLMTitle")}
+                </div>
+                <p class="text-xs text-muted-foreground -mt-2">
+                  {t("options.api.perServiceLLMHint")}
+                </p>
+                <Input
+                  label={t("options.api.perServiceApiKey")}
+                  type="password"
+                  placeholder={
+                    apiKey()
+                      ? t("options.api.perServiceInheritHint", {
+                          value: "***",
+                        })
+                      : ""
+                  }
+                  value={llmApiKey()}
+                  onInput={(e) => setLLMApiKey(e.currentTarget.value)}
+                />
+                <Input
+                  label={t("options.api.perServiceBaseURL")}
+                  placeholder={
+                    baseURL() ||
+                    "https://api.openai.com"
+                  }
+                  value={llmBaseURL()}
+                  onInput={(e) => setLLMBaseURL(e.currentTarget.value)}
+                />
+                <Input
+                  label={t("options.api.perServiceModel")}
+                  placeholder="deepseek-ai/DeepSeek-V3"
+                  value={llmModel()}
+                  onInput={(e) => setLLMModel(e.currentTarget.value)}
+                />
+              </div>
             </div>
           </Show>
         </div>
