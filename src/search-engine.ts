@@ -291,7 +291,7 @@ export async function searchHybrid(
 
   const where: any = {};
   if (options.sourceFilter) {
-    where.source = options.sourceFilter;
+    where.source = { eq: options.sourceFilter };
   }
   if (options.idFilter && options.idFilter.length > 0) {
     where.id = options.idFilter;
@@ -326,7 +326,7 @@ export async function searchVector(
 
   const where: any = {};
   if (options.sourceFilter) {
-    where.source = options.sourceFilter;
+    where.source = { eq: options.sourceFilter };
   }
   if (options.idFilter && options.idFilter.length > 0) {
     where.id = options.idFilter;
@@ -352,9 +352,9 @@ export async function searchKeyword(
   } = {},
 ): Promise<BookmarkRecord[]> {
   if (!engine) return [];
-  const where: { source?: BookmarkRecord["source"]; id?: string[] } = {};
+  const where: { source?: { eq: BookmarkRecord["source"] }; id?: string[] } = {};
   if (options.sourceFilter) {
-    where.source = options.sourceFilter;
+    where.source = { eq: options.sourceFilter };
   }
   if (options.idFilter && options.idFilter.length > 0) {
     where.id = options.idFilter;
