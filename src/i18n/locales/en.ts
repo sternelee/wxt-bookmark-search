@@ -525,6 +525,7 @@ export default {
     cmdTwitter: "🐦 /twitter keyword — Search Twitter Bookmarks",
     cmdHistory: "📜 /history keyword — Search Browser History",
     cmdFolder: "📁 /folder:name keyword — Search in a specific folder",
+    cmdCodeWiki: "📚 cw keyword — Open Code Wiki for symbols & docs",
     folderSearch: "📁 Search folder: {{name}}",
     providerNotConfigured: "Provider not configured",
     apiKeyNotConfigured: "API key not configured",
@@ -532,5 +533,54 @@ export default {
     syncInProgress: "Sync is already in progress",
     contentExtractionFailed: "Content extraction failed",
     noRelevantBookmarks: "No relevant bookmarks found.",
+  },
+
+  codeWiki: {
+    title: "Code Wiki",
+    tab: {
+      map: "Code Map",
+      search: "Symbol Search",
+      docs: "Wiki Docs",
+      qa: "AI Q&A",
+    },
+    action: {
+      build: "Build",
+      sync: "Sync",
+      send: "Send",
+    },
+    placeholder: {
+      buildUrl: "GitHub repo URL (files must be supplied by caller)",
+      search: "Search symbols...",
+      ask: "Ask about the codebase...",
+    },
+    status: {
+      building: "Building code graph...",
+      built: "✓ Built: {{symbols}} symbols, {{edges}} edges, {{embeddings}} embeddings, {{docs}} docs",
+      syncing: "Syncing...",
+      synced: "✓ Synced: {{symbols}} symbols, {{edges}} edges",
+      failed: "✗ Failed: {{error}}",
+      error: "✗ Error: {{error}}",
+      searching: "Searching...",
+    },
+    empty: {
+      title: "No code graph built yet",
+      hint: "Enter a GitHub repo URL above and click Build.",
+    },
+    kind: {
+      function: "Function",
+      class: "Class",
+      interface: "Interface",
+      type: "Type",
+      variable: "Variable",
+      export: "Export",
+      import: "Import",
+      file: "File",
+    },
+    qa: {
+      sources: "Sources:",
+      thinking: "Thinking...",
+      failed: "Failed to get answer.",
+      error: "Error: {{error}}",
+    },
   },
 } as const;

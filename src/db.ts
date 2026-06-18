@@ -2,9 +2,16 @@
  * IndexedDB 数据库封装 - 使用 Dexie.js
  * 存储书签向量索引数据
  */
-
 import Dexie, { Table } from "dexie";
-import type { BookmarkRecord, IndexQueueRecord, Settings } from "./types";
+import type {
+  BookmarkRecord,
+  IndexQueueRecord,
+  Settings,
+  CodeSymbol,
+  CodeEdge,
+  WikiDoc,
+  CodeEmbedding,
+} from "./types";
 
 const SETTINGS_KEY = "settings";
 
@@ -46,14 +53,16 @@ export interface DailyDigest {
   connections: { description: string; sourceA: string; sourceB: string; relation: string }[];
   bookmarks: { title: string; url: string; quickSummary: string; contentType: string }[];
 }
-
 class BookmarkDB extends Dexie {
-  bookmarks!: Table<BookmarkRecord, string>;
-  indexQueue!: Table<IndexQueueRecord, string>;
-  concepts!: Table<ConceptRecord, string>;
-  conceptRelations!: Table<ConceptRelation, number>;
-  dailyDigests!: Table<DailyDigest, string>;
-
+   bookmarks!: Table<BookmarkRecord, string>;
+   indexQueue!: Table<IndexQueueRecord, string>;
+   concepts!: Table<ConceptRecord, string>;
+   conceptRelations!: Table<ConceptRelation, number>;
+   dailyDigests!: Table<DailyDigest, string>;
+  codeSymbols!: Table<CodeSymbol, string>;
+  codeEdges!: Table<CodeEdge, string>;
+  wikiDocs!: Table<WikiDoc, string>;
+  codeEmbeddings!: Table<CodeEmbedding, string>;
   constructor() {
     super("FlowSearch");
     // v1: original schema (Dexie 3 installs stored IDB version as-is)
@@ -123,6 +132,31 @@ class BookmarkDB extends Dexie {
       concepts: "id, name, category, frequency, lastSeen",
       conceptRelations: "++id, sourceId, targetId, relationType",
       dailyDigests: "date",
+    });
+    // v8: add code wiki tables (codeSymbols, codeEdges, wikiDocs, codeEmbeddings)
+    this.version(8).stores({
+      bookmarks: "id, url, status, indexedAt, *tags, source",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+      concepts: "id, name, category, frequency, lastSeen",
+      conceptRelations: "++id, sourceId, targetId, relationType",
+      dailyDigests: "date",
+      codeSymbols: "id, name, kind, filePath, repoUrl, branch",
+      codeEdges: "id, from, to, kind, repoUrl",
+      wikiDocs: "id, title, repoUrl, updatedAt, kind",
+      codeEmbeddings: "id, repoUrl",
+    });
+    // v9: code wiki tables — add repoUrl index on edges for fast per-repo queries
+    // (Dexie auto-migrates existing data; new field is optional on read)
+    this.version(9).stores({
+      bookmarks: "id, url, status, indexedAt, *tags, source",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+      concepts: "id, name, category, frequency, lastSeen",
+      conceptRelations: "++id, sourceId, targetId, relationType",
+      dailyDigests: "date",
+      codeSymbols: "id, name, kind, filePath, repoUrl, branch",
+      codeEdges: "id, from, to, kind, repoUrl",
+      wikiDocs: "id, title, repoUrl, updatedAt, kind",
+      codeEmbeddings: "id, repoUrl",
     });
   }
 }
@@ -524,4 +558,73 @@ export async function getRecentDigests(days = 7): Promise<DailyDigest[]> {
     dates.push(d.toISOString().split("T")[0]);
   }
   return db.dailyDigests.bulkGet(dates).then((r) => r.filter(Boolean) as DailyDigest[]);
+}
+
+// === Code Wiki 数据库操作 ===
+
+/** 批量保存代码符号 */
+export async function upsertCodeSymbols(symbols: CodeSymbol[]): Promise<void> {
+  if (symbols.length === 0) return;
+  await db.codeSymbols.bulkPut(symbols);
+}
+
+/** 获取仓库的所有代码符号 */
+export async function getCodeSymbolsByRepo(repoUrl: string): Promise<CodeSymbol[]> {
+  return db.codeSymbols.where("repoUrl").equals(repoUrl).toArray();
+}
+
+/** 获取单个代码符号 */
+export async function getCodeSymbol(id: string): Promise<CodeSymbol | undefined> {
+  return db.codeSymbols.get(id);
+}
+
+/** 批量保存代码边 */
+export async function upsertCodeEdges(edges: CodeEdge[]): Promise<void> {
+  if (edges.length === 0) return;
+  await db.codeEdges.bulkPut(edges);
+}
+
+/** 获取仓库的所有代码边 */
+export async function getCodeEdgesByRepo(repoUrl: string): Promise<CodeEdge[]> {
+  return db.codeEdges.where("repoUrl").equals(repoUrl).toArray();
+}
+
+/** 批量保存 Wiki 文档 */
+export async function upsertWikiDocs(docs: WikiDoc[]): Promise<void> {
+  if (docs.length === 0) return;
+  await db.wikiDocs.bulkPut(docs);
+}
+
+/** 获取仓库的所有 Wiki 文档 */
+export async function getWikiDocsByRepo(repoUrl: string): Promise<WikiDoc[]> {
+  return db.wikiDocs.where("repoUrl").equals(repoUrl).toArray();
+}
+
+/** 获取单个 Wiki 文档 */
+export async function getWikiDoc(id: string): Promise<WikiDoc | undefined> {
+  return db.wikiDocs.get(id);
+}
+
+/** 批量保存代码嵌入 */
+export async function upsertCodeEmbeddings(embeddings: CodeEmbedding[]): Promise<void> {
+  if (embeddings.length === 0) return;
+  await db.codeEmbeddings.bulkPut(embeddings);
+}
+
+/** 获取仓库的所有代码嵌入 */
+export async function getCodeEmbeddingsByRepo(repoUrl: string): Promise<CodeEmbedding[]> {
+  return db.codeEmbeddings.where("repoUrl").equals(repoUrl).toArray();
+}
+
+/** 获取单个代码嵌入 */
+export async function getCodeEmbedding(id: string): Promise<CodeEmbedding | undefined> {
+  return db.codeEmbeddings.get(id);
+}
+
+/** 清空仓库的代码 wiki 数据 */
+export async function clearCodeWikiByRepo(repoUrl: string): Promise<void> {
+  await db.codeSymbols.where("repoUrl").equals(repoUrl).delete();
+  await db.codeEdges.where("repoUrl").equals(repoUrl).delete();
+  await db.wikiDocs.where("repoUrl").equals(repoUrl).delete();
+  await db.codeEmbeddings.where("repoUrl").equals(repoUrl).delete();
 }

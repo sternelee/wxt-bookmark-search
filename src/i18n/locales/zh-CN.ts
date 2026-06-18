@@ -512,6 +512,7 @@ export default {
     cmdTwitter: "🐦 /twitter 关键词 — 搜索 Twitter 书签",
     cmdHistory: "📜 /history 关键词 — 搜索浏览历史",
     cmdFolder: "📁 /folder:名称 关键词 — 限定在特定文件夹中搜索",
+    cmdCodeWiki: "📚 cw 关键词 — 打开代码 Wiki 浏览符号与文档",
     folderSearch: "📁 搜索文件夹: {{name}}",
     providerNotConfigured: "未配置同步提供方",
     apiKeyNotConfigured: "未配置 API Key",
@@ -519,5 +520,54 @@ export default {
     syncInProgress: "同步正在进行中",
     contentExtractionFailed: "内容提取失败",
     noRelevantBookmarks: "未找到相关书签。",
+  },
+
+  codeWiki: {
+    title: "代码 Wiki",
+    tab: {
+      map: "代码地图",
+      search: "符号搜索",
+      docs: "Wiki 文档",
+      qa: "AI 问答",
+    },
+    action: {
+      build: "构建",
+      sync: "同步",
+      send: "发送",
+    },
+    placeholder: {
+      buildUrl: "GitHub 仓库 URL（需提供文件列表）",
+      search: "搜索符号...",
+      ask: "向代码库提问...",
+    },
+    status: {
+      building: "正在构建代码图谱...",
+      built: "✓ 已构建：{{symbols}} 个符号，{{edges}} 条边，{{embeddings}} 个向量，{{docs}} 篇文档",
+      syncing: "同步中...",
+      synced: "✓ 已同步：{{symbols}} 个符号，{{edges}} 条边",
+      failed: "✗ 失败：{{error}}",
+      error: "✗ 错误：{{error}}",
+      searching: "搜索中...",
+    },
+    empty: {
+      title: "尚未构建任何代码图谱",
+      hint: "在上方输入 GitHub 仓库 URL 并点击“构建”。",
+    },
+    kind: {
+      function: "函数",
+      class: "类",
+      interface: "接口",
+      type: "类型",
+      variable: "变量",
+      export: "导出",
+      import: "导入",
+      file: "文件",
+    },
+    qa: {
+      sources: "来源：",
+      thinking: "思考中...",
+      failed: "获取答案失败。",
+      error: "错误：{{error}}",
+    },
   },
 } as const;

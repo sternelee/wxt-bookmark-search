@@ -282,3 +282,137 @@ export interface RAGAnswer {
   answer: string;
   citations: { title: string; url: string; excerpt: string }[];
 }
+/** 代码符号类型 */
+export type CodeSymbolKind = "function" | "class" | "interface" | "type" | "variable" | "export" | "import";
+
+/** 代码分片类型 — 在 CodeSymbolKind 基础上扩展文件级 chunk */
+export type CodeChunkKind = CodeSymbolKind | "file";
+
+/** 代码符号 */
+export interface CodeSymbol {
+  id: string; // filePath#symbolName
+  name: string;
+  kind: CodeSymbolKind;
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  signature: string;
+  jsdoc: string;
+  repoUrl: string;
+  branch: string;
+}
+
+/** 代码图谱边 */
+export interface CodeEdge {
+  id: string;
+  from: string; // symbol id
+  to: string;
+  kind: "calls" | "extends" | "implements" | "imports" | "exports" | "references";
+  /** 冗余字段：便于按 repo 查询、删除 */
+  repoUrl: string;
+}
+
+/** Wiki 文档 id 前缀规范 — 避免与 symbol id 冲突 */
+export const WIKI_DOC_ID = {
+  overview: (repoUrl: string) => `doc:overview:${repoUrl}`,
+  module: (repoUrl: string, moduleName: string) => `doc:module:${repoUrl}:${moduleName}`,
+  file: (repoUrl: string, filePath: string) => `doc:file:${repoUrl}:${filePath}`,
+} as const;
+
+/** Wiki 文档 */
+export interface WikiDoc {
+  id: string; // 使用 WIKI_DOC_ID.* 生成
+  title: string;
+  content: string; // markdown
+  summary: string; // AI 生成摘要
+  symbols: string[]; // 包含的 symbol ids
+  repoUrl: string;
+  updatedAt: number;
+  /** 文档类型：overview / module / file / symbol */
+  kind: "overview" | "module" | "file" | "symbol";
+}
+
+/** 代码嵌入向量 */
+export interface CodeEmbedding {
+  id: string; // symbol id
+  vector: number[]; // 1024-dim
+  chunk: string; // 原始代码片段
+  repoUrl: string;
+}
+
+/** 代码分片 */
+export interface CodeChunk {
+  id: string;
+  content: string;
+  language: string;
+  filePath: string;
+  symbolName: string;
+  kind: CodeChunkKind;
+  lineStart: number;
+  lineEnd: number;
+  repoUrl: string;
+  branch: string;
+}
+
+/** 代码图谱 */
+export interface CodeGraph {
+  repoUrl: string;
+  branch: string;
+  symbols: CodeSymbol[];
+  edges: CodeEdge[];
+  files: string[];
+}
+
+/** Wiki 消息类型 — 复用 background.ts 的 `type` 字段 dispatch 协议 */
+export type WikiMessage =
+  | { type: "BUILD_CODE_GRAPH"; repoUrl: string; branch?: string; files?: { path: string; content: string }[]; fetchFromGitHub?: boolean }
+  | { type: "GET_CODE_GRAPH"; repoUrl: string }
+  | { type: "SEMANTIC_CODE_SEARCH"; query: string; repoUrl?: string; limit?: number }
+  | { type: "ASK_CODEBASE"; question: string; repoUrl: string }
+  | { type: "GET_SYMBOL_INFO"; symbolId: string }
+  | { type: "GET_WIKI_DOC"; docId: string }
+  | { type: "SYNC_WIKI"; repoUrl: string; branch?: string; files?: { path: string; content: string }[]; fetchFromGitHub?: boolean }
+  | { type: "WIKI_LIST_REPOS" }
+  | { type: "GET_WIKI_OVERVIEW"; repoUrl: string };
+
+/** Wiki 进度事件（background → UI） */
+export type WikiProgressEvent = {
+  type: "WIKI_PROGRESS";
+  repoUrl: string;
+  phase: "fetching_tree" | "downloading" | "parsing" | "embedding" | "wiki";
+  message: string;
+  /** 当前文件索引（用于 downloading phase） */
+  current?: number;
+  total?: number;
+};
+
+/** Wiki 仓库元信息 */
+export interface WikiRepoMeta {
+  id: string;
+  repoUrl: string;
+  branch: string;
+  updatedAt: number;
+  symbolCount: number;
+  edgeCount: number;
+  docCount: number;
+  embeddingCount: number;
+}
+
+/** 代码搜索结果 */
+export interface CodeSearchResult {
+  id: string;
+  name: string;
+  kind: CodeChunkKind;
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  repoUrl: string;
+  score: number;
+  excerpt: string;
+}
+
+/** 代码问答结果 */
+export interface CodeQAResult {
+  answer: string;
+  citations: { title: string; filePath: string; excerpt: string }[];
+}

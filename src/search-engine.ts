@@ -370,3 +370,6 @@ export async function searchKeyword(
 
   return applyFreqBoost(results.hits);
 }
+
+// Code Wiki 搜索引擎已迁移至 src/embed-code/index.ts（避免重复实例）。
+// 原代码块已删除；任何残留 import 见 embed-code 模块的 barrel re-export。

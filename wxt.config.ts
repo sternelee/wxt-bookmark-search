@@ -11,6 +11,9 @@ export default defineConfig({
       "cookies",
       "history",
       "alarms",
+      // Code Wiki: spawn offscreen document to host the parser Web Worker
+      // (Chrome MV3 only — Firefox falls back to in-SW cooperative yielding).
+      "offscreen",
     ],
     host_permissions: [
       "https://r.jina.ai/*",
@@ -21,6 +24,7 @@ export default defineConfig({
       "https://content.googleapis.com/*",
       "https://api.dropboxapi.com/*",
       "https://content.dropboxapi.com/*",
+      "https://api.github.com/*",
     ],
     omnibox: { keyword: "bi" },
     trial_tokens: process.env.CHROME_AI_TRIAL_TOKEN

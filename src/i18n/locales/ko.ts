@@ -457,6 +457,7 @@ export default {
     cmdTwitter: "🐦 /twitter 키워드 — Twitter 북마크 검색",
     cmdHistory: "📜 /history 키워드 — 브라우징 기록 검색",
     cmdFolder: "📁 /folder:이름 키워드 — 특정 폴더 내 검색",
+    cmdCodeWiki: "📚 cw 키워드 — 심볼 & 문서 Code Wiki 열기",
     folderSearch: "📁 폴더 검색: {{name}}",
     providerNotConfigured: "제공자가 설정되지 않았습니다",
     apiKeyNotConfigured: "API 키가 설정되지 않았습니다",
@@ -464,5 +465,54 @@ export default {
     syncInProgress: "동기화가 이미 진행 중입니다",
     contentExtractionFailed: "콘텐츠 추출에 실패했습니다",
     noRelevantBookmarks: "관련 북마크를 찾지 못했습니다.",
+  },
+
+  codeWiki: {
+    title: "Code Wiki",
+    tab: {
+      map: "코드 맵",
+      search: "심볼 검색",
+      docs: "Wiki 문서",
+      qa: "AI Q&A",
+    },
+    action: {
+      build: "빌드",
+      sync: "동기화",
+      send: "보내기",
+    },
+    placeholder: {
+      buildUrl: "GitHub 저장소 URL (파일 목록 필요)",
+      search: "심볼 검색...",
+      ask: "코드베이스에 질문하기...",
+    },
+    status: {
+      building: "코드 그래프 구축 중...",
+      built: "✓ 구축 완료: 심볼 {{symbols}}개, 엣지 {{edges}}개, 벡터 {{embeddings}}개, 문서 {{docs}}개",
+      syncing: "동기화 중...",
+      synced: "✓ 동기화 완료: 심볼 {{symbols}}개, 엣지 {{edges}}개",
+      failed: "✗ 실패: {{error}}",
+      error: "✗ 오류: {{error}}",
+      searching: "검색 중...",
+    },
+    empty: {
+      title: "아직 코드 그래프가 없습니다",
+      hint: "상단에 GitHub 저장소 URL을 입력하고 빌드를 클릭하세요.",
+    },
+    kind: {
+      function: "함수",
+      class: "클래스",
+      interface: "인터페이스",
+      type: "타입",
+      variable: "변수",
+      export: "내보내기",
+      import: "가져오기",
+      file: "파일",
+    },
+    qa: {
+      sources: "출처:",
+      thinking: "생각 중...",
+      failed: "답변을 가져오지 못했습니다.",
+      error: "오류: {{error}}",
+    },
   },
 } as const;

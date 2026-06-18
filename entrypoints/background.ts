@@ -18,6 +18,11 @@ import type {
   SearchResult,
   Settings,
   GistBookmarkNode,
+  CodeSymbol,
+  CodeEmbedding,
+  CodeChunk,
+  CodeSearchResult,
+  WikiMessage,
 } from "../src/types";
 import {
   getQueryEmbedding,
@@ -493,6 +498,9 @@ export default defineBackground(() => {
   // 初始化搜索引擎 (Orama)
   initSearchAndPopulate();
 
+  // 初始化代码 Wiki 搜索引擎 (Orama) — 独立实例
+  initCodeSearchAndPopulate();
+
   // 初始化 LLM provider
   initLLMProvider();
 
@@ -554,6 +562,81 @@ export default defineBackground(() => {
       await flushSaveSearchEngine();
     } catch (error) {
       console.error("[FlowSearch] Failed to init search engine:", error);
+    }
+  }
+
+  /** 初始化代码搜索引擎（Code Wiki），优先从 storage.local 恢复 */
+  async function initCodeSearchAndPopulate(): Promise<void> {
+    try {
+      const { initCodeSearchEngine, loadCodeSearchEngine, populateCodeSearchEngine: populateCode } = await import("../src/embed-code/index");
+      const { registerCodeSaveFn, scheduleSaveCodeSearchEngine } = await import(
+        "../src/embed-code/index"
+      );
+      const { ORAMA_CODE_INDEX_STORAGE_KEY } = await import(
+        "../src/embed-code/index"
+      );
+
+      await initCodeSearchEngine();
+
+      // 注册持久化回调
+      registerCodeSaveFn(async () => {
+        const raw = (await import("../src/embed-code/index")).saveCodeSearchEngine();
+        if (raw) {
+          await browser.storage.local.set({ [ORAMA_CODE_INDEX_STORAGE_KEY]: raw });
+        }
+      });
+
+      // 尝试从 storage.local 恢复
+      const stored = await browser.storage.local.get(ORAMA_CODE_INDEX_STORAGE_KEY);
+      if (stored[ORAMA_CODE_INDEX_STORAGE_KEY]) {
+        try {
+          loadCodeSearchEngine(stored[ORAMA_CODE_INDEX_STORAGE_KEY] as RawData);
+          console.log("[FlowSearch] Code wiki Orama index restored from storage");
+          return;
+        } catch {
+          console.warn(
+            "[FlowSearch] Failed to load code wiki Orama index, rebuilding...",
+          );
+        }
+      }
+
+      // 从 IndexedDB 重建：取所有 embeddings + symbols，重建 chunks
+      const { db } = await import("../src/db");
+      const [embeddingRecords, symbolRecords] = await Promise.all([
+        db.codeEmbeddings.toArray(),
+        db.codeSymbols.toArray(),
+      ]);
+      if (embeddingRecords.length === 0) {
+        console.log("[FlowSearch] No code wiki data to index");
+        return;
+      }
+      // 构造最小 chunks（symbol 级：signature + jsdoc + filePath）
+      const symbolMap = new Map(symbolRecords.map((s) => [s.id, s]));
+      const chunks: import("../src/types").CodeChunk[] = [];
+      const records: { chunk: import("../src/types").CodeChunk; embedding: number[] }[] = [];
+      for (const e of embeddingRecords) {
+        const sym = symbolMap.get(e.id);
+        if (!sym) continue;
+        const chunk: import("../src/types").CodeChunk = {
+          id: e.id,
+          content: [sym.jsdoc ? `/* ${sym.jsdoc} */` : "", sym.signature].filter(Boolean).join("\n"),
+          language: sym.filePath.split(".").pop() || "text",
+          filePath: sym.filePath,
+          symbolName: sym.name,
+          kind: sym.kind,
+          lineStart: sym.lineStart,
+          lineEnd: sym.lineEnd,
+          repoUrl: sym.repoUrl,
+          branch: sym.branch,
+        };
+        chunks.push(chunk);
+        records.push({ chunk, embedding: e.vector });
+      }
+      const count = await populateCode(records);
+      console.log(`[FlowSearch] Code wiki Orama rebuilt: ${count} chunks`);
+      scheduleSaveCodeSearchEngine();
+    } catch (error) {
+      console.error("[FlowSearch] Failed to init code wiki search engine:", error);
     }
   }
 
@@ -991,6 +1074,37 @@ export default defineBackground(() => {
             ? t("background.cmdFolder")
             : t("background.cmdFolder"),
         },
+        {
+          content: "cw ",
+          description: IS_FIREFOX
+            ? t("background.cmdCodeWiki")
+            : t("background.cmdCodeWiki"),
+        },
+      ]);
+      return;
+    }
+
+    // Code Wiki trigger: "cw ..." — open wiki page or suggest a query
+    if (rawInput === "cw" || rawInput.startsWith("cw ")) {
+      const query = rawInput === "cw" ? "" : rawInput.substring(3).trim();
+      const wikiPageUrl = browser.runtime.getURL("/wiki.html" as unknown as `/search.html${string}`);
+      suggest([
+        {
+          content: wikiPageUrl,
+          description: IS_FIREFOX
+            ? `Open Code Wiki${query ? ` — ${query}` : ""}`
+            : `<match>Open Code Wiki</match> <dim>${escapeXml(query || "browse symbols & docs")}</dim>`,
+        },
+        ...(query
+          ? [
+              {
+                content: `${wikiPageUrl}?q=${encodeURIComponent(query)}`,
+                description: IS_FIREFOX
+                  ? `Search: ${query}`
+                  : `<match>Search:</match> <dim>${escapeXml(query)}</dim> <url>${escapeXml(wikiPageUrl)}</url>`,
+              },
+            ]
+          : []),
       ]);
       return;
     }
@@ -2015,6 +2129,126 @@ export default defineBackground(() => {
             const history = await getResearchHistory(message.limit || 10);
             return { success: true, history };
           }
+          // === Code Wiki handlers ===
+          case "BUILD_CODE_GRAPH": {
+            return await buildCodeGraphHandler(message);
+          }
+          case "GET_CODE_GRAPH": {
+            const {
+              getSymbolsByRepo,
+              getEdgesByRepo,
+              getWikiDocsByRepo,
+            } = await import("../src/code-graph/persist");
+            const [symbols, edges, docs] = await Promise.all([
+              getSymbolsByRepo(message.repoUrl),
+              getEdgesByRepo(message.repoUrl),
+              getWikiDocsByRepo(message.repoUrl),
+            ]);
+            return { success: true, symbols, edges, docs };
+          }
+          case "SEMANTIC_CODE_SEARCH": {
+            const { semanticCodeSearch } = await import("../src/embed-code/search");
+            const settings = await getSettings();
+            const apiKey = settings.embedApiKey || settings.openaiApiKey || "";
+            if (!apiKey) {
+              return { success: false, error: "No API key configured" };
+            }
+            const results = await semanticCodeSearch(
+              message.query,
+              apiKey,
+              {
+                repoUrl: message.repoUrl,
+                limit: message.limit || 20,
+                baseURL: settings.embedBaseURL || settings.baseURL,
+                model: settings.embeddingModel,
+              },
+            );
+            return { success: true, results };
+          }
+          case "ASK_CODEBASE": {
+            return await askCodebaseHandler(message);
+          }
+          case "GET_SYMBOL_INFO": {
+            const { getSymbol } = await import("../src/code-graph/persist");
+            const symbol = await getSymbol(message.symbolId);
+            if (!symbol) {
+              return { success: false, error: "Symbol not found" };
+            }
+            return { success: true, symbol };
+          }
+          case "GET_WIKI_DOC": {
+            const { getWikiDoc } = await import("../src/code-graph/persist");
+            const doc = await getWikiDoc(message.docId);
+            if (!doc) {
+              return { success: false, error: "Doc not found" };
+            }
+            return { success: true, doc };
+          }
+          case "GET_WIKI_OVERVIEW": {
+            const { db } = await import("../src/db");
+            const { WIKI_DOC_ID } = await import("../src/types");
+            const doc = await db.wikiDocs.get(WIKI_DOC_ID.overview(message.repoUrl));
+            if (!doc) {
+              return { success: false, error: "Overview not found" };
+            }
+            return { success: true, doc };
+          }
+          case "SYNC_WIKI": {
+            return await syncWikiHandler(message);
+          }
+          case "WIKI_LIST_REPOS": {
+            const { db } = await import("../src/db");
+            const [allSymbols, allEdges, allDocs, allEmbeds] = await Promise.all([
+              db.codeSymbols.toArray(),
+              db.codeEdges.toArray(),
+              db.wikiDocs.toArray(),
+              db.codeEmbeddings.toArray(),
+            ]);
+            const repoMap = new Map<
+              string,
+              {
+                id: string;
+                repoUrl: string;
+                branch: string;
+                updatedAt: number;
+                symbolCount: number;
+                edgeCount: number;
+                docCount: number;
+                embeddingCount: number;
+              }
+            >();
+            for (const s of allSymbols) {
+              const cur = repoMap.get(s.repoUrl) || {
+                id: s.repoUrl,
+                repoUrl: s.repoUrl,
+                branch: s.branch,
+                updatedAt: 0,
+                symbolCount: 0,
+                edgeCount: 0,
+                docCount: 0,
+                embeddingCount: 0,
+              };
+              cur.symbolCount++;
+              cur.updatedAt = Math.max(cur.updatedAt, 0);
+              repoMap.set(s.repoUrl, cur);
+            }
+            for (const e of allEdges) {
+              const cur = repoMap.get(e.repoUrl);
+              if (cur) cur.edgeCount++;
+            }
+            for (const d of allDocs) {
+              const cur = repoMap.get(d.repoUrl);
+              if (cur) {
+                cur.docCount++;
+                cur.updatedAt = Math.max(cur.updatedAt, d.updatedAt);
+              }
+            }
+            for (const em of allEmbeds) {
+              const cur = repoMap.get(em.repoUrl);
+              if (cur) cur.embeddingCount++;
+            }
+            return { success: true, repos: [...repoMap.values()] };
+          }
           default:
             return { success: false, error: "Unknown message type" };
         }
@@ -2055,4 +2289,478 @@ function formatSuggestion(
   }
 
   return `${prefix}<match>${escapeXml(title)}</match> <dim>${escapeXml(summary)}...</dim> <url>${escapeXml(record.url)}</url>`;
+}
+
+// ============================================================
+// Code Wiki helper handlers (extracted from switch for clarity)
+// ============================================================
+
+function langNameForSettings(lang: string | undefined): string {
+  switch (lang) {
+    case "zh-CN":
+      return "Chinese";
+    case "ja":
+      return "Japanese";
+    case "ko":
+      return "Korean";
+    case "en":
+    default:
+      return "English";
+  }
+}
+
+function normaliseBaseURL(url: string | undefined, fallback: string): string {
+  const base = (url || fallback).replace(/\/$/, "");
+  return base.endsWith("/v1") ? base : `${base}/v1`;
+}
+
+/** 从 symbols 构造最小可用 chunks（fallback when Orama engine empty） */
+function symbolsToChunks(symbols: CodeSymbol[]): CodeChunk[] {
+  return symbols.map((s) => ({
+    id: s.id,
+    content: [
+      s.jsdoc ? `/* ${s.jsdoc} */` : "",
+      s.signature,
+    ].filter(Boolean).join("\n"),
+    language: s.filePath.split(".").pop() || "text",
+    filePath: s.filePath,
+    symbolName: s.name,
+    kind: s.kind,
+    lineStart: s.lineStart,
+    lineEnd: s.lineEnd,
+    repoUrl: s.repoUrl,
+    branch: s.branch,
+  }));
+}
+
+/** 加载仓库的所有 symbols 和 embeddings（fallback path for QA） */
+async function loadRepoContext(repoUrl: string): Promise<{
+  symbols: CodeSymbol[];
+  embeddings: Map<string, number[]>;
+}> {
+  const { getSymbolsByRepo } = await import("../src/code-graph/persist");
+  const { db } = await import("../src/db");
+  const [symbols, embeddingRecords] = await Promise.all([
+    getSymbolsByRepo(repoUrl),
+    db.codeEmbeddings.where("repoUrl").equals(repoUrl).toArray(),
+  ]);
+  const embeddings = new Map<string, number[]>();
+  for (const e of embeddingRecords as CodeEmbedding[]) {
+    embeddings.set(e.id, e.vector);
+  }
+  return { symbols, embeddings };
+}
+
+/** BUILD_CODE_GRAPH 完整流水线：parse → embed → populate → wiki */
+async function buildCodeGraphHandler(
+  message: Extract<WikiMessage, { type: "BUILD_CODE_GRAPH" }>,
+) {
+  const settings = await getSettings();
+  const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
+  const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
+  const embedBaseURL = normaliseBaseURL(
+    settings.embedBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+  const llmBaseURL = normaliseBaseURL(
+    settings.llmBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+  const embedModel = settings.embeddingModel;
+  const llmModel = settings.llmModel;
+
+  const { parseFiles: parseFilesLegacy, saveSymbols, saveEdges, parseGitHubUrl, fetchRepoSource } =
+    await import("../src/code-graph");
+  void parseFilesLegacy; // legacy fallback exposed for tests; production uses parseViaWorker
+  const { parseViaWorker, chunkViaWorker } = await import(
+    "../src/code-graph/worker-client"
+  );
+  const { chunkFiles } = await import("../src/embed-code/chunk");
+  const { embedChunks, saveCodeEmbedding } = await import(
+    "../src/embed-code/embed"
+  );
+  const {
+    ensureCodeSearchEngine,
+    populateCodeSearchEngine,
+    clearCodeSearchByRepo,
+  } = await import("../src/embed-code/index");
+  const { summarizeSymbols, buildWikiDocs } = await import("../src/repo-wiki");
+  const { upsertWikiDocs } = await import("../src/db");
+  type WikiProgressEvent = import("../src/types").WikiProgressEvent;
+
+  const branch = message.branch || "main";
+  const repoUrl = message.repoUrl;
+
+  // 进度广播：向所有打开的 tab 发送 WIKI_PROGRESS
+  const broadcastProgress = (
+    phase: WikiProgressEvent["phase"],
+    msg: string,
+    current?: number,
+    total?: number,
+  ) => {
+    try {
+      const event: WikiProgressEvent = {
+        type: "WIKI_PROGRESS",
+        repoUrl,
+        phase,
+        message: msg,
+        current,
+        total,
+      };
+      browser.runtime.sendMessage(event).catch(() => {
+        /* no listeners */
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // 1. 拉取 source：可选 GitHub
+  let files: { path: string; content: string }[] = message.files || [];
+  if (message.fetchFromGitHub) {
+    const ref = parseGitHubUrl(repoUrl);
+    if (!ref) {
+      return { success: false, error: `Invalid GitHub URL: ${repoUrl}` };
+    }
+    const targetBranch = branch || ref.branch;
+    const fullRef = { ...ref, branch: targetBranch };
+    broadcastProgress(
+      "fetching_tree",
+      `Resolving tree for ${ref.owner}/${ref.repo}@${targetBranch}...`,
+    );
+    try {
+      files = await fetchRepoSource(fullRef, {
+        onProgress: (msg) => {
+          const match = /Downloaded (\d+)\/(\d+)/.exec(msg);
+          if (match) {
+            broadcastProgress(
+              "downloading",
+              msg,
+              Number(match[1]),
+              Number(match[2]),
+            );
+          } else {
+            broadcastProgress("downloading", msg);
+          }
+        },
+      });
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      return { success: false, error: `GitHub fetch failed: ${errMsg}` };
+    }
+    if (files.length === 0) {
+      return {
+        success: false,
+        error: "No source files found in repository (check branch or access)",
+      };
+    }
+  }
+
+  broadcastProgress("parsing", `Parsing ${files.length} files...`);
+
+  // 2. 解析（worker offload，失败 fallback 到 in-SW）
+  const { symbols, edges } = await parseViaWorker(
+    files,
+    repoUrl,
+    branch,
+    (done, total) => broadcastProgress("parsing", `Parsed ${done}/${total} files...`),
+  );
+
+  // 3. 持久化 symbols/edges
+  await saveSymbols(symbols);
+  await saveEdges(edges);
+
+  broadcastProgress("parsing", `Chunking ${symbols.length} symbols...`);
+
+  // 4. 切分（按文件 + symbols 精切）
+  const chunks = await chunkViaWorker(
+    files.map((f: { path: string; content: string }) => ({
+      path: f.path,
+      content: f.content,
+      symbols: symbols.filter((s) => s.filePath === f.path),
+    })),
+    symbols,
+    repoUrl,
+    branch,
+    (done, total) => broadcastProgress("embedding", `Chunked ${done}/${total} files...`),
+  );
+
+  broadcastProgress("embedding", `Embedding ${chunks.length} chunks via BGE-M3...`);
+
+  // 4. 嵌入（需 API key）
+  let embeddings: CodeEmbedding[] = [];
+  if (chunks.length > 0 && embedApiKey) {
+    try {
+      embeddings = await embedChunks(
+        chunks,
+        embedApiKey,
+        embedBaseURL,
+        embedModel,
+      );
+      await saveCodeEmbedding(embeddings);
+    } catch (e) {
+      console.warn(
+        "[BUILD_CODE_GRAPH] embed failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  } else if (chunks.length > 0) {
+    console.warn("[BUILD_CODE_GRAPH] no embed API key, skipping embeddings");
+  }
+
+  // 5. 填充搜索引擎（先清后填）
+  if (embeddings.length > 0) {
+    try {
+      await ensureCodeSearchEngine();
+      await clearCodeSearchByRepo(repoUrl);
+      const embedMap = new Map(embeddings.map((e) => [e.id, e.vector]));
+      await populateCodeSearchEngine(
+        chunks
+          .map((c) => ({ chunk: c, embedding: embedMap.get(c.id) ?? [] }))
+          .filter((r) => r.embedding.length > 0),
+      );
+    } catch (e) {
+      console.warn(
+        "[BUILD_CODE_GRAPH] populate engine failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+
+  // 6. Wiki 文档生成
+  broadcastProgress("wiki", "Generating wiki documentation...");
+  let wikiDocs: import("../src/types").WikiDoc[] = [];
+  try {
+    const symbolSummaries = llmApiKey && symbols.length > 0
+      ? await summarizeSymbols(
+          symbols,
+          llmApiKey,
+          llmBaseURL,
+          llmModel,
+          langNameForSettings(settings.language),
+        )
+      : undefined;
+    wikiDocs = buildWikiDocs(symbols, symbolSummaries, repoUrl);
+    await upsertWikiDocs(wikiDocs);
+  } catch (e) {
+    console.warn(
+      "[BUILD_CODE_GRAPH] wiki generation failed:",
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+
+  return {
+    success: true,
+    symbolCount: symbols.length,
+    edgeCount: edges.length,
+    embeddingCount: embeddings.length,
+    wikiDocCount: wikiDocs.length,
+  };
+}
+
+/** SYNC_WIKI：按文件增量重算 */
+async function syncWikiHandler(
+  message: Extract<WikiMessage, { type: "SYNC_WIKI" }>,
+) {
+  const settings = await getSettings();
+  const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
+  const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
+  const embedBaseURL = normaliseBaseURL(
+    settings.embedBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+  const llmBaseURL = normaliseBaseURL(
+    settings.llmBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+  const embedModel = settings.embeddingModel;
+  const llmModel = settings.llmModel;
+
+  const {
+    saveSymbols,
+    saveEdges,
+    deleteSymbolsByFile,
+    deleteEdgesByFile,
+  } = await import("../src/code-graph");
+  const { parseViaWorker, chunkViaWorker } = await import(
+    "../src/code-graph/worker-client"
+  );
+  const { chunkFiles } = await import("../src/embed-code/chunk");
+  const { embedChunks, saveCodeEmbedding, deleteCodeEmbeddingsByFile } =
+    await import("../src/embed-code/embed");
+  const {
+    ensureCodeSearchEngine,
+    populateCodeSearchEngine,
+    removeCodeSearchByFile,
+  } = await import("../src/embed-code/index");
+  const { summarizeSymbols, buildWikiDocs } = await import("../src/repo-wiki");
+  const { upsertWikiDocs, db } = await import("../src/db");
+  const { getSymbolsByRepo } = await import("../src/code-graph/persist");
+
+  const files = message.files || [];
+  const branch = message.branch || "main";
+  const repoUrl = message.repoUrl;
+
+  // 1) 删除变更文件的旧数据
+  for (const f of files) {
+    await deleteSymbolsByFile(f.path);
+    await deleteEdgesByFile(f.path);
+    await deleteCodeEmbeddingsByFile(f.path);
+    await removeCodeSearchByFile(f.path);
+  }
+
+  const { symbols: newSymbols, edges: newEdges } = await parseViaWorker(
+    files,
+    repoUrl,
+    branch,
+  );
+  await saveSymbols(newSymbols);
+  await saveEdges(newEdges);
+
+  const chunks = await chunkViaWorker(
+    files.map((f) => ({
+      path: f.path,
+      content: f.content,
+      symbols: newSymbols.filter((s) => s.filePath === f.path),
+    })),
+    newSymbols,
+    repoUrl,
+    branch,
+  );
+
+  let embeddings: CodeEmbedding[] = [];
+  if (chunks.length > 0 && embedApiKey) {
+    try {
+      embeddings = await embedChunks(
+        chunks,
+        embedApiKey,
+        embedBaseURL,
+        embedModel,
+      );
+      await saveCodeEmbedding(embeddings);
+      await ensureCodeSearchEngine();
+      const embedMap = new Map(embeddings.map((e) => [e.id, e.vector]));
+      await populateCodeSearchEngine(
+        chunks
+          .map((c) => ({ chunk: c, embedding: embedMap.get(c.id) ?? [] }))
+          .filter((r) => r.embedding.length > 0),
+      );
+    } catch (e) {
+      console.warn(
+        "[SYNC_WIKI] embed failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+
+  // 重建 wiki（覆盖；先删后插）
+  const allSymbols = await getSymbolsByRepo(repoUrl);
+  const allDocs = await db.wikiDocs.where("repoUrl").equals(repoUrl).primaryKeys();
+  if (allDocs.length > 0) await db.wikiDocs.bulkDelete(allDocs);
+
+  let wikiDocs: import("../src/types").WikiDoc[] = [];
+  try {
+    const symbolSummaries = llmApiKey && allSymbols.length > 0
+      ? await summarizeSymbols(
+          allSymbols,
+          llmApiKey,
+          llmBaseURL,
+          llmModel,
+          langNameForSettings(settings.language),
+        )
+      : undefined;
+    wikiDocs = buildWikiDocs(allSymbols, symbolSummaries, repoUrl);
+    await upsertWikiDocs(wikiDocs);
+  } catch (e) {
+    console.warn(
+      "[SYNC_WIKI] wiki rebuild failed:",
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+
+  return {
+    success: true,
+    symbolCount: newSymbols.length,
+    edgeCount: newEdges.length,
+    embeddingCount: embeddings.length,
+    wikiDocCount: wikiDocs.length,
+  };
+}
+
+/** ASK_CODEBASE RAG — pool-based cosine sim + LLM */
+async function askCodebaseHandler(
+  message: Extract<WikiMessage, { type: "ASK_CODEBASE" }>,
+) {
+  const settings = await getSettings();
+  const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
+  const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
+  if (!embedApiKey || !llmApiKey) {
+    return { success: false, error: "No API key configured" };
+  }
+
+  const { askCodebase } = await import("../src/repo-wiki/qa");
+  const { searchViaWorkerPool } = await import("../src/code-graph/worker-client");
+  const { repoUrl, question } = message;
+
+  // 1) 加载仓库所有 symbols + embeddings
+  const { symbols, embeddings } = await loadRepoContext(repoUrl);
+  if (symbols.length === 0) {
+    return {
+      success: true,
+      answer: "This repository has no indexed code yet. Build the code graph first.",
+      citations: [],
+    };
+  }
+
+  // 2) 构造 chunks（symbol 级别）
+  const chunks = symbolsToChunks(symbols);
+
+  const embedBaseURL = normaliseBaseURL(
+    settings.embedBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+  const llmBaseURL = normaliseBaseURL(
+    settings.llmBaseURL || settings.baseURL,
+    "https://api.siliconflow.cn",
+  );
+
+  // 3) Embed query + pool-based cosine sim across N workers
+  const { getQueryEmbedding } = await import("../src/embedding");
+  const queryEmbedding = await getQueryEmbedding(
+    question,
+    embedApiKey,
+    undefined,
+    settings.embeddingModel,
+    embedBaseURL,
+  );
+  const TOP_K = 8;
+  const ranked = await searchViaWorkerPool(
+    queryEmbedding,
+    chunks,
+    embeddings,
+    TOP_K,
+    (phase) => console.log(`[ASK_CODEBASE] ${phase}`),
+  );
+  // Map ranked ids back to top chunks for context + citations
+  const chunkById = new Map(chunks.map((c) => [c.id, c]));
+  const topChunks = ranked
+    .map((r) => chunkById.get(r.id))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+  // 4) Build RAG context + call LLM (askCodebase from qa.ts handles the prompt)
+  const result = await askCodebase(
+    question,
+    topChunks,
+    embeddings,
+    embedApiKey,
+    embedBaseURL,
+    settings.embeddingModel,
+    settings.llmModel,
+    llmApiKey,
+  );
+  return {
+    success: true,
+    answer: result.answer,
+    citations: result.citations,
+  };
 }

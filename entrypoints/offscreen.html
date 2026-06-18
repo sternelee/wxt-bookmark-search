@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  Offscreen page that hosts the Code Wiki parser Web Worker.
+
+  This page is created at runtime by the service worker via
+  `chrome.offscreen.createDocument({ url, reasons: ['WORKERS'], ... })`
+  (Chrome MV3 only). It spawns a dedicated Web Worker and relays
+  messages between the SW and the worker via chrome.runtime.
+
+  This file is not registered as a visible extension page (no
+  browser_action / page_action), so it won't appear in any UI.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Flow Search — Code Wiki Offscreen Worker Host</title>
+  </head>
+  <body>
+    <div id="status">offscreen-host: initialising</div>
+    <script type="module" src="./offscreen/main.ts"></script>
+  </body>
+</html>

@@ -465,6 +465,7 @@ export default {
     cmdTwitter: "🐦 /twitter キーワード — Twitter ブックマークを検索",
     cmdHistory: "📜 /history キーワード — ブラウジング履歴を検索",
     cmdFolder: "📁 /folder:名前 キーワード — 特定フォルダ内を検索",
+    cmdCodeWiki: "📚 cw キーワード — シンボル & ドキュメントの Code Wiki を開く",
     folderSearch: "📁 フォルダを検索: {{name}}",
     providerNotConfigured: "プロバイダーが設定されていません",
     apiKeyNotConfigured: "API キーが設定されていません",
@@ -473,5 +474,54 @@ export default {
     syncInProgress: "同期はすでに進行中です",
     contentExtractionFailed: "コンテンツの抽出に失敗しました",
     noRelevantBookmarks: "関連するブックマークが見つかりませんでした。",
+  },
+
+  codeWiki: {
+    title: "コード Wiki",
+    tab: {
+      map: "コードマップ",
+      search: "シンボル検索",
+      docs: "Wiki ドキュメント",
+      qa: "AI Q&A",
+    },
+    action: {
+      build: "ビルド",
+      sync: "同期",
+      send: "送信",
+    },
+    placeholder: {
+      buildUrl: "GitHub リポジトリ URL（ファイル一覧が必要）",
+      search: "シンボルを検索...",
+      ask: "コードベースについて質問...",
+    },
+    status: {
+      building: "コードグラフを構築中...",
+      built: "✓ 構築完了：{{symbols}} シンボル、{{edges}} エッジ、{{embeddings}} ベクトル、{{docs}} ドキュメント",
+      syncing: "同期中...",
+      synced: "✓ 同期完了：{{symbols}} シンボル、{{edges}} エッジ",
+      failed: "✗ 失敗：{{error}}",
+      error: "✗ エラー：{{error}}",
+      searching: "検索中...",
+    },
+    empty: {
+      title: "コードグラフはまだ構築されていません",
+      hint: "上部に GitHub リポジトリ URL を入力して「ビルド」をクリックしてください。",
+    },
+    kind: {
+      function: "関数",
+      class: "クラス",
+      interface: "インターフェース",
+      type: "型",
+      variable: "変数",
+      export: "エクスポート",
+      import: "インポート",
+      file: "ファイル",
+    },
+    qa: {
+      sources: "ソース：",
+      thinking: "考え中...",
+      failed: "回答を取得できませんでした。",
+      error: "エラー：{{error}}",
+    },
   },
 } as const;
