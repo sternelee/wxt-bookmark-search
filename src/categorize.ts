@@ -169,7 +169,21 @@ Example output:
   }[];
 
   try {
-    const parsed = JSON.parse(content);
+    // 处理 LLM 可能返回的围栏 JSON / 散文包裹
+    let text = content.trim();
+    const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/i);
+    if (fenceMatch) {
+      text = fenceMatch[1].trim();
+    }
+    if (!text.startsWith("[")) {
+      const first = text.indexOf("[");
+      const last = text.lastIndexOf("]");
+      if (first !== -1 && last > first) {
+        text = text.slice(first, last + 1);
+      }
+    }
+
+    const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) {
       items = parsed;
     } else if (parsed && typeof parsed === "object") {

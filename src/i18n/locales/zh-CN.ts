@@ -340,8 +340,16 @@ export default {
         "将用云端书签全量替换本地书签。本地独有的书签将会被删除，此操作不可撤销。",
       confirmDelete:
         "确认删除云端同步文件？本地数据不受影响，但设备绑定会被清空。",
+      confirmBookmarksSyncTitle: "🔄 确认书签同步",
+      confirmBookmarksSyncBody:
+        "书签将进行双向合并。远程副本可能会添加或删除书签。本地独有的书签将上传，远程独有的将下载。这可能会改变您的书签树。",
+      confirmDeleteTitle: "🗑️ 确认删除",
       deleteSuccess: "✓ 云端文件已删除",
       deleteFailed: "删除失败：{{error}}",
+
+      tokenExpired: "访问令牌已过期或无效 — 请在服务商控制台重新生成后粘贴。",
+      sizeError: "同步数据过大 — 尝试减少书签数量或在索引范围设置中限定文件夹范围。",
+      versionError: "远程数据版本不匹配 — 远程数据可能已损坏或被外部修改。",
     },
 
     indexManager: {
@@ -418,6 +426,8 @@ export default {
       keep: "保留此项",
       removeOthers: "删除其他",
       resolveSuccess: "✓ 重复项已处理",
+      confirmResolveTitle: "⚠️ 确认保留",
+      confirmResolveBody: "本组内其他所有书签将被永久删除。此操作不可撤销。",
       urlLabel: "URL",
       folderLabel: "文件夹",
     },
@@ -437,6 +447,9 @@ export default {
       applying: "正在移动书签...",
       applySuccess:
         "✓ 已移动 {{moved}} 个书签，新建 {{created}} 个文件夹，跳过 {{skipped}} 个",
+      confirmApplyTitle: "⚠️ 确认移动",
+      confirmApplyBody:
+        "{{count}} 个书签将被移动到分类文件夹中。可能会创建新文件夹。此操作不易撤销。",
       saved: "✓ 分类设置已保存",
       confidenceHigh: "高",
       confidenceMedium: "中",
@@ -479,6 +492,29 @@ export default {
     summarizing: "正在生成摘要...",
     summaryFailed: "摘要生成失败",
     summaryEmpty: "无内容可摘要",
+
+    contentType: {
+      article: "📄 文章",
+      repo: "📦 仓库",
+      tweet: "🐦 推文",
+      doc: "📚 文档",
+      video: "🎬 视频",
+      tool: "🔧 工具",
+      other: "📌 其他",
+    },
+    difficulty: {
+      beginner: "入门",
+      intermediate: "中级",
+      advanced: "高级",
+    },
+    keyPoints: "要点",
+    technologies: "技术栈",
+    concepts: "💡 概念",
+    keyClaims: "🎯 关键论述",
+    keyData: "📊 关键数据",
+    related: "相关:",
+    minute: "分钟",
+
     askPlaceholder: "向 AI 提问你的书签...",
     askButton: "提问",
     asking: "思考中...",

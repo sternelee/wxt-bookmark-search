@@ -21,7 +21,6 @@ export function normalizeTag(tag: string): string {
   return tag
     .toLowerCase()
     .trim()
-    .replace(/s$/, "")      // 去复数: servers → server
     .replace(/[^a-z0-9一-龥+#.-]/g, "-")  // 统一特殊字符
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
@@ -71,7 +70,9 @@ function extractTechKeywords(title: string): string[] {
   for (const kw of TECH_KEYWORDS) {
     if (matched.length >= 5) break;
     // 用词边界匹配，避免 "react" 匹配到 "reactive"
-    if (lower.includes(kw) && !matched.some((m) => m.toLowerCase() === kw)) {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+    if (re.test(lower) && !matched.some((m) => m.toLowerCase() === kw)) {
       matched.push(kw);
     }
   }
@@ -131,7 +132,10 @@ export function buildRootTagCloud(records: BookmarkRecord[]): TagNode[] {
 
   if (tagMap.size === 0) return [];
 
-  const maxCount = Math.max(1, ...Array.from(tagMap.values()).map((s) => s.size));
+  let maxCount = 1;
+  for (const ids of tagMap.values()) {
+    if (ids.size > maxCount) maxCount = ids.size;
+  }
 
   return Array.from(tagMap.entries())
     .map(([tag, ids]) => ({
@@ -191,7 +195,10 @@ export function drillDown(
 
   if (coTagMap.size === 0) return [];
 
-  const maxCount = Math.max(1, ...Array.from(coTagMap.values()).map((s) => s.size));
+  let maxCount = 1;
+  for (const ids of coTagMap.values()) {
+    if (ids.size > maxCount) maxCount = ids.size;
+  }
 
   return Array.from(coTagMap.entries())
     .map(([tag, ids]) => ({

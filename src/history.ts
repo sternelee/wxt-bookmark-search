@@ -37,8 +37,8 @@ interface HistoryItem {
  */
 function historyItemToRecord(item: HistoryItem): BookmarkRecord {
   const url = item.url!;
-  // id: "hi-" + encodeURIComponent(url) 截取前 200 字符确保唯一可读
-  const id = "hi-" + encodeURIComponent(url).slice(0, 200);
+  // id: "hi-" + encodeURIComponent(url)，不再截断以避免长 URL 碰撞
+  const id = "hi-" + encodeURIComponent(url);
   return {
     id,
     url,

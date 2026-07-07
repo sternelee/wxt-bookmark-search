@@ -25,6 +25,9 @@ export default function CategorizeSettings() {
   } | null>(null);
   const [analyzing, setAnalyzing] = createSignal(false);
   const [applying, setApplying] = createSignal(false);
+  // 确认对话框
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [confirmMoveCount, setConfirmMoveCount] = createSignal(0);
   const [suggestions, setSuggestions] = createSignal<
     {
       bookmarkId: string;
@@ -138,6 +141,15 @@ export default function CategorizeSettings() {
       return;
     }
 
+    // 先弹出确认对话框
+    setConfirmMoveCount(toApply.length);
+    setConfirmOpen(true);
+  };
+
+  const confirmApply = async () => {
+    setConfirmOpen(false);
+    const toApply = suggestions().filter((s) => s._accepted);
+
     setApplying(true);
     try {
       const response = await browser.runtime.sendMessage({
@@ -210,6 +222,7 @@ export default function CategorizeSettings() {
   };
 
   return (
+    <>
     <Card class="mb-6">
       <CardHeader>
         <CardTitle>{t("options.categorize.title")}</CardTitle>
@@ -320,5 +333,28 @@ export default function CategorizeSettings() {
         </Alert>
       </CardContent>
     </Card>
+
+    {/* 确认对话框 */}
+    <Show when={confirmOpen()}>
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="bg-background border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-semibold text-destructive mb-2">
+            {t("options.categorize.confirmApplyTitle")}
+          </h3>
+          <p class="text-sm text-muted-foreground mb-4">
+            {t("options.categorize.confirmApplyBody", { count: confirmMoveCount() })}
+          </p>
+          <div class="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={confirmApply}>
+              {t("common.confirm")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Show>
+    </>
   );
 }

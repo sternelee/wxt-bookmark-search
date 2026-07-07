@@ -11,6 +11,7 @@ import { Alert } from "../../../src/components/ui/alert";
 import { Select } from "../../../src/components/ui/select";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
+import { CloudSyncError } from "../../../src/cloud-sync/types";
 
 type ProviderValue = "" | "google-drive" | "dropbox" | "webdav";
 
@@ -49,10 +50,37 @@ export default function CloudSyncSettings() {
   const [isDownloadingBookmarks, setIsDownloadingBookmarks] = createSignal(false);
   const [pendingBookmarkDownload, setPendingBookmarkDownload] = createSignal(false);
 
+  // 确认对话框（替代原生 confirm）
+  const [confirmDialog, setConfirmDialog] = createSignal<{
+    open: boolean;
+    title: string;
+    message: string;
+    variant: "destructive" | "default";
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "default",
+    onConfirm: () => {},
+  });
+
   // 删除操作
   const [isDeleting, setIsDeleting] = createSignal(false);
 
   const formatError = (error: unknown): string => {
+    if (error instanceof CloudSyncError) {
+      switch (error.code) {
+        case "AUTH":
+          return t("options.cloudSync.tokenExpired");
+        case "SIZE":
+          return t("options.cloudSync.sizeError");
+        case "VERSION":
+          return t("options.cloudSync.versionError");
+        default:
+          return error.message;
+      }
+    }
     if (error instanceof Error) return error.message;
     return String(error);
   };
@@ -324,6 +352,16 @@ export default function CloudSyncSettings() {
       });
       return;
     }
+    setConfirmDialog({
+      open: true,
+      title: t("options.cloudSync.confirmBookmarksSyncTitle"),
+      message: t("options.cloudSync.confirmBookmarksSyncBody"),
+      variant: "destructive",
+      onConfirm: executeSyncBookmarks,
+    });
+  };
+
+  const executeSyncBookmarks = async () => {
     setIsSyncingBookmarks(true);
     setStatus({ message: t("options.cloudSync.syncingBookmarks"), type: "info" });
     try {
@@ -442,7 +480,16 @@ export default function CloudSyncSettings() {
 
   const handleDelete = async () => {
     if (!provider() || !hasTokenOrPassword()) return;
-    if (!confirm(t("options.cloudSync.confirmDelete"))) return;
+    setConfirmDialog({
+      open: true,
+      title: t("options.cloudSync.confirmDeleteTitle"),
+      message: t("options.cloudSync.confirmDelete"),
+      variant: "destructive",
+      onConfirm: executeDelete,
+    });
+  };
+
+  const executeDelete = async () => {
     setIsDeleting(true);
     try {
       const res = await browser.runtime.sendMessage({
@@ -502,6 +549,7 @@ export default function CloudSyncSettings() {
   const providerHint = () => t("options.cloudSync.providerHint");
 
   return (
+    <>
     <Card class="mb-6">
       <CardHeader>
         <CardTitle>{t("options.cloudSync.title")}</CardTitle>
@@ -789,6 +837,36 @@ export default function CloudSyncSettings() {
         </Show>
       </CardContent>
     </Card>
+
+    {/* 通用确认对话框 */}
+    <Show when={confirmDialog().open}>
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="bg-background border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+          <h3 class={confirmDialog().variant === "destructive" ? "text-lg font-semibold text-destructive mb-2" : "text-lg font-semibold mb-2"}>
+            {confirmDialog().title}
+          </h3>
+          <p class="text-sm text-muted-foreground mb-4">{confirmDialog().message}</p>
+          <div class="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant={confirmDialog().variant}
+              onClick={() => {
+                setConfirmDialog((prev) => ({ ...prev, open: false }));
+                confirmDialog().onConfirm();
+              }}
+            >
+              {t("common.confirm")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Show>
+    </>
   );
 }
 

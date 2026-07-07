@@ -39,6 +39,7 @@ let isProcessing = false;
 let isPaused = false; // 暂停标志
 let totalToProcess = 0; // 总待处理数
 let processedCount = 0; // 已处理数
+let pausedProcessedCount = 0; // pause 时保存的已处理数
 let queueGeneration = 0;
 let activeProcessingGeneration = 0;
 const MAX_RETRIES = 2;
@@ -475,6 +476,7 @@ export async function resetIndexerState(): Promise<void> {
   isPaused = false;
   totalToProcess = 0;
   processedCount = 0;
+  pausedProcessedCount = 0;
   await Promise.all([
     db.indexQueue.clear(),
     browser.storage.local.remove(ENRICHMENT_QUEUE_KEY),
@@ -1070,8 +1072,15 @@ async function processQueue(): Promise<void> {
   const runGeneration = queueGeneration;
   activeProcessingGeneration = runGeneration;
   isProcessing = true;
-  totalToProcess = queue.length;
-  processedCount = 0;
+  // 从暂停恢复时保留累计进度
+  if (pausedProcessedCount > 0) {
+    totalToProcess = queue.length;
+    processedCount = pausedProcessedCount;
+    pausedProcessedCount = 0;
+  } else {
+    totalToProcess = queue.length;
+    processedCount = 0;
+  }
 
   const settings = await getSettings();
   const embedCfg = resolveEmbedConfig(settings);
@@ -1293,7 +1302,6 @@ async function processQueue(): Promise<void> {
           }
         }
         await enqueueIndexJobs(retryJobs, { front: true });
-        totalToProcess += retryJobs.length;
 
         const delay = calculateDelay();
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -1317,7 +1325,6 @@ async function processQueue(): Promise<void> {
         }
       }
       await enqueueIndexJobs(retryJobs);
-      totalToProcess += retryJobs.length;
 
       processedCount += batch.length;
       continue;
@@ -1337,6 +1344,7 @@ async function processQueue(): Promise<void> {
     const records: BookmarkRecord[] = contents.map(
       ({ job, content, summary, tags, quickSummary, keyPoints, readingTime, technologies, llmEnhanced }, i) => {
         const existing = existingById.get(job.bookmarkId);
+        const hasEmbedding = !!embeddings[i];
         return {
           ...existing,
           id: job.bookmarkId,
@@ -1345,8 +1353,8 @@ async function processQueue(): Promise<void> {
           summary: summary || existing?.summary || "",
           tags: tags.length > 0 ? tags : existing?.tags || [],
           embedding: embeddings[i],
-          status: "indexed" as const,
-          indexedAt: Date.now(),
+          status: hasEmbedding ? ("indexed" as const) : ("pending" as const),
+          indexedAt: hasEmbedding ? Date.now() : existing?.indexedAt,
           error: undefined,
           llmEnhanced: llmEnhanced || existing?.llmEnhanced || false,
           source: existing?.source || "bookmark",
@@ -1358,13 +1366,30 @@ async function processQueue(): Promise<void> {
       },
     );
 
+    // 分离出嵌入失败的记录（保留 LLM 结果，仅重试 embedding）
+    const indexedRecords = records.filter((r) => r.status === "indexed");
+    const failedRecords = records.filter((r) => r.status === "pending");
+
+    if (failedRecords.length > 0) {
+      const retryJobs: IndexJob[] = failedRecords.map((r) => ({
+        bookmarkId: r.id,
+        url: r.url,
+        title: r.title,
+        retryCount: 0,
+      }));
+      await enqueueIndexJobs(retryJobs, { front: true });
+      console.warn(`[indexer] ${failedRecords.length} items re-queued for embedding retry`);
+    }
+
     try {
       await upsertBookmarks(records);
-      console.log(`[indexer] Batch indexed: ${batch.length} items`);
+      console.log(`[indexer] Batch indexed: ${indexedRecords.length} items${failedRecords.length > 0 ? `, ${failedRecords.length} re-queued` : ""}`);
 
       try {
-        await upsertSearchEngineBatch(records);
-        await flushSaveSearchEngine();
+        if (indexedRecords.length > 0) {
+          await upsertSearchEngineBatch(indexedRecords);
+          await flushSaveSearchEngine();
+        }
       } catch (e) {
         console.warn("[indexer] Search engine sync failed:", e);
       }
@@ -1413,8 +1438,9 @@ async function processQueue(): Promise<void> {
         }
       }
       await enqueueIndexJobs(retryJobs);
-      totalToProcess += retryJobs.length;
     }
+
+    // DB 写入失败，batch 计为已处理（终端状态）
 
     // 限流延迟
     const delay = calculateDelay();
@@ -1553,6 +1579,7 @@ export function getIndexingStatus(): {
 export function pauseIndexing(): void {
   if (isProcessing) {
     isPaused = true;
+    pausedProcessedCount = processedCount;
     console.log("[indexer] Pause requested");
   }
 }

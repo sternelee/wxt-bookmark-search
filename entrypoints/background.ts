@@ -9,6 +9,7 @@ import { rerankBookmarks, getMatchQuality } from "../src/search";
 import {
   highlightBookmark,
   highlightBookmarkPlain,
+  highlightMatches,
   escapeXml,
 } from "../src/highlight";
 import { getSettings, hasApiKey, saveSettings } from "../src/db";
@@ -124,6 +125,10 @@ let cloudBookmarkSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let isSyncingCloudBookmarks = false;
 let cloudBookmarkSyncLock = false;
 let pendingCloudBookmarkSync = false;
+
+/** 防止 Gist 和云书签同时同步产生竞态（两者都操作 browser.bookmarks） */
+let isAnyBookmarkSyncRunning = false;
+let pendingAnyBookmarkSync = false;
 
 type BrowserSearchBookmark = {
   id: string;
@@ -474,12 +479,12 @@ export default defineBackground(() => {
       Object.keys(cache).length,
       "entries",
     );
-  });
+  }).catch((err) => console.error("[FlowSearch] Failed to load frequency cache:", err));
 
   // 初始化索引器
   initIndexer().then(() => {
     console.log("[FlowSearch] Indexer initialized");
-  });
+  }).catch((err) => console.error("[FlowSearch] Failed to init indexer:", err));
 
   // 注册 Orama 索引持久化回调（必须在 initSearchAndPopulate 之前）
   registerSaveFn(async () => {
@@ -517,7 +522,7 @@ export default defineBackground(() => {
       console.log("[FlowSearch] API key found, starting initial index...");
       indexAllBookmarks();
     }
-  });
+  }).catch((err) => console.error("[FlowSearch] Failed to check API key:", err));
 
   /** 初始化 LLM provider */
   async function initLLMProvider(): Promise<void> {
@@ -723,7 +728,7 @@ export default defineBackground(() => {
 
   /** 触发 debounced Gist 同步（5 秒合并多次事件） */
   function scheduleDebouncedGistSync(): void {
-    if (gistSyncLock || isSyncingGist) {
+    if (gistSyncLock || isSyncingGist || isAnyBookmarkSyncRunning) {
       pendingGistSync = true;
       return;
     }
@@ -828,11 +833,12 @@ export default defineBackground(() => {
       throw new Error(t("background.gistSyncUnavailable"));
     }
 
-    if (isSyncingGist) {
+    if (isSyncingGist || isAnyBookmarkSyncRunning) {
       throw new Error(t("background.syncInProgress"));
     }
 
     isSyncingGist = true;
+    isAnyBookmarkSyncRunning = true;
     let result: {
       added: number;
       removed: number;
@@ -873,11 +879,20 @@ export default defineBackground(() => {
       }
     } finally {
       isSyncingGist = false;
+      isAnyBookmarkSyncRunning = false;
     }
 
     if (pendingGistSync) {
       pendingGistSync = false;
       queueMicrotask(() => scheduleDebouncedGistSync());
+    }
+
+    if (pendingAnyBookmarkSync) {
+      pendingAnyBookmarkSync = false;
+      queueMicrotask(() => {
+        scheduleDebouncedGistSync();
+        scheduleDebouncedCloudBookmarkSync();
+      });
     }
 
     return result!;
@@ -887,7 +902,7 @@ export default defineBackground(() => {
 
   /** 触发 debounced 云端书签同步（5 秒合并多次事件） */
   function scheduleDebouncedCloudBookmarkSync(): void {
-    if (cloudBookmarkSyncLock || isSyncingCloudBookmarks) {
+    if (cloudBookmarkSyncLock || isSyncingCloudBookmarks || isAnyBookmarkSyncRunning) {
       pendingCloudBookmarkSync = true;
       return;
     }
@@ -918,11 +933,12 @@ export default defineBackground(() => {
       throw new Error("Cloud provider not configured");
     }
 
-    if (isSyncingCloudBookmarks) {
+    if (isSyncingCloudBookmarks || isAnyBookmarkSyncRunning) {
       throw new Error("Cloud bookmark sync already in progress");
     }
 
     isSyncingCloudBookmarks = true;
+    isAnyBookmarkSyncRunning = true;
     let result: { added: number; removed: number; uploaded: number };
 
     try {
@@ -954,11 +970,20 @@ export default defineBackground(() => {
       }
     } finally {
       isSyncingCloudBookmarks = false;
+      isAnyBookmarkSyncRunning = false;
     }
 
     if (pendingCloudBookmarkSync) {
       pendingCloudBookmarkSync = false;
       queueMicrotask(() => scheduleDebouncedCloudBookmarkSync());
+    }
+
+    if (pendingAnyBookmarkSync) {
+      pendingAnyBookmarkSync = false;
+      queueMicrotask(() => {
+        scheduleDebouncedGistSync();
+        scheduleDebouncedCloudBookmarkSync();
+      });
     }
 
     return result!;
@@ -979,6 +1004,23 @@ export default defineBackground(() => {
     scheduleDebouncedGistSync();
     scheduleDebouncedCloudBookmarkSync();
   });
+
+  /** 在书签树中查找指定节点的完整路径 */
+  function findPathToNode(
+    nodes: Array<{ id: string; title?: string; children?: any[] }>,
+    targetId: string,
+  ): string[] | null {
+    for (const node of nodes) {
+      if (node.id === targetId) return [];
+      if (node.children) {
+        const sub = findPathToNode(node.children, targetId);
+        if (sub !== null) {
+          return node.title ? [node.title, ...sub] : sub;
+        }
+      }
+    }
+    return null;
+  }
 
   browser.bookmarks.onRemoved.addListener(async (_id, removeInfo) => {
     try {
@@ -1016,10 +1058,18 @@ export default defineBackground(() => {
         return results;
       };
 
+      // 重建父文件夹完整路径，确保删除记录 key 与远端 key 匹配
+      const parentId = (removeInfo as any).parentId ?? (removeInfo as any).parent?.id;
+      let basePath: string[] = [];
+      if (parentId) {
+        const tree = await browser.bookmarks.getTree();
+        basePath = findPathToNode(tree, parentId) ?? [];
+      }
+
       const removedNode = (removeInfo as { node?: RemovedNode }).node;
       if (!removedNode) return;
 
-      for (const bookmark of collectRemovedBookmarks(removedNode)) {
+      for (const bookmark of collectRemovedBookmarks(removedNode, basePath)) {
         await recordBookmarkDeletion(
           bookmark.url,
           bookmark.title,
@@ -1035,11 +1085,8 @@ export default defineBackground(() => {
 
   // Omnibox 交互
   browser.omnibox.onInputStarted.addListener(() => {
-    const defaultDesc = IS_FIREFOX
-      ? t("background.omniboxDefault")
-      : t("background.omniboxDefault");
     browser.omnibox.setDefaultSuggestion({
-      description: defaultDesc,
+      description: t("background.omniboxDefault"),
     });
   });
 
@@ -1052,33 +1099,23 @@ export default defineBackground(() => {
       suggest([
         {
           content: "/github ",
-          description: IS_FIREFOX
-            ? t("background.cmdGithub")
-            : t("background.cmdGithub"),
+          description: t("background.cmdGithub"),
         },
         {
           content: "/twitter ",
-          description: IS_FIREFOX
-            ? t("background.cmdTwitter")
-            : t("background.cmdTwitter"),
+          description: t("background.cmdTwitter"),
         },
         {
           content: "/history ",
-          description: IS_FIREFOX
-            ? t("background.cmdHistory")
-            : t("background.cmdHistory"),
+          description: t("background.cmdHistory"),
         },
         {
           content: "/folder:",
-          description: IS_FIREFOX
-            ? t("background.cmdFolder")
-            : t("background.cmdFolder"),
+          description: t("background.cmdFolder"),
         },
         {
           content: "cw ",
-          description: IS_FIREFOX
-            ? t("background.cmdCodeWiki")
-            : t("background.cmdCodeWiki"),
+          description: t("background.cmdCodeWiki"),
         },
       ]);
       return;
@@ -1180,6 +1217,9 @@ export default defineBackground(() => {
           ({ url }) => !url.startsWith("chrome") && !url.startsWith("about"),
         );
       }
+      browser.omnibox.setDefaultSuggestion({
+        description: t("background.omniboxDefault"),
+      });
       suggest(
         filtered.slice(0, 8).map(({ url }) => ({
           content: url,
@@ -1235,7 +1275,7 @@ export default defineBackground(() => {
 
     // 1. 获取关键词搜索结果，并应用过滤
     let chromeResults = await browser.bookmarks.search(query);
-    let valid = chromeResults.filter((b) => b.url !== null);
+    let valid = chromeResults.filter((b) => b.url != null);
     if (allowedUrls) {
       valid = valid.filter((b) => allowedUrls!.has(b.url!));
     }
@@ -1249,11 +1289,19 @@ export default defineBackground(() => {
       });
     }
 
+    // 2. 取消任何挂起的搜索（必须在模式分支之前，确保 keyword 和后续输入也清理）
+    if (searchTimer) clearTimeout(searchTimer);
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+
     const mode = settings.searchMode || "hybrid";
     const embedCfg = resolveEmbedConfig(settings);
 
-    // 2. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
+    // 3. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
     if (mode === "keyword" || !embedCfg.apiKey) {
+      browser.omnibox.setDefaultSuggestion({
+        description: t("background.omniboxDefault"),
+      });
       suggest(
         await buildKeywordSuggestions(query, valid, {
           limit: 9,
@@ -1264,20 +1312,15 @@ export default defineBackground(() => {
       return;
     }
 
-    // 3. 防抖搜索
-    if (searchTimer) clearTimeout(searchTimer);
-    if (searchAbortController) searchAbortController.abort();
-    searchAbortController = new AbortController();
+    // 4. 防抖搜索
     const signal = searchAbortController.signal;
 
     // 查询向量已缓存时跳过 debounce 直接搜索
-    const debounceMs = hasCachedQuery(query, embedCfg.model) ? 0 : 300;
+    const debounceMs = hasCachedQuery(query, embedCfg.model, embedCfg.baseURL) ? 0 : 300;
 
     if (debounceMs > 0) {
       browser.omnibox.setDefaultSuggestion({
-        description: IS_FIREFOX
-          ? t("background.searching")
-          : t("background.searching"),
+        description: t("background.searching"),
       });
     }
 
@@ -1325,6 +1368,9 @@ export default defineBackground(() => {
             description: formatSuggestion(record, query, true),
           })),
         );
+        browser.omnibox.setDefaultSuggestion({
+          description: t("background.omniboxDefault"),
+        });
       } catch (error: any) {
         // 忽略 AbortError，静默返回
         if (error.name === "AbortError" || error.message?.includes("aborted"))
@@ -1337,6 +1383,9 @@ export default defineBackground(() => {
             sourceFilter,
           }),
         );
+        browser.omnibox.setDefaultSuggestion({
+          description: t("background.omniboxDefault"),
+        });
       }
     }, debounceMs);
   });
@@ -1390,7 +1439,11 @@ export default defineBackground(() => {
 
     if (
       oldVal?.aiProvider !== newVal?.aiProvider ||
-      oldVal?.openaiApiKey !== newVal?.openaiApiKey
+      oldVal?.openaiApiKey !== newVal?.openaiApiKey ||
+      oldVal?.llmApiKey !== newVal?.llmApiKey ||
+      oldVal?.llmBaseURL !== newVal?.llmBaseURL ||
+      oldVal?.llmModel !== newVal?.llmModel ||
+      oldVal?.language !== newVal?.language
     ) {
       try {
         const provider = await autoCreateLLMProvider(newVal);
@@ -2254,7 +2307,7 @@ export default defineBackground(() => {
         }
       } catch (error: any) {
         console.error(`[FlowSearch] Message error (${message.type}):`, error);
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
       }
     };
 
@@ -2269,7 +2322,7 @@ export default defineBackground(() => {
  */
 function formatSuggestion(
   record: BookmarkRecord,
-  _query: string,
+  query: string,
   showAi: boolean,
 ): string {
   const aiActive = showAi && record.status === "indexed";
@@ -2288,7 +2341,11 @@ function formatSuggestion(
     return `${prefix}${title}${summary ? " — " + summary : ""} (${record.url})`;
   }
 
-  return `${prefix}<match>${escapeXml(title)}</match> <dim>${escapeXml(summary)}...</dim> <url>${escapeXml(record.url)}</url>`;
+  const highlightedTitle = highlightMatches(title, query);
+  const summaryPart = summary
+    ? ` <dim>${escapeXml(summary)}…</dim>`
+    : "";
+  return `${prefix}${highlightedTitle}${summaryPart} <url>${escapeXml(record.url)}</url>`;
 }
 
 // ============================================================

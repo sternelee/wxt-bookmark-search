@@ -275,8 +275,19 @@ export default {
         "이 작업은 로컬 북마크 + 검색 인덱스를 원격 사본으로 완전히 교체합니다. 아직 업로드되지 않은 로컬 데이터는 손실됩니다.",
       confirmDelete:
         "원격 동기화 파일을 삭제할까요? 로컬 데이터는 보존되지만 기기 링크가 초기화됩니다.",
+      confirmBookmarksSyncTitle: "🔄 북마크 동기화 확인",
+      confirmBookmarksSyncBody:
+        "북마크가 양방향으로 병합됩니다. 원격 사본에 북마크가 추가되거나 제거될 수 있습니다. 로컬 전용 북마크는 업로드되고 원격 전용 북마크는 다운로드됩니다. 북마크 트리가 변경될 수 있습니다.",
+      confirmDeleteTitle: "🗑️ 삭제 확인",
       deleteSuccess: "✓ 원격 파일 삭제됨",
       deleteFailed: "삭제 실패: {{error}}",
+
+      tokenExpired:
+        "액세스 토큰이 만료되었거나 유효하지 않습니다. 제공자 콘솔에서 재생성하여 붙여넣으세요.",
+      sizeError:
+        "동기화 데이터가 너무 큽니다. 북마크 수를 줄이거나 인덱스 범위 설정에서 폴더를 제한하세요.",
+      versionError:
+        "원격 데이터 버전이 일치하지 않습니다. 원격 데이터가 손상되었거나 외부에서 변경되었을 수 있습니다.",
       configRequired:
         "제공자를 선택하고 액세스 토큰을 붙여넣으세요.",
       remoteModified: "원격 수정 시간",
@@ -363,6 +374,8 @@ export default {
       keep: "유지",
       removeOthers: "나머지 삭제",
       resolveSuccess: "✓ 중복이 해결되었습니다",
+      confirmResolveTitle: "⚠️ 유지 확인",
+      confirmResolveBody: "이 그룹의 다른 모든 북마크가 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
       urlLabel: "URL",
       folderLabel: "폴더",
     },
@@ -382,6 +395,9 @@ export default {
       applying: "북마크 이동 중...",
       applySuccess:
         "✓ {{moved}}개 이동, {{created}}개 폴더 생성, {{skipped}}개 건너뜀",
+      confirmApplyTitle: "⚠️ 이동 확인",
+      confirmApplyBody:
+        "{{count}}개의 북마크가 분류 폴더로 이동됩니다. 새 폴더가 생성될 수 있습니다. 이 작업은 쉽게 취소할 수 없습니다.",
       saved: "✓ 분류 설정이 저장되었습니다",
       confidenceHigh: "높음",
       confidenceMedium: "중간",
@@ -424,6 +440,29 @@ export default {
     summarizing: "요약 생성 중...",
     summaryFailed: "요약 실패",
     summaryEmpty: "요약할 콘텐츠가 없습니다",
+
+    contentType: {
+      article: "📄 기사",
+      repo: "📦 저장소",
+      tweet: "🐦 트윗",
+      doc: "📚 문서",
+      video: "🎬 비디오",
+      tool: "🔧 도구",
+      other: "📌 기타",
+    },
+    difficulty: {
+      beginner: "초급",
+      intermediate: "중급",
+      advanced: "고급",
+    },
+    keyPoints: "요점",
+    technologies: "기술 스택",
+    concepts: "💡 개념",
+    keyClaims: "🎯 주요 주장",
+    keyData: "📊 주요 데이터",
+    related: "관련:",
+    minute: "분",
+
     askPlaceholder: "북마크에 대해 AI에게 질문...",
     askButton: "질문",
     asking: "답변 생성 중...",

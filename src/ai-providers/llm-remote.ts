@@ -209,8 +209,8 @@ export function createRemoteLLMProvider(
           result.technologies = (result.technologies || [])
             .map((t: string) => t.trim())
             .filter(Boolean);
-          if (result.quickSummary && result.quickSummary.length > 30) {
-            result.quickSummary = result.quickSummary.slice(0, 27) + "...";
+          if (result.quickSummary && result.quickSummary.length > 100) {
+            result.quickSummary = result.quickSummary.slice(0, 97) + "...";
           }
           return result;
         } catch (error: unknown) {

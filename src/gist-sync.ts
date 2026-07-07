@@ -448,6 +448,18 @@ export async function fullGistSync(
       deletedEntries,
     );
 
+    // 先检查上传大小，超限则提前抛出，避免本地已变更后回滚困难
+    const uploadData: GistBookmarkData = {
+      version: 1,
+      exportedAt: Date.now(),
+      deviceId,
+      bookmarks: result.merged,
+    };
+    const uploadSize = new TextEncoder().encode(JSON.stringify(uploadData)).length;
+    if (uploadSize > MAX_GIST_SIZE) {
+      throw new GistSizeError(uploadSize, MAX_GIST_SIZE);
+    }
+
     for (const entry of result.toAddLocal) {
       try {
         await createBookmark(entry.folderPath, entry.node);
@@ -466,12 +478,6 @@ export async function fullGistSync(
       await removeFromDeletedBookmarks(result.toRemoveRemote);
     }
 
-    const uploadData: GistBookmarkData = {
-      version: 1,
-      exportedAt: Date.now(),
-      deviceId,
-      bookmarks: result.merged,
-    };
     await updateGist(octokit, currentGistId, uploadData);
 
     return {

@@ -1,6 +1,6 @@
 import { Show, For } from "solid-js";
 import type { SummarizeResult } from "../types";
-import { t } from "../i18n";
+import { t as i18nT } from "../i18n";
 
 interface Props {
   result: SummarizeResult | null;
@@ -8,23 +8,32 @@ interface Props {
   onClose: () => void;
 }
 
-const CONTENT_TYPE_LABELS: Record<string, string> = {
-  article: "📄 Article",
-  repo: "📦 Repository",
-  tweet: "🐦 Tweet",
-  doc: "📚 Documentation",
-  video: "🎬 Video",
-  tool: "🔧 Tool",
-  other: "📌 Other",
-};
+function ctLabel(key: string): string {
+  const map: Record<string, string> = {
+    article: i18nT("search.contentType.article"),
+    repo: i18nT("search.contentType.repo"),
+    tweet: i18nT("search.contentType.tweet"),
+    doc: i18nT("search.contentType.doc"),
+    video: i18nT("search.contentType.video"),
+    tool: i18nT("search.contentType.tool"),
+    other: i18nT("search.contentType.other"),
+  };
+  return map[key] || key;
+}
 
-const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
-  beginner: { label: "Beginner", color: "bg-green-100 text-green-700" },
-  intermediate: {
-    label: "Intermediate",
-    color: "bg-yellow-100 text-yellow-700",
-  },
-  advanced: { label: "Advanced", color: "bg-red-100 text-red-700" },
+function diffLabel(key: string): string {
+  const map: Record<string, string> = {
+    beginner: i18nT("search.difficulty.beginner"),
+    intermediate: i18nT("search.difficulty.intermediate"),
+    advanced: i18nT("search.difficulty.advanced"),
+  };
+  return map[key] || key;
+}
+
+const DIFFICULTY_COLORS: Record<string, string> = {
+  beginner: "bg-green-100 text-green-700",
+  intermediate: "bg-yellow-100 text-yellow-700",
+  advanced: "bg-red-100 text-red-700",
 };
 
 export default function SummarizePanel(props: Props) {
@@ -32,7 +41,7 @@ export default function SummarizePanel(props: Props) {
     <aside class="w-96 shrink-0 border-l border-border pl-4 py-4 overflow-y-auto max-h-[calc(100vh-11rem)] sticky top-40 self-start">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-sm">
-          ✨ {t("search.summarize").replace("✨ ", "")}
+          ✨ {i18nT("search.summarize").replace("✨ ", "")}
         </h3>
         <button
           type="button"
@@ -77,23 +86,23 @@ export default function SummarizePanel(props: Props) {
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <Show when={props.result!.contentType}>
             <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
-              {CONTENT_TYPE_LABELS[props.result!.contentType!] ||
+              {ctLabel(props.result!.contentType!) ||
                 props.result!.contentType}
             </span>
           </Show>
 
           <Show when={props.result!.difficulty}>
             <span
-              class={`text-xs px-2 py-0.5 rounded-full ${DIFFICULTY_LABELS[props.result!.difficulty!]?.color || "bg-secondary text-secondary-foreground"}`}
+              class={`text-xs px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[props.result!.difficulty!] || "bg-secondary text-secondary-foreground"}`}
             >
-              {DIFFICULTY_LABELS[props.result!.difficulty!]?.label ||
+              {diffLabel(props.result!.difficulty!) ||
                 props.result!.difficulty}
             </span>
           </Show>
 
           <Show when={props.result!.readingTime}>
             <span class="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-              ⏱ {props.result!.readingTime} min
+              ⏱ {props.result!.readingTime} {i18nT("search.minute")}
             </span>
           </Show>
         </div>
@@ -117,7 +126,7 @@ export default function SummarizePanel(props: Props) {
         >
           <div class="mb-3">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Key Points
+              {i18nT("search.keyPoints")}
             </h4>
             <ul class="space-y-1">
               <For each={props.result!.keyPoints}>
@@ -140,7 +149,7 @@ export default function SummarizePanel(props: Props) {
         >
           <div class="mb-3">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Technologies
+              {i18nT("search.technologies")}
             </h4>
             <div class="flex flex-wrap gap-1">
               <For each={props.result!.technologies}>
@@ -160,7 +169,7 @@ export default function SummarizePanel(props: Props) {
         >
           <div class="mb-3 border-t border-border pt-3">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              💡 Concepts
+              {i18nT("search.concepts")}
             </h4>
             <div class="space-y-2">
               <For each={props.result!.concepts}>
@@ -170,7 +179,7 @@ export default function SummarizePanel(props: Props) {
                     <div class="text-blue-600 mt-0.5">{concept.definition}</div>
                     <Show when={concept.relatedConcepts.length > 0}>
                       <div class="text-blue-400 mt-1">
-                        Related: {concept.relatedConcepts.join(", ")}
+                        {i18nT("search.related")} {concept.relatedConcepts.join(", ")}
                       </div>
                     </Show>
                   </div>
@@ -184,7 +193,7 @@ export default function SummarizePanel(props: Props) {
         <Show when={props.result!.claims && props.result!.claims!.length > 0}>
           <div class="mb-3">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              🎯 Key Claims
+              {i18nT("search.keyClaims")}
             </h4>
             <ul class="space-y-1.5">
               <For each={props.result!.claims}>
@@ -220,7 +229,7 @@ export default function SummarizePanel(props: Props) {
         >
           <div class="mb-3">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              📊 Key Data
+              {i18nT("search.keyData")}
             </h4>
             <ul class="space-y-1">
               <For each={props.result!.dataPoints}>
@@ -243,7 +252,7 @@ export default function SummarizePanel(props: Props) {
 
       <Show when={!props.loading && !props.result}>
         <div class="text-sm text-muted-foreground">
-          {t("search.summaryEmpty")}
+          {i18nT("search.summaryEmpty")}
         </div>
       </Show>
     </aside>

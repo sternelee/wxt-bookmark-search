@@ -348,10 +348,22 @@ export default {
       confirmBookmarksDownloadTitle: "⬇️ Confirm Download Bookmarks",
       confirmBookmarksDownloadBody:
         "This will replace local bookmarks with the remote copy. Local-only bookmarks will be deleted. This action cannot be undone.",
+      confirmBookmarksSyncTitle: "🔄 Confirm Bookmark Sync",
+      confirmBookmarksSyncBody:
+        "Bookmarks will be merged bidirectionally. The remote copy may have bookmarks added or removed. Local-only bookmarks will be uploaded, and remote-only ones downloaded. This may change your bookmark tree.",
       confirmDelete:
         "Delete the remote sync files? Your local data stays intact, but the device link is reset.",
+      confirmDeleteTitle: "🗑️ Confirm Delete",
       deleteSuccess: "✓ Remote files removed",
       deleteFailed: "Delete failed: {{error}}",
+
+      // Error code messages
+      tokenExpired:
+        "Access token expired or invalid — regenerate it in your provider console and paste the new token.",
+      sizeError:
+        "Sync data too large — consider reducing bookmark count or narrowing folder scope in Index Scope settings.",
+      versionError:
+        "Remote data version mismatch — the remote may have been corrupted or modified externally.",
     },
 
     indexManager: {
@@ -430,6 +442,9 @@ export default {
       keep: "Keep",
       removeOthers: "Remove Others",
       resolveSuccess: "✓ Duplicates resolved",
+      confirmResolveTitle: "⚠️ Confirm Keep",
+      confirmResolveBody:
+        "All other bookmarks in this group will be permanently deleted. This action cannot be undone.",
       urlLabel: "URL",
       folderLabel: "Folder",
     },
@@ -450,6 +465,9 @@ export default {
       applying: "Moving bookmarks...",
       applySuccess:
         "✓ {{moved}} moved, {{created}} folders created, {{skipped}} skipped",
+      confirmApplyTitle: "⚠️ Confirm Move",
+      confirmApplyBody:
+        "{{count}} bookmark(s) will be moved into categorized folders. Some folders may be created. This cannot be undone easily.",
       saved: "✓ Categorization settings saved",
       confidenceHigh: "High",
       confidenceMedium: "Medium",
@@ -492,6 +510,30 @@ export default {
     summarizing: "Generating summary...",
     summaryFailed: "Summary failed",
     summaryEmpty: "No content to summarize",
+
+    // Content type labels
+    contentType: {
+      article: "📄 Article",
+      repo: "📦 Repository",
+      tweet: "🐦 Tweet",
+      doc: "📚 Documentation",
+      video: "🎬 Video",
+      tool: "🔧 Tool",
+      other: "📌 Other",
+    },
+    difficulty: {
+      beginner: "Beginner",
+      intermediate: "Intermediate",
+      advanced: "Advanced",
+    },
+    keyPoints: "Key Points",
+    technologies: "Technologies",
+    concepts: "💡 Concepts",
+    keyClaims: "🎯 Key Claims",
+    keyData: "📊 Key Data",
+    related: "Related:",
+    minute: "min",
+
     askPlaceholder: "Ask AI about your bookmarks...",
     askButton: "Ask",
     asking: "Asking...",

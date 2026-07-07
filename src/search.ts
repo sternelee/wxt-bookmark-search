@@ -242,7 +242,11 @@ export function rerankBookmarks(
   plainMode = false,
 ): OmniboxSuggestion[] {
   const freqCache = getFreqCache();
-  const maxFreq = Math.max(1, ...Object.values(freqCache));
+  const freqValues = Object.values(freqCache);
+  let maxFreq = 1;
+  for (const f of freqValues) {
+    if (f > maxFreq) maxFreq = f;
+  }
   const fmt = plainMode ? highlightBookmarkPlain : highlightBookmark;
 
   const scored: ScoredBookmark[] = [];

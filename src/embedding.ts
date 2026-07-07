@@ -32,13 +32,14 @@ class EmbeddingCache {
     this.ttlMs = ttlMs;
   }
 
-  /** 生成缓存 key，加入 context 和 model 前缀避免混用 */
+  /** 生成缓存 key，加入 context、model 和 baseURL 前缀避免混用 */
   private hash(
     text: string,
     context: "query" | "doc" = "doc",
     model: string = DEFAULT_MODEL,
+    baseURL: string = "",
   ): string {
-    return `${model}:${context}:${text.trim().toLowerCase()}`;
+    return `${baseURL}:${model}:${context}:${text.trim().toLowerCase()}`;
   }
 
   /** 获取缓存 */
@@ -46,8 +47,9 @@ class EmbeddingCache {
     text: string,
     context: "query" | "doc" = "doc",
     model: string = DEFAULT_MODEL,
+    baseURL: string = "",
   ): number[] | null {
-    const key = this.hash(text, context, model);
+    const key = this.hash(text, context, model, baseURL);
     const entry = this.cache.get(key);
 
     if (!entry) return null;
@@ -71,8 +73,9 @@ class EmbeddingCache {
     embedding: number[],
     context: "query" | "doc" = "doc",
     model: string = DEFAULT_MODEL,
+    baseURL: string = "",
   ): void {
-    const key = this.hash(text, context, model);
+    const key = this.hash(text, context, model, baseURL);
 
     // 如果已存在，先删除
     if (this.cache.has(key)) {
@@ -112,8 +115,9 @@ class EmbeddingCache {
     text: string,
     context: "query" | "doc" = "doc",
     model: string = DEFAULT_MODEL,
+    baseURL: string = "",
   ): boolean {
-    const key = this.hash(text, context, model);
+    const key = this.hash(text, context, model, baseURL);
     const entry = this.cache.get(key);
     if (!entry) return false;
     if (Date.now() - entry.timestamp > this.ttlMs) {
@@ -165,7 +169,7 @@ export async function getEmbedding(
   context: "query" | "doc" = "doc",
 ): Promise<{ embedding: number[]; tokens: number; cached: boolean }> {
   // 检查缓存
-  const cached = embeddingCache.get(text, context, model);
+  const cached = embeddingCache.get(text, context, model, baseURL);
   if (cached) {
     return { embedding: cached, tokens: 0, cached: true };
   }
@@ -197,7 +201,7 @@ export async function getEmbedding(
   const embedding = data.data[0].embedding;
 
   // 存入缓存
-  embeddingCache.set(text, embedding, context, model);
+  embeddingCache.set(text, embedding, context, model, baseURL);
 
   return {
     embedding,
@@ -224,7 +228,7 @@ export async function batchEmbedTexts(
 
   // 1. 检查缓存
   texts.forEach((text, i) => {
-    const cached = embeddingCache.get(text, "doc", model);
+    const cached = embeddingCache.get(text, "doc", model, baseURL);
     if (cached) {
       results[i] = cached;
     } else {
@@ -264,38 +268,51 @@ export async function batchEmbedTexts(
       chunkStart + MAX_BATCH_CHUNK,
     );
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        input: chunkTexts,
-      }),
-    });
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          input: chunkTexts,
+        }),
+      });
 
-    if (!response.ok) {
-      const error = (await response.json().catch(() => ({}))) as EmbeddingError;
-      throw new Error(
-        error.error?.message ||
-          error.message ||
-          `API error: ${response.status}`,
-      );
+      if (!response.ok) {
+        const error = (await response.json().catch(() => ({}))) as EmbeddingError;
+        throw new Error(
+          error.error?.message ||
+            error.message ||
+            `API error: ${response.status}`,
+        );
+      }
+
+      const data = (await response.json()) as EmbeddingResponse;
+      const embeddings = data.data
+        .sort((a, b) => a.index - b.index)
+        .map((d) => d.embedding);
+
+      // 4. 写入缓存并填充结果
+      embeddings.forEach((embedding, i) => {
+        const globalIdx = chunkIndices[i];
+        results[globalIdx] = embedding;
+        embeddingCache.set(chunkOriginals[i], embedding, "doc", model, baseURL);
+      });
+    } catch (err) {
+      // Per-chunk 错误隔离：标记失败索引为 null，继续处理其他 chunk
+      console.warn("[embedding] Chunk failed, marking as null:", err);
+      for (const idx of chunkIndices) {
+        results[idx] = null!;
+      }
     }
+  }
 
-    const data = (await response.json()) as EmbeddingResponse;
-    const embeddings = data.data
-      .sort((a, b) => a.index - b.index)
-      .map((d) => d.embedding);
-
-    // 4. 写入缓存并填充结果
-    embeddings.forEach((embedding, i) => {
-      const globalIdx = chunkIndices[i];
-      results[globalIdx] = embedding;
-      embeddingCache.set(chunkOriginals[i], embedding, "doc", model);
-    });
+  // 如果全部 chunk 都失败了，抛出错误
+  if (results.every((r) => r == null)) {
+    throw new Error("All embedding chunks failed");
   }
 
   return results;
@@ -363,6 +380,7 @@ export function getCacheStats(): { size: number; maxSize: number } {
 export function hasCachedQuery(
   query: string,
   model: string = DEFAULT_MODEL,
+  baseURL: string = "",
 ): boolean {
-  return embeddingCache.has(query, "query", model);
+  return embeddingCache.has(query, "query", model, baseURL);
 }
