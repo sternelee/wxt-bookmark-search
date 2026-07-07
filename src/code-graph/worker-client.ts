@@ -191,9 +191,23 @@ function splitIntoChunks<T>(items: T[], n: number): T[][] {
   return chunks;
 }
 
+const TASK_TIMEOUT_MS = 120_000; // 2 minutes
+
 function sendTask(req: WorkerRequest): Promise<unknown> {
   return new Promise((resolve, reject) => {
     pendingTasks.set(req.taskId, { resolve, reject });
+    // 超时保护：自动拒绝超时任务
+    const timeoutId = setTimeout(() => {
+      const pending = pendingTasks.get(req.taskId);
+      if (pending) {
+        pendingTasks.delete(req.taskId);
+        reject(new Error("Task timed out after " + TASK_TIMEOUT_MS + "ms: " + req.taskId));
+      }
+    }, TASK_TIMEOUT_MS);
+    // 包装 resolve/reject 以清理超时
+    const entry = pendingTasks.get(req.taskId)!;
+    entry.resolve = (value: unknown) => { clearTimeout(timeoutId); resolve(value); };
+    entry.reject = (error: Error) => { clearTimeout(timeoutId); reject(error); };
     try {
       void chrome.runtime.sendMessage({
         type: "SEND_TASK",
@@ -201,6 +215,7 @@ function sendTask(req: WorkerRequest): Promise<unknown> {
       });
     } catch (e) {
       pendingTasks.delete(req.taskId);
+      clearTimeout(timeoutId);
       reject(e instanceof Error ? e : new Error(String(e)));
     }
   });

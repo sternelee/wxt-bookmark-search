@@ -17,6 +17,7 @@ export default {
     confirm: "実行確認",
     cancel: "キャンセル",
     delete: "🗑️ ブックマーク削除",
+    deleting: "削除中...",
     start: "🚀 全量/増分インデックス開始",
     startFolder: "🚀 選択した {{count}} 個のフォルダをインデックス",
     pause: "⏸️ 一時停止",

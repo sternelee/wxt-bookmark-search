@@ -17,6 +17,7 @@ export default {
     confirm: "확인",
     cancel: "취소",
     delete: "🗑️ 북마크 삭제",
+    deleting: "삭제 중...",
     start: "🚀 전체/증분 색인 시작",
     startFolder: "🚀 선택한 {{count}}개 폴더 색인",
     pause: "⏸️ 일시정지",

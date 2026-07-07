@@ -692,24 +692,32 @@ export default defineBackground(() => {
   // === 每日知识简报 ===
 
   async function initDailyDigestAlarm(): Promise<void> {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(8, 0, 0, 0);
+    if (target <= now) target.setDate(target.getDate() + 1);
+    const delayMs = target.getTime() - now.getTime();
     browser.alarms.create("daily-digest", {
+      delayInMinutes: Math.ceil(delayMs / 60000),
       periodInMinutes: 24 * 60,
     });
-    console.log("[FlowSearch] Daily digest alarm set");
+    console.log("[FlowSearch] Daily digest alarm set (next run: ~8am)");
   }
 
   async function handleDailyDigest(): Promise<void> {
     try {
       const { generateDailyDigest, hasDigestForDate } = await import("../src/daily-digest");
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-      if (await hasDigestForDate(yesterday)) {
+      if (await hasDigestForDate(yesterdayStr)) {
         console.log("[FlowSearch] Digest already exists for", yesterday);
         return;
       }
 
       const provider = getLLMProvider();
-      const digest = await generateDailyDigest(provider || undefined, yesterday);
+      const digest = await generateDailyDigest(provider || undefined, yesterdayStr);
 
       if (digest) {
         browser.notifications.create("daily-digest", {

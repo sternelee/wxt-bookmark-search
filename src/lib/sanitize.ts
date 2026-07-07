@@ -19,6 +19,8 @@ export function sanitizeHtml(html: string): string {
         name.startsWith("on") ||
         name === "style" ||
         (name === "href" &&
+          !attr.value.match(/^https?:\/\//)) ||
+        (name === "src" &&
           !attr.value.match(/^https?:\/\//))
       ) {
         el.removeAttribute(name);
