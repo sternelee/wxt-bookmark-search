@@ -4,7 +4,7 @@
  */
 
 import type { CloudProvider } from "./types";
-import { CLOUD_SYNC_BOOKMARK_FILENAME, CloudSyncError } from "./types";
+import { CLOUD_SYNC_BOOKMARK_FILENAME, CloudSyncError, MAX_UPLOAD_SIZE } from "./types";
 import {
   exportBookmarkTree,
   mergeBookmarks,
@@ -89,6 +89,12 @@ export async function syncCloudBookmarks(
     const encoded = new TextEncoder().encode(
       JSON.stringify(uploadData, null, 2),
     );
+    if (encoded.byteLength > MAX_UPLOAD_SIZE) {
+      throw new CloudSyncError(
+        `Bookmark sync data too large: ${(encoded.byteLength / 1024 / 1024).toFixed(1)} MB (limit ${(MAX_UPLOAD_SIZE / 1024 / 1024).toFixed(0)} MB) — try reducing bookmark count or folder scope`,
+        "SIZE",
+      );
+    }
     await provider.upload(CLOUD_SYNC_BOOKMARK_FILENAME, encoded);
 
     return {
@@ -109,6 +115,12 @@ export async function syncCloudBookmarks(
   const encoded = new TextEncoder().encode(
     JSON.stringify(uploadData, null, 2),
   );
+  if (encoded.byteLength > MAX_UPLOAD_SIZE) {
+    throw new CloudSyncError(
+      `Bookmark sync data too large: ${(encoded.byteLength / 1024 / 1024).toFixed(1)} MB (limit ${(MAX_UPLOAD_SIZE / 1024 / 1024).toFixed(0)} MB) — try reducing bookmark count or folder scope`,
+      "SIZE",
+    );
+  }
   await provider.upload(CLOUD_SYNC_BOOKMARK_FILENAME, encoded);
 
   return {
@@ -137,6 +149,12 @@ export async function uploadCloudBookmarks(
   const encoded = new TextEncoder().encode(
     JSON.stringify(uploadData, null, 2),
   );
+  if (encoded.byteLength > MAX_UPLOAD_SIZE) {
+    throw new CloudSyncError(
+      `Bookmark sync data too large: ${(encoded.byteLength / 1024 / 1024).toFixed(1)} MB (limit ${(MAX_UPLOAD_SIZE / 1024 / 1024).toFixed(0)} MB) — try reducing bookmark count or folder scope`,
+      "SIZE",
+    );
+  }
   await provider.upload(CLOUD_SYNC_BOOKMARK_FILENAME, encoded);
 
   return {

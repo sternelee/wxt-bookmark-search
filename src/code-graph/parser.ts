@@ -69,6 +69,13 @@ export function parseFile(
   repoUrl: string,
   branch: string,
 ): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  // 文件大小保护：拒绝超过 500KB 的文件，防止 TypeScript 编译器 OOM
+  const MAX_FILE_SIZE = 500 * 1024;
+  if (new TextEncoder().encode(content).length > MAX_FILE_SIZE) {
+    console.warn(`[parser] Skipping oversized file: ${filePath}`);
+    return { symbols: [], edges: [] };
+  }
+
   const ext = filePath.split(".").pop() || "";
   const isTsx = ext === "tsx" || ext === "jsx";
   const scriptKind =

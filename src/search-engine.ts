@@ -330,7 +330,7 @@ export async function searchVector(
     where.source = { eq: options.sourceFilter };
   }
   if (options.idFilter && options.idFilter.length > 0) {
-    where.id = options.idFilter;
+    where.id = { in: options.idFilter };
   }
 
   const results = await search(engine, {

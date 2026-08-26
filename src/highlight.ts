@@ -25,7 +25,7 @@ export function urlHost(url: string): string {
  * Wrap matching substrings of `query` inside `text` with <match></match> XML tags.
  * Matching is case-insensitive.
  */
-function highlightMatches(text: string, query: string): string {
+export function highlightMatches(text: string, query: string): string {
   if (!query) return escapeXml(text);
   const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(`(${escapedQuery})`, "gi");

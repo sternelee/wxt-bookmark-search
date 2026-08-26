@@ -42,7 +42,7 @@ function normalizeCitations(
     normalized.push({
       title: bookmark.title,
       url: bookmark.url,
-      excerpt: citation.excerpt || bookmark.summary.slice(0, 160),
+      excerpt: citation.excerpt || bookmark.summary.slice(0, 160) || bookmark.title.slice(0, 160),
     });
   }
 
@@ -67,20 +67,29 @@ export async function askBookmarks(
   answer: string;
   citations: { title: string; url: string; excerpt: string }[];
 }> {
+  if (bookmarks.length === 0) {
+    return {
+      answer: "I couldn't find relevant information in your bookmarks.",
+      citations: [],
+    };
+  }
+
   const apiUrl = `${(baseURL || "https://api.openai.com").replace(/\/$/, "")}/v1/chat/completions`;
   const llmModel = model || "gpt-4o-mini";
 
-  // 构建上下文
-  let contextText = bookmarks
-    .map(
-      (b, i) =>
-        `[${i + 1}] Title: ${b.title}\nURL: ${b.url}\nSummary: ${b.summary.slice(0, 300)}`,
-    )
-    .join("\n\n");
+  // 构建上下文 — 按书签边界截断，确保每个条目完整
+  let contextText = "";
+  let includedCount = 0;
+  for (let i = 0; i < bookmarks.length; i++) {
+    const b = bookmarks[i];
+    const entry = `[${i + 1}] Title: ${b.title}\nURL: ${b.url}\nSummary: ${b.summary.slice(0, 300)}`;
+    if (contextText.length + entry.length + 2 > MAX_CONTEXT_LENGTH) break;
+    contextText += (contextText ? "\n\n" : "") + entry;
+    includedCount++;
+  }
 
-  if (contextText.length > MAX_CONTEXT_LENGTH) {
-    contextText =
-      contextText.slice(0, MAX_CONTEXT_LENGTH) + "\n... (truncated)";
+  if (includedCount < bookmarks.length) {
+    contextText += "\n\n... (truncated)";
   }
 
   const systemPrompt = `You are a bookmark search assistant. Answer the user's question using ONLY the information in the provided bookmarks below.
@@ -137,7 +146,7 @@ Example output:
       answer: parsed.answer || "No answer generated.",
       citations: normalizeCitations(
         parsed.citations || [],
-        bookmarks,
+        bookmarks.slice(0, includedCount),
       ),
     };
   } catch {

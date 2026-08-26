@@ -88,8 +88,15 @@ export async function resolveDuplicates(
   for (const id of deleteIds) {
     try {
       await removeBookmark(id);
-    } catch {
-      console.debug("[dedup] Bookmark already removed:", id);
+    } catch (err) {
+      // 预期内：书签已被其他进程删除 → 静默忽略
+      // 非预期：权限/网络问题 → warn 但继续
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("not found") || msg.includes("Can't find")) {
+        console.debug("[dedup] Bookmark already removed:", id);
+      } else {
+        console.warn("[dedup] Failed to remove bookmark", id, ":", msg);
+      }
     }
   }
 
@@ -102,7 +109,9 @@ export async function resolveDuplicates(
   for (const id of deleteIds) {
     try {
       await removeFromSearchEngine(id);
-    } catch {}
+    } catch (err) {
+      console.warn("[dedup] Failed to remove from search engine:", id, err);
+    }
   }
   await flushSaveSearchEngine();
 }

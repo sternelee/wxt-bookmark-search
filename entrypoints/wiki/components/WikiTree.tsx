@@ -157,7 +157,13 @@ export function WikiTree(props: WikiTreeProps) {
 }
 
 function renderMarkdown(md: string): string {
-  return md
+  // HTML-escape first to prevent XSS from code snippets / user-controlled content
+  const escaped = md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  return escaped
     .replace(/^### (.*$)/gim, "<h3>$1</h3>")
     .replace(/^## (.*$)/gim, "<h2>$1</h2>")
     .replace(/^# (.*$)/gim, "<h1>$1</h1>")

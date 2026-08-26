@@ -17,6 +17,7 @@ export default {
     confirm: "実行確認",
     cancel: "キャンセル",
     delete: "🗑️ ブックマーク削除",
+    deleting: "削除中...",
     start: "🚀 全量/増分インデックス開始",
     startFolder: "🚀 選択した {{count}} 個のフォルダをインデックス",
     pause: "⏸️ 一時停止",
@@ -287,8 +288,19 @@ export default {
         "ローカルのブックマーク + 検索インデックスがクラウドのデータで完全に置き換えられます。未アップロードのローカルデータは失われます。",
       confirmDelete:
         "リモート同期ファイルを削除しますか? ローカルデータは保持されますが、端末リンクはリセットされます。",
+      confirmBookmarksSyncTitle: "🔄 ブックマーク同期の確認",
+      confirmBookmarksSyncBody:
+        "ブックマークは双方向にマージされます。リモートコピーには追加や削除が含まれる場合があります。ローカルのみのブックマークはアップロードされ、リモートのみのブックマークはダウンロードされます。ブックマークツリーが変更される可能性があります。",
+      confirmDeleteTitle: "🗑️ 削除の確認",
       deleteSuccess: "✓ リモートファイルを削除しました",
       deleteFailed: "削除失敗: {{error}}",
+
+      tokenExpired:
+        "アクセストークンの有効期限が切れているか無効です。プロバイダのコンソールで再生成して貼り付けてください。",
+      sizeError:
+        "同期データが大きすぎます。ブックマーク数を減らすか、インデックス範囲設定でフォルダを絞ってください。",
+      versionError:
+        "リモートデータのバージョンが一致しません。リモートデータが破損しているか、外部から変更された可能性があります。",
       configRequired:
         "プロバイダを選択しアクセストークンを貼り付けてください。",
       remoteModified: "リモート更新日時",
@@ -377,6 +389,8 @@ export default {
       keep: "保持",
       removeOthers: "他を削除",
       resolveSuccess: "✓ 重複を解決しました",
+      confirmResolveTitle: "⚠️ 保持を確認",
+      confirmResolveBody: "このグループ内の他のすべてのブックマークは完全に削除されます。この操作は元に戻せません。",
       urlLabel: "URL",
       folderLabel: "フォルダ",
     },
@@ -397,6 +411,9 @@ export default {
       applying: "ブックマークを移動中...",
       applySuccess:
         "✓ {{moved}} 件移動, {{created}} フォルダ作成, {{skipped}} 件スキップ",
+      confirmApplyTitle: "⚠️ 移動を確認",
+      confirmApplyBody:
+        "{{count}} 個のブックマークを分類フォルダに移動します。新しいフォルダが作成される場合があります。この操作は簡単に元に戻せません。",
       saved: "✓ 分類設定を保存しました",
       confidenceHigh: "高",
       confidenceMedium: "中",
@@ -440,6 +457,29 @@ export default {
     summarizing: "要約を生成中...",
     summaryFailed: "要約に失敗しました",
     summaryEmpty: "要約するコンテンツがありません",
+
+    contentType: {
+      article: "📄 記事",
+      repo: "📦 リポジトリ",
+      tweet: "🐦 ツイート",
+      doc: "📚 ドキュメント",
+      video: "🎬 動画",
+      tool: "🔧 ツール",
+      other: "📌 その他",
+    },
+    difficulty: {
+      beginner: "初級",
+      intermediate: "中級",
+      advanced: "上級",
+    },
+    keyPoints: "ポイント",
+    technologies: "技術スタック",
+    concepts: "💡 概念",
+    keyClaims: "🎯 主要な主張",
+    keyData: "📊 主要データ",
+    related: "関連:",
+    minute: "分",
+
     askPlaceholder: "ブックマークについてAIに質問...",
     askButton: "質問",
     asking: "回答を生成中...",

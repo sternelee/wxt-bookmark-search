@@ -133,7 +133,9 @@ export async function generateDailyDigest(
   provider?: LLMProvider,
   targetDate?: string,
 ): Promise<DailyDigest | null> {
-  const date = targetDate || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const date = targetDate || yesterday.toISOString().split("T")[0];
   const dayStart = new Date(date).getTime();
   const dayEnd = dayStart + 24 * 60 * 60 * 1000;
 

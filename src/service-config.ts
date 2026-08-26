@@ -31,7 +31,7 @@ export function resolveEmbedConfig(settings: Settings): EmbedConfig {
     baseURL: (
       settings.embedBaseURL ||
       settings.baseURL ||
-      "https://api.openai.com"
+      "https://api.siliconflow.cn"
     )
       .trim()
       .replace(/\/+$/, ""),
@@ -46,7 +46,7 @@ export function resolveLLMConfig(settings: Settings): LLMConfig {
     baseURL: (
       settings.llmBaseURL ||
       settings.baseURL ||
-      "https://api.openai.com"
+      "https://api.siliconflow.cn"
     )
       .trim()
       .replace(/\/+$/, ""),

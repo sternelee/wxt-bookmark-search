@@ -27,6 +27,11 @@ export default function DuplicateSettings() {
     }[]
   >([]);
 
+  // 确认对话框（防止误删书签）
+  const [confirmId, setConfirmId] = createSignal<string>("");
+  const [confirmGroupIdx, setConfirmGroupIdx] = createSignal(0);
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+
   const handleScan = async () => {
     setScanning(true);
     setStatus(null);
@@ -71,6 +76,16 @@ export default function DuplicateSettings() {
   };
 
   const handleResolve = async (keepId: string, groupIndex: number) => {
+    // 先弹出确认对话框
+    setConfirmId(keepId);
+    setConfirmGroupIdx(groupIndex);
+    setConfirmOpen(true);
+  };
+
+  const confirmResolve = async () => {
+    const keepId = confirmId();
+    const groupIndex = confirmGroupIdx();
+    setConfirmOpen(false);
     const group = duplicates()[groupIndex];
     const deleteIds = group.bookmarks
       .filter((b) => b.id !== keepId)
@@ -100,6 +115,7 @@ export default function DuplicateSettings() {
   };
 
   return (
+    <>
     <Card class="mb-6">
       <CardHeader>
         <CardTitle>{t("options.duplicates.title")}</CardTitle>
@@ -157,5 +173,46 @@ export default function DuplicateSettings() {
         </Alert>
       </CardContent>
     </Card>
+
+    {/* 确认对话框 */}
+    <Show when={confirmOpen()}>
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="bg-background border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-semibold text-destructive mb-2">
+            {t("options.duplicates.confirmResolveTitle")}
+          </h3>
+          <p class="text-sm text-muted-foreground mb-1">
+            {t("options.duplicates.confirmResolveBody")}
+          </p>
+          <div class="text-xs text-muted-foreground mb-4">
+            {(() => {
+              const g = duplicates()[confirmGroupIdx()];
+              if (!g) return null;
+              const keep = g.bookmarks.find((b: { id: string; title: string }) => b.id === confirmId());
+              const del = g.bookmarks.filter((b: { id: string; title: string }) => b.id !== confirmId());
+              return (
+                <div>
+                  <div class="text-green-600 dark:text-green-400">
+                    ✓ {t("options.duplicates.keep")}: {keep?.title}
+                  </div>
+                  {del.map((b: { id: string; title: string }) => (
+                    <div class="text-red-500">✕ {b.title}</div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+          <div class="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={confirmResolve}>
+              {t("common.confirm")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Show>
+    </>
   );
 }
