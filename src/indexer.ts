@@ -582,7 +582,7 @@ async function processEnrichmentQueue(): Promise<void> {
 
   const settings = await getSettings();
   const embedCfg = resolveEmbedConfig(settings);
-  if (!embedCfg.apiKey) {
+    if (embedCfg.backend !== "local" && !embedCfg.apiKey) {
     isEnriching = false;
     return;
   }
@@ -631,6 +631,8 @@ async function processEnrichmentQueue(): Promise<void> {
           undefined,
           embedCfg.model,
           embedCfg.baseURL,
+          "doc",
+          embedCfg.backend,
         );
         await updateBookmark(job.bookmarkId, {
           summary,
@@ -668,7 +670,7 @@ export async function syncGithubStars(): Promise<{
   if (!settings.githubToken) {
     throw new Error("GitHub Token not configured");
   }
-  if (!embedCfg.apiKey) {
+  if (embedCfg.backend !== "local" && !embedCfg.apiKey) {
     throw new Error("API Key not configured");
   }
 
@@ -694,6 +696,7 @@ export async function syncGithubStars(): Promise<{
           embedCfg.apiKey,
           embedCfg.model,
           embedCfg.baseURL,
+          embedCfg.backend,
         );
       } catch (err) {
         console.warn(
@@ -1076,7 +1079,7 @@ async function processQueue(): Promise<void> {
   const settings = await getSettings();
   const embedCfg = resolveEmbedConfig(settings);
 
-  if (!embedCfg.apiKey) {
+  if (embedCfg.backend !== "local" && !embedCfg.apiKey) {
     console.warn("[indexer] No API key, skipping queue processing");
     finishQueueRun(runGeneration);
     notifyProgress({
@@ -1271,6 +1274,7 @@ async function processQueue(): Promise<void> {
         embedCfg.apiKey,
         embedCfg.model,
         embedCfg.baseURL,
+        embedCfg.backend,
       );
       onSuccess(); // 成功则加速
     } catch (error) {
@@ -1965,7 +1969,8 @@ export async function syncTwitterBookmarks(): Promise<{
   error?: string;
 }> {
   const settings = await getSettings();
-  if (!resolveEmbedConfig(settings).apiKey) {
+  const embedCfgForTwitter = resolveEmbedConfig(settings);
+  if (embedCfgForTwitter.backend !== "local" && !embedCfgForTwitter.apiKey) {
     throw new Error("API Key 未配置");
   }
 
@@ -2040,6 +2045,7 @@ export async function syncTwitterBookmarks(): Promise<{
           tweetEmbedCfg.apiKey,
           tweetEmbedCfg.model,
           tweetEmbedCfg.baseURL,
+          tweetEmbedCfg.backend,
         );
       } catch (batchError) {
         console.warn(
@@ -2057,6 +2063,8 @@ export async function syncTwitterBookmarks(): Promise<{
               undefined,
               tweetEmbedCfg.model,
               tweetEmbedCfg.baseURL,
+              "doc",
+              tweetEmbedCfg.backend,
             );
             embeddings[i] = embedding;
           } catch (err) {
@@ -2112,6 +2120,8 @@ export async function syncTwitterBookmarks(): Promise<{
                 undefined,
                 tweetEmbedCfg.model,
                 tweetEmbedCfg.baseURL,
+                "doc",
+                tweetEmbedCfg.backend,
               );
               await updateBookmark(`tw-${bookmark.tweetId}`, {
                 summary: llmResult.summary,

@@ -11,6 +11,7 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
+import { EMBEDDING_VECTOR_DIM } from "../types";
 import type { CodeSearchResult, CodeChunk } from "../types";
 
 /** Orama schema（code 专用） */
@@ -25,7 +26,7 @@ const codeSchema = {
   lineEnd: "number",
   repoUrl: "string",
   branch: "string",
-  embedding: "vector[1024]",
+  embedding: `vector[${EMBEDDING_VECTOR_DIM}]`,
 } as const;
 
 type CodeDocument = {

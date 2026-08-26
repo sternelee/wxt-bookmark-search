@@ -10,6 +10,7 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
+import { EMBEDDING_VECTOR_DIM } from "./types";
 import type { BookmarkRecord } from "./types";
 import { getFreqCache } from "./freq";
 
@@ -23,7 +24,7 @@ const bookmarkSchema = {
   source: "enum",
   status: "enum",
   indexedAt: "number",
-  embedding: "vector[1024]",
+  embedding: `vector[${EMBEDDING_VECTOR_DIM}]`,
   freq: "number",
   linkStatus: "number",
   linkCheckedAt: "number",

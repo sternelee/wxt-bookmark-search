@@ -77,6 +77,14 @@ export default {
 
     api: {
       title: "🔑 API 설정",
+      embedBackend: "Embedding 백엔드",
+      embedBackendRemote: "원격 API",
+      embedBackendLocal: "로컬 (기기 내, API 키 불필요)",
+      embedBackendHint:
+        "로컬은 @ternlight/mini WASM (384차원 벡터, 기기 내에서 완전 동작, 네트워크 불필요)을 사용합니다. 원격은 HTTP Embedding API를 사용합니다.",
+      localModel: "로컬 모델",
+      localTestSuccess: "✓ 로컬 Embedding 엔진이 정상 작동합니다",
+      localEngineInfo: "엔진: {{info}}",
       apiKeyHint: "OpenAI, SiliconFlow, Azure OpenAI 등 호환 API 지원",
       baseURL: "API 기본 URL",
       baseURLHint: "API 기본 URL, 기본값: https://api.openai.com/v1",

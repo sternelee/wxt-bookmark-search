@@ -12,6 +12,8 @@ export interface EmbedConfig {
   apiKey: string;
   baseURL: string;
   model?: string;
+  /** 后端: "local" = on-device WASM, "remote" = HTTP API */
+  backend: "local" | "remote";
 }
 
 /** LLM 服务解析后的有效配置 */
@@ -24,6 +26,7 @@ export interface LLMConfig {
 /** 解析 Embedding 服务配置（override > shared） */
 export function resolveEmbedConfig(settings: Settings): EmbedConfig {
   return {
+    backend: settings.embedBackend === "local" ? "local" : "remote",
     apiKey: (settings.embedApiKey || settings.openaiApiKey || "").trim(),
     baseURL: (
       settings.embedBaseURL ||
@@ -58,5 +61,10 @@ export function isEmbedConfigChanged(
 ): boolean {
   const a = resolveEmbedConfig({ ...prev, ...next } as Settings);
   const b = resolveEmbedConfig(prev);
-  return a.baseURL !== b.baseURL || (a.model || "") !== (b.model || "");
+
+  return (
+    a.backend !== b.backend ||
+    a.baseURL !== b.baseURL ||
+    (a.model || "") !== (b.model || "")
+  );
 }

@@ -12,6 +12,9 @@ export interface OmniboxSuggestion {
   description: string;
 }
 
+/** Orama 向量索引维度 — 本地后端 (384) 会零填充到该值以匹配远程 (1024) */
+export const EMBEDDING_VECTOR_DIM = 1024;
+
 /** 向量化书签记录 */
 export interface BookmarkRecord {
   id: string; // bookmark id
@@ -140,6 +143,9 @@ export interface Settings {
   // 模型配置
   embeddingModel?: string; // Embedding 模型名称
   llmModel?: string; // LLM 模型名称
+
+  /** Embedding 后端: "local" = on-device WASM (@ternlight/mini, 384 维, 无 API), "remote" = HTTP API */
+  embedBackend?: "local" | "remote";
 
   // Per-service overrides (optional) — 为 LLM 和 Embedding 分别配置不同服务
   /** Embedding 服务的独立 API Key（覆盖 openaiApiKey） */

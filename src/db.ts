@@ -389,6 +389,7 @@ const defaultSettings: Settings = {
   enableLLMEnrichment: true, // 默认启用 LLM 增强
   embeddingModel: "text-embedding-3-small", // 默认 embedding 模型
   llmModel: "gpt-4o-mini", // 默认 LLM 模型
+  embedBackend: "remote", // 默认远程 API；用户可在设置中切换为 local (on-device)
   // Per-service overrides: undefined = fall back to shared openaiApiKey/baseURL
   embedApiKey: undefined,
   embedBaseURL: undefined,

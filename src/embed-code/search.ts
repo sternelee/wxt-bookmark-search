@@ -23,11 +23,12 @@ export async function semanticCodeSearch(
     baseURL?: string;
     model?: string;
     signal?: AbortSignal;
+    backend?: "local" | "remote";
   } = {},
 ): Promise<CodeSearchResult[]> {
-  const { baseURL, model, signal, ...searchOpts } = options;
+  const { baseURL, model, signal, backend, ...searchOpts } = options;
   await ensureCodeSearchEngine();
-  const queryEmbedding = await getQueryEmbedding(query, apiKey, signal, model, baseURL);
+  const queryEmbedding = await getQueryEmbedding(query, apiKey, signal, model, baseURL, backend);
   return searchCodeHybrid(query, queryEmbedding, searchOpts);
 }
 

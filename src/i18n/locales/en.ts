@@ -79,6 +79,14 @@ export default {
 
     api: {
       title: "🔑 API Configuration",
+      embedBackend: "Embedding Backend",
+      embedBackendRemote: "Remote API",
+      embedBackendLocal: "Local (On-device, no API key)",
+      embedBackendHint:
+        "Local uses @ternlight/mini WASM (384-dim vectors, runs entirely on your device, no network). Remote uses an HTTP embedding API.",
+      localModel: "Local model",
+      localTestSuccess: "✓ Local embedding engine is working",
+      localEngineInfo: "Engine: {{info}}",
       apiKeyHint:
         "Supports OpenAI, SiliconFlow, Azure OpenAI and compatible APIs",
       baseURL: "API Base URL",

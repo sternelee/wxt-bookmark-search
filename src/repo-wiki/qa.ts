@@ -149,6 +149,7 @@ export async function askCodebase(
   embedModel: string = "BAAI/bge-m3",
   llmModel: string = "deepseek-ai/DeepSeek-V3",
   apiKeyForLLM?: string,
+  embedBackend: "local" | "remote" = "remote",
 ): Promise<{
   answer: string;
   citations: { title: string; filePath: string; excerpt: string }[];
@@ -167,6 +168,7 @@ export async function askCodebase(
     undefined,
     embedModel,
     baseURL,
+    embedBackend,
   );
 
   // 2) 搜索最相关的代码块

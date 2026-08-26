@@ -23,6 +23,9 @@ export default function APISettings() {
   const [llmModel, setLLMModel] = createSignal("");
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
+  const [embedBackend, setEmbedBackend] = createSignal<"local" | "remote">("remote");
+  const [localEngineInfo, setLocalEngineInfo] = createSignal("");
+  const [embeddingTested, setEmbeddingTested] = createSignal(false);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
   // Per-service override: LLM / Embedding 可指向不同服务。默认收起隐藏。
   const [showPerService, setShowPerService] = createSignal(false);
@@ -49,6 +52,7 @@ export default function APISettings() {
     setAIProvider(
       provider === "disabled" ? "disabled" : "remote",
     );
+    setEmbedBackend(settings.embedBackend === "local" ? "local" : "remote");
     // Per-service override 初始化
     setEmbedApiKey(settings.embedApiKey || "");
     setEmbedBaseURL(settings.embedBaseURL || "");
@@ -57,7 +61,7 @@ export default function APISettings() {
   });
 
   const handleSave = async () => {
-    if (!apiKey()) {
+    if (embedBackend() !== "local" && !apiKey()) {
       setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
       return;
     }
@@ -73,12 +77,14 @@ export default function APISettings() {
         baseURL: nextBaseURL || undefined,
         embedBaseURL: nextEmbedBaseURL || undefined,
         embeddingModel: nextEmbeddingModel || undefined,
+        embedBackend: embedBackend(),
       });
 
       await saveSettings({
         openaiApiKey: apiKey(),
         baseURL: baseURL() || undefined,
         embeddingModel: embeddingModel() || undefined,
+        embedBackend: embedBackend(),
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
@@ -119,7 +125,7 @@ export default function APISettings() {
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      if (!apiKey()) {
+      if (embedBackend() !== "local" && !apiKey()) {
         setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
         return;
       }
@@ -136,8 +142,21 @@ export default function APISettings() {
         embedKey,
         embeddingModel() || undefined,
         embedBase,
+        embedBackend(),
       ).then(
-        () => ({ ok: true as const }),
+        async (v) => {
+          if (embedBackend() === "local") {
+            try {
+              const { getLocalEngineInfo } = await import(
+                "../../../src/embedding-local"
+              );
+              setLocalEngineInfo(getLocalEngineInfo());
+            } catch {
+              /* engineInfo 不可用时忽略 */
+            }
+          }
+          return { ok: true as const, value: v as true };
+        },
         (err) => ({
           ok: false as const,
           message: err instanceof Error ? err.message : String(err),
@@ -166,11 +185,14 @@ export default function APISettings() {
       if (!separateServices) {
         if (!embedResult.ok) {
           setStatus({ message: embedResult.message, type: "error" });
-        } else if (!llmResult.ok) {
+        } else if (!llmResult.ok && !(llmResult as { skipped?: boolean }).skipped) {
           setStatus({ message: llmResult.message, type: "error" });
         } else {
           setStatus({
-            message: t("options.api.testSuccess"),
+            message:
+              embedBackend() === "local"
+                ? t("options.api.localTestSuccess")
+                : t("options.api.testSuccess"),
             type: "success",
           });
         }
@@ -236,14 +258,48 @@ export default function APISettings() {
         <CardTitle>{t("options.api.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Input
-          label="API Key"
-          type="password"
-          placeholder="sk-..."
-          value={apiKey()}
-          onInput={(e) => setApiKey(e.currentTarget.value)}
-          hint={t("options.api.apiKeyHint")}
-        />
+        <div class="mb-4">
+          <label class="text-sm font-medium block mb-1">
+            {t("options.api.embedBackend")}
+          </label>
+          <select
+            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={embedBackend()}
+            onChange={(e) =>
+              setEmbedBackend(e.currentTarget.value as "local" | "remote")
+            }
+          >
+            <option value="remote">{t("options.api.embedBackendRemote")}</option>
+            <option value="local">{t("options.api.embedBackendLocal")}</option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">
+            {t("options.api.embedBackendHint")}
+          </p>
+          <Show when={embedBackend() === "local"}>
+            <div class="mt-2 rounded-md border border-border p-3 text-xs text-muted-foreground space-y-1">
+              <div>
+                <span class="font-medium text-foreground">
+                  {t("options.api.localModel")}:
+                </span>{" "}
+                ternlight/mini (384-dim, WASM)
+              </div>
+              <Show when={localEngineInfo()}>
+                <div class="break-all">{localEngineInfo()}</div>
+              </Show>
+            </div>
+          </Show>
+        </div>
+
+        <Show when={embedBackend() === "remote"}>
+          <Input
+            label="API Key"
+            type="password"
+            placeholder="sk-..."
+            value={apiKey()}
+            onInput={(e) => setApiKey(e.currentTarget.value)}
+            hint={t("options.api.apiKeyHint")}
+          />
+        </Show>
 
         <div class="mt-4">
           <button
@@ -256,21 +312,23 @@ export default function APISettings() {
 
           <Show when={showAdvanced()}>
             <div class="mt-3 space-y-4 pl-2 border-l-2 border-gray-200">
-              <Input
-                label="Base URL"
-                placeholder="https://api.siliconflow.cn"
-                value={baseURL()}
-                onInput={(e) => setBaseURL(e.currentTarget.value)}
-                hint={t("options.api.baseURLHint")}
-              />
+              <Show when={embedBackend() === "remote"}>
+                <Input
+                  label="Base URL"
+                  placeholder="https://api.siliconflow.cn"
+                  value={baseURL()}
+                  onInput={(e) => setBaseURL(e.currentTarget.value)}
+                  hint={t("options.api.baseURLHint")}
+                />
 
-              <Input
-                label={t("options.api.embeddingModel")}
-                placeholder="BAAI/bge-m3"
-                value={embeddingModel()}
-                onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
-                hint={t("options.api.embeddingModelHint")}
-              />
+                <Input
+                  label={t("options.api.embeddingModel")}
+                  placeholder="BAAI/bge-m3"
+                  value={embeddingModel()}
+                  onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
+                  hint={t("options.api.embeddingModelHint")}
+                />
+              </Show>
 
               <Input
                 label={t("options.api.llmModel")}
@@ -302,6 +360,7 @@ export default function APISettings() {
           <Show when={showPerService()}>
             <div class="mt-3 space-y-4 pl-2 border-l-2 border-gray-200">
               {/* Embedding service override */}
+              <Show when={embedBackend() === "remote"}>
               <div class="rounded-md border border-border p-3 space-y-3">
                 <div class="text-sm font-semibold">
                   {t("options.api.perServiceEmbedTitle")}
@@ -338,6 +397,7 @@ export default function APISettings() {
                   onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
                 />
               </div>
+              </Show>
 
               {/* LLM service override */}
               <div class="rounded-md border border-border p-3 space-y-3">

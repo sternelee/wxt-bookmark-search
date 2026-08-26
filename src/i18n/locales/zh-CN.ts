@@ -78,6 +78,14 @@ export default {
 
     api: {
       title: "🔑 API 配置",
+      embedBackend: "Embedding 后端",
+      embedBackendRemote: "远程 API",
+      embedBackendLocal: "本地 (设备端，无需 API Key)",
+      embedBackendHint:
+        "本地使用 @ternlight/mini WASM（384 维向量，完全在设备端运行，无网络请求）。远程使用 HTTP Embedding API。",
+      localModel: "本地模型",
+      localTestSuccess: "✓ 本地 Embedding 引擎工作正常",
+      localEngineInfo: "引擎: {{info}}",
       apiKeyHint: "支持 OpenAI、SiliconFlow、Azure OpenAI 等兼容 API",
       baseURL: "API 基础地址",
       baseURLHint: "API 基础地址，默认: https://api.openai.com/v1",

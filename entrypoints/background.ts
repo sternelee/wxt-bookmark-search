@@ -391,7 +391,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
 
   const mode = settings.searchMode || "hybrid";
   const embedCfg = resolveEmbedConfig(settings);
-  if (mode === "keyword" || !embedCfg.apiKey) {
+  if (mode === "keyword" || (embedCfg.backend !== "local" && !embedCfg.apiKey)) {
     return buildKeywordSearchResults(query, valid, {
       limit: 20,
       allowedUrls,
@@ -406,6 +406,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
       undefined,
       embedCfg.model,
       embedCfg.baseURL,
+      embedCfg.backend,
     );
     let results: BookmarkRecord[];
 
@@ -1271,7 +1272,7 @@ export default defineBackground(() => {
     const signal = searchAbortController.signal;
 
     // 查询向量已缓存时跳过 debounce 直接搜索
-    const debounceMs = hasCachedQuery(query, embedCfg.model) ? 0 : 300;
+    const debounceMs = hasCachedQuery(query, embedCfg.model, embedCfg.backend) ? 0 : 300;
 
     if (debounceMs > 0) {
       browser.omnibox.setDefaultSuggestion({
@@ -1291,6 +1292,7 @@ export default defineBackground(() => {
           signal,
           embedCfg.model,
           embedCfg.baseURL,
+          embedCfg.backend,
         );
 
         // 如果已中止，直接返回
@@ -1865,7 +1867,7 @@ export default defineBackground(() => {
             const askSettings = await getSettings();
             const askEmbedCfg = resolveEmbedConfig(askSettings);
             const askLLMCfg = resolveLLMConfig(askSettings);
-            if (!askEmbedCfg.apiKey || !askLLMCfg.apiKey) {
+            if ((askEmbedCfg.backend !== "local" && !askEmbedCfg.apiKey) || !askLLMCfg.apiKey) {
               return {
                 success: false,
                 error: t("background.apiKeyNotConfigured"),
@@ -1878,6 +1880,7 @@ export default defineBackground(() => {
               undefined,
               askEmbedCfg.model,
               askEmbedCfg.baseURL,
+              askEmbedCfg.backend,
             );
             const topK = message.topK || 8;
             const results = await searchVector(queryVector, { limit: topK });
@@ -2149,18 +2152,19 @@ export default defineBackground(() => {
           case "SEMANTIC_CODE_SEARCH": {
             const { semanticCodeSearch } = await import("../src/embed-code/search");
             const settings = await getSettings();
-            const apiKey = settings.embedApiKey || settings.openaiApiKey || "";
-            if (!apiKey) {
+            const embedCfg = resolveEmbedConfig(settings);
+            if (embedCfg.backend !== "local" && !embedCfg.apiKey) {
               return { success: false, error: "No API key configured" };
             }
             const results = await semanticCodeSearch(
               message.query,
-              apiKey,
+              embedCfg.apiKey,
               {
                 repoUrl: message.repoUrl,
                 limit: message.limit || 20,
                 baseURL: settings.embedBaseURL || settings.baseURL,
                 model: settings.embeddingModel,
+                backend: embedCfg.backend,
               },
             );
             return { success: true, results };
@@ -2358,6 +2362,7 @@ async function buildCodeGraphHandler(
   const settings = await getSettings();
   const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
   const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
+  const embedCfgForWiki = resolveEmbedConfig(settings);
   const embedBaseURL = normaliseBaseURL(
     settings.embedBaseURL || settings.baseURL,
     "https://api.siliconflow.cn",
@@ -2489,13 +2494,14 @@ async function buildCodeGraphHandler(
 
   // 4. 嵌入（需 API key）
   let embeddings: CodeEmbedding[] = [];
-  if (chunks.length > 0 && embedApiKey) {
+  if (chunks.length > 0 && (embedCfgForWiki.backend === "local" || embedApiKey)) {
     try {
       embeddings = await embedChunks(
         chunks,
         embedApiKey,
         embedBaseURL,
         embedModel,
+        embedCfgForWiki.backend,
       );
       await saveCodeEmbedding(embeddings);
     } catch (e) {
@@ -2565,6 +2571,7 @@ async function syncWikiHandler(
   const settings = await getSettings();
   const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
   const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
+  const embedCfgForWiki = resolveEmbedConfig(settings);
   const embedBaseURL = normaliseBaseURL(
     settings.embedBaseURL || settings.baseURL,
     "https://api.siliconflow.cn",
@@ -2629,13 +2636,14 @@ async function syncWikiHandler(
   );
 
   let embeddings: CodeEmbedding[] = [];
-  if (chunks.length > 0 && embedApiKey) {
+  if (chunks.length > 0 && (embedCfgForWiki.backend === "local" || embedApiKey)) {
     try {
       embeddings = await embedChunks(
         chunks,
         embedApiKey,
         embedBaseURL,
         embedModel,
+        embedCfgForWiki.backend,
       );
       await saveCodeEmbedding(embeddings);
       await ensureCodeSearchEngine();
@@ -2692,9 +2700,10 @@ async function askCodebaseHandler(
   message: Extract<WikiMessage, { type: "ASK_CODEBASE" }>,
 ) {
   const settings = await getSettings();
-  const embedApiKey = settings.embedApiKey || settings.openaiApiKey || "";
+  const embedCfg = resolveEmbedConfig(settings);
+  const embedApiKey = embedCfg.apiKey;
   const llmApiKey = settings.llmApiKey || settings.openaiApiKey || "";
-  if (!embedApiKey || !llmApiKey) {
+  if ((embedCfg.backend !== "local" && !embedApiKey) || !llmApiKey) {
     return { success: false, error: "No API key configured" };
   }
 
@@ -2732,6 +2741,7 @@ async function askCodebaseHandler(
     undefined,
     settings.embeddingModel,
     embedBaseURL,
+    embedCfg.backend,
   );
   const TOP_K = 8;
   const ranked = await searchViaWorkerPool(
@@ -2757,6 +2767,7 @@ async function askCodebaseHandler(
     settings.embeddingModel,
     settings.llmModel,
     llmApiKey,
+    embedCfg.backend,
   );
   return {
     success: true,

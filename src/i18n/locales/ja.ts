@@ -78,6 +78,14 @@ export default {
 
     api: {
       title: "🔑 API 設定",
+      embedBackend: "Embedding バックエンド",
+      embedBackendRemote: "リモート API",
+      embedBackendLocal: "ローカル (端末内, API キー不要)",
+      embedBackendHint:
+        "ローカルは @ternlight/mini WASM (384次元ベクトル、端末内で完結、ネットワーク不要)。リモートは HTTP Embedding API を使用。",
+      localModel: "ローカルモデル",
+      localTestSuccess: "✓ ローカル Embedding エンジンは正常に動作しています",
+      localEngineInfo: "エンジン: {{info}}",
       apiKeyHint: "OpenAI、SiliconFlow、Azure OpenAI など互換 API に対応",
       baseURL: "API ベース URL",
       baseURLHint: "API ベース URL、デフォルト: https://api.openai.com/v1",

@@ -22,10 +22,11 @@ export async function embedChunks(
   apiKey: string,
   baseURL?: string,
   model?: string,
+  backend: "local" | "remote" = "remote",
 ): Promise<CodeEmbedding[]> {
   // BGE-M3 不使用指令前缀。直接将代码内容截断到 4000 字符喂入。
   const texts = chunks.map((c) => c.content.slice(0, 4000));
-  const vectors = await batchEmbedTexts(texts, apiKey, model, baseURL);
+  const vectors = await batchEmbedTexts(texts, apiKey, model, baseURL, backend);
   const embeddings: CodeEmbedding[] = [];
   for (let i = 0; i < chunks.length; i++) {
     embeddings.push({
