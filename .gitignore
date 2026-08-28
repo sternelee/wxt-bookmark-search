@@ -29,3 +29,5 @@ chrome-mv3
 
 # @ternlight/mini wasm — copied to public/ by wxt build hook (wxt.config.ts)
 public/tern_engine_bg.wasm
+.pi
+.pi-subagents
