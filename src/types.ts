@@ -147,6 +147,9 @@ export interface Settings {
   /** Embedding 后端: "local" = on-device WASM (@ternlight/mini, 384 维, 无 API), "remote" = HTTP API */
   embedBackend?: "local" | "remote";
 
+  /** 页面内容提取后端: "markdown" = markdown.new (Cloudflare AI), "jina" = Jina Reader */
+  readerBackend?: "markdown" | "jina";
+
   // Per-service overrides (optional) — 为 LLM 和 Embedding 分别配置不同服务
   /** Embedding 服务的独立 API Key（覆盖 openaiApiKey） */
   embedApiKey?: string;

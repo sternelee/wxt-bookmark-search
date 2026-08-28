@@ -95,6 +95,11 @@ export default {
       llmModelHint: "기본값: gpt-4o-mini (요약 및 태그 생성용)",
       enableLLM: "LLM 콘텐츠 강화 활성화",
       enableLLMHint: "LLM을 사용하여 요약과 태그를 생성하고 검색 품질 향상",
+      readerBackend: "콘텐츠 추출 서비스",
+      readerBackendMarkdown: "markdown.new (Cloudflare AI)",
+      readerBackendJina: "Jina Reader",
+      readerBackendHint:
+        "로컬 추출이 실패할 때 사용할 타사 서비스입니다. 이 서비스로도 가져올 수 없다면 페이지에 더 이상 접근할 수 없는 경우가 대부분이므로, 다른 서비스로 자동 폴백하지 않습니다.",
       advanced: "고급 설정",
       apiKeyRequired: "API 키를 입력하세요",
       saved: "✓ 설정이 저장되었습니다",

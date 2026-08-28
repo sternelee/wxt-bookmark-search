@@ -24,6 +24,7 @@ export default function APISettings() {
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [embedBackend, setEmbedBackend] = createSignal<"local" | "remote">("remote");
+  const [readerBackend, setReaderBackend] = createSignal<"markdown" | "jina">("markdown");
   const [localEngineInfo, setLocalEngineInfo] = createSignal("");
   const [embeddingTested, setEmbeddingTested] = createSignal(false);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
@@ -53,6 +54,9 @@ export default function APISettings() {
       provider === "disabled" ? "disabled" : "remote",
     );
     setEmbedBackend(settings.embedBackend === "local" ? "local" : "remote");
+    setReaderBackend(
+      settings.readerBackend === "jina" ? "jina" : "markdown",
+    );
     // Per-service override 初始化
     setEmbedApiKey(settings.embedApiKey || "");
     setEmbedBaseURL(settings.embedBaseURL || "");
@@ -85,6 +89,7 @@ export default function APISettings() {
         baseURL: baseURL() || undefined,
         embeddingModel: embeddingModel() || undefined,
         embedBackend: embedBackend(),
+        readerBackend: readerBackend(),
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
@@ -288,6 +293,25 @@ export default function APISettings() {
               </Show>
             </div>
           </Show>
+        </div>
+
+        <div class="mb-4">
+          <label class="text-sm font-medium block mb-1">
+            {t("options.api.readerBackend")}
+          </label>
+          <select
+            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={readerBackend()}
+            onChange={(e) =>
+              setReaderBackend(e.currentTarget.value as "markdown" | "jina")
+            }
+          >
+            <option value="markdown">{t("options.api.readerBackendMarkdown")}</option>
+            <option value="jina">{t("options.api.readerBackendJina")}</option>
+          </select>
+          <p class="text-xs text-muted-foreground mt-1">
+            {t("options.api.readerBackendHint")}
+          </p>
         </div>
 
         <Show when={embedBackend() === "remote"}>

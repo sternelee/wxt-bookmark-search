@@ -98,6 +98,11 @@ export default {
       enableLLM: "Enable LLM Content Enrichment",
       enableLLMHint:
         "Use LLM to generate summaries and tags, improving search quality",
+      readerBackend: "Content Extraction Service",
+      readerBackendMarkdown: "markdown.new (Cloudflare AI)",
+      readerBackendJina: "Jina Reader",
+      readerBackendHint:
+        "Third-party service used when local extraction fails. If this service also cannot fetch the page, the page is likely no longer accessible — there is no automatic fallback to the other service.",
       advanced: "Advanced Settings",
       apiKeyRequired: "Please enter API Key",
       saved: "✓ Settings saved",

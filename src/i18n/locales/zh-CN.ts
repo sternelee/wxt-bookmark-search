@@ -95,6 +95,11 @@ export default {
       llmModelHint: "默认: gpt-4o-mini (用于摘要和标签)",
       enableLLM: "启用 LLM 内容增强",
       enableLLMHint: "使用 LLM 生成摘要和标签，提升搜索质量",
+      readerBackend: "内容提取方式",
+      readerBackendMarkdown: "markdown.new (Cloudflare AI)",
+      readerBackendJina: "Jina Reader",
+      readerBackendHint:
+        "本地提取失败时使用的第三方提取服务。若该服务也无法获取，说明页面大概率已无法访问，不会自动回退另一服务。",
       advanced: "高级设置",
       apiKeyRequired: "请输入 API Key",
       saved: "✓ 设置已保存",

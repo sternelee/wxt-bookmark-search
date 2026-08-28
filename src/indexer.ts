@@ -105,10 +105,10 @@ const RATE_LIMITER_DEFAULTS = {
 
 /** 各端点独立限流器，避免某端点 429 拖累其他请求 */
 const embeddingLimiter = new RateLimiter("embedding", RATE_LIMITER_DEFAULTS);
-const jinaLimiter = new RateLimiter("jina", {
-  ...RATE_LIMITER_DEFAULTS,
-  minDelay: 500,
-});
+/** 第三方 reader 共用限流参数：基础延迟高于默认，降低触发 429 的频率 */
+const READER_LIMITER_OPTIONS = { ...RATE_LIMITER_DEFAULTS, minDelay: 500 };
+const jinaLimiter = new RateLimiter("jina", READER_LIMITER_OPTIONS);
+const markdownLimiter = new RateLimiter("markdown", READER_LIMITER_OPTIONS);
 const githubLimiter = new RateLimiter("github", {
   ...RATE_LIMITER_DEFAULTS,
   maxDelay: 30000,
@@ -414,6 +414,23 @@ function extractFromMarkdown(
 
   const summary = contentLines.join(" ").slice(0, 1000);
   return { title, summary };
+}
+
+/**
+ * 剥离 Markdown 开头的 YAML frontmatter（如 markdown.new 返回的 `---\ntitle: ...\n---`）。
+ * 返回正文与 frontmatter 中的 title（如有）。
+ */
+function stripYamlFrontmatter(
+  markdown: string,
+): { body: string; title?: string } {
+  const match = markdown.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!match) return { body: markdown };
+
+  const titleMatch = match[1].match(/^title:\s*(.+)$/m);
+  const title = titleMatch
+    ? titleMatch[1].trim().replace(/^["']|["']$/g, "")
+    : undefined;
+  return { body: markdown.slice(match[0].length), title };
 }
 
 import { Readability } from "@mozilla/readability";
@@ -822,7 +839,11 @@ function isPrivateReaderHost(hostname: string): boolean {
   );
 }
 
-function getSafeJinaReaderUrl(url: string): string | null {
+/**
+ * 校验第三方 reader 可安全访问的公网 URL：仅允许 http/https、拒绝内网/私网地址。
+ * 返回脱敏后的 URL（去除内嵌凭证、查询参数、hash），不可用返回 null。
+ */
+function sanitizeReaderUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
@@ -836,10 +857,15 @@ function getSafeJinaReaderUrl(url: string): string | null {
     parsed.password = "";
     parsed.search = "";
     parsed.hash = "";
-    return `https://r.jina.ai/${encodeURIComponent(parsed.toString())}`;
+    return parsed.toString();
   } catch {
     return null;
   }
+}
+
+function getSafeJinaReaderUrl(url: string): string | null {
+  const safe = sanitizeReaderUrl(url);
+  return safe ? `https://r.jina.ai/${encodeURIComponent(safe)}` : null;
 }
 
 /** 构造用于 embedding 的结构化文档文本 */
@@ -856,6 +882,122 @@ function buildEmbeddingText(
   const domain = getUrlDomain(url);
   if (domain) parts.push(`Source: ${domain}`);
   return parts.length > 0 ? parts.join("\n") : title;
+}
+
+/** 第三方 reader（markdown.new / Jina）提取的结果 */
+interface ReaderExtraction {
+  markdown: string;
+  title?: string;
+  summary?: string;
+}
+
+/**
+ * 通过 markdown.new (Cloudflare AI) 提取页面 markdown（默认 reader）
+ */
+async function fetchWithMarkdownNew(
+  url: string,
+): Promise<ReaderExtraction | null> {
+  const safeUrl = sanitizeReaderUrl(url);
+  if (!safeUrl) {
+    console.warn(
+      `[indexer] markdown.new: Skipping private or unsupported URL: ${url}`,
+    );
+    return null;
+  }
+
+  console.log(`[indexer] markdown.new: Requesting ${url}`);
+  try {
+    const markdownResponse = await fetch("https://markdown.new/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        url: safeUrl,
+        method: "auto",
+        retain_images: false,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (markdownResponse.status === 429) {
+      markdownLimiter.onRateLimit();
+      return null;
+    }
+    if (!markdownResponse.ok) {
+      console.warn(
+        `[indexer] markdown.new: HTTP ${markdownResponse.status} for ${url}`,
+      );
+      return null;
+    }
+
+    markdownLimiter.onSuccess();
+    const data = (await markdownResponse.json().catch(() => null)) as {
+      success?: boolean;
+      content?: string;
+      title?: string;
+    } | null;
+    if (
+      data?.success &&
+      typeof data.content === "string" &&
+      data.content.trim().length > 0
+    ) {
+      const { body, title: frontTitle } = stripYamlFrontmatter(data.content);
+      const { title, summary } = extractFromMarkdown(
+        body,
+        frontTitle || data.title || "",
+      );
+      console.log(`[indexer] markdown.new: success for ${url}`);
+      return { markdown: body, title, summary };
+    }
+  } catch (e) {
+    console.warn(`[indexer] markdown.new: failed for ${url}:`, e);
+  }
+  return null;
+}
+
+/**
+ * 通过 Jina Reader 提取页面 markdown
+ */
+async function fetchWithJinaReader(
+  url: string,
+): Promise<ReaderExtraction | null> {
+  const readerUrl = getSafeJinaReaderUrl(url);
+  if (!readerUrl) {
+    console.warn(
+      `[indexer] Jina Reader: Skipping private or unsupported URL: ${url}`,
+    );
+    return null;
+  }
+
+  console.log(`[indexer] Jina Reader: Requesting ${url}`);
+  try {
+    const jinaResponse = await fetch(readerUrl, {
+      headers: { Accept: "text/markdown" },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (jinaResponse.status === 429) {
+      jinaLimiter.onRateLimit();
+      return null;
+    }
+    if (!jinaResponse.ok) {
+      console.warn(
+        `[indexer] Jina Reader: HTTP ${jinaResponse.status} for ${url}`,
+      );
+      return null;
+    }
+
+    jinaLimiter.onSuccess();
+    const markdown = await jinaResponse.text();
+    const { title, summary } = extractFromMarkdown(markdown, "");
+    console.log(`[indexer] Jina Reader: success for ${url}`);
+    return { markdown, title, summary };
+  } catch (e) {
+    console.warn(`[indexer] Jina Reader: failed for ${url}:`, e);
+  }
+  return null;
 }
 
 /**
@@ -920,7 +1062,7 @@ export async function fetchPageContent(
       }
     }
 
-    // 策略 2 和 3 并行执行：本地 Fetch + Jina Reader
+    // 策略 2、3 并行执行：本地 Fetch + 用户选择的第三方 reader（markdown.new / Jina）
     const localPromise = (async () => {
       try {
         console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
@@ -975,36 +1117,12 @@ export async function fetchPageContent(
       return null;
     })();
 
-    const jinaPromise = (async () => {
-      try {
-        const readerUrl = getSafeJinaReaderUrl(url);
-        if (!readerUrl) {
-          console.warn(
-            `[indexer] Strategy 3: Skipping Jina Reader for private or unsupported URL: ${url}`,
-          );
-          return null;
-        }
-
-        console.log(`[indexer] Strategy 3: Requesting Jina Reader for ${url}`);
-        const jinaResponse = await fetch(readerUrl, {
-          headers: { Accept: "text/markdown" },
-          signal: AbortSignal.timeout(8000),
-        });
-
-        if (jinaResponse.status === 429) {
-          jinaLimiter.onRateLimit();
-        } else if (jinaResponse.ok) {
-          jinaLimiter.onSuccess();
-          const markdown = await jinaResponse.text();
-          const { title, summary } = extractFromMarkdown(markdown, "");
-          console.log(`[indexer] Strategy 3: Jina Reader success`);
-          return { markdown, title, summary };
-        }
-      } catch (e) {
-        console.warn(`[indexer] Strategy 3: Jina Reader failed:`, e);
-      }
-      return null;
-    })();
+    // 仅调用设置中选择的 reader 后端，两者互不兜底
+    // （本地+该后端均失败时，页面大概率已无法访问，回退另一服务无意义）
+    const readerPromise =
+      settings.readerBackend === "jina"
+        ? fetchWithJinaReader(url)
+        : fetchWithMarkdownNew(url);
 
     // 先等本地结果；高质量则直接返回
     const localResult = await localPromise;
@@ -1012,10 +1130,10 @@ export async function fetchPageContent(
       return localResult.content;
     }
 
-    // 本地不够高或失败，等 Jina
-    const jinaResult = await jinaPromise;
-    if (jinaResult) {
-      return jinaResult;
+    // 本地不足或失败时，使用所选的第三方 reader
+    const readerResult = await readerPromise;
+    if (readerResult) {
+      return readerResult;
     }
 
     // 最终兜底：回退到本地 best-effort

@@ -97,6 +97,11 @@ export default {
       llmModelHint: "デフォルト: gpt-4o-mini (要約とタグ生成用)",
       enableLLM: "LLM コンテンツ強化を有効化",
       enableLLMHint: "LLM を使用して要約とタグを生成し、検索品質を向上",
+      readerBackend: "コンテンツ抽出サービス",
+      readerBackendMarkdown: "markdown.new (Cloudflare AI)",
+      readerBackendJina: "Jina Reader",
+      readerBackendHint:
+        "ローカル抽出が失敗した場合に使用するサードパーティサービス。このサービスでも取得できない場合は、ページへのアクセスができない可能性が高いため、他のサービスへの自動フォールバックは行いません。",
       advanced: "詳細設定",
       apiKeyRequired: "API キーを入力してください",
       saved: "✓ 設定を保存しました",

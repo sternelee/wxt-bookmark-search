@@ -39,6 +39,7 @@ export default defineConfig({
     ],
     host_permissions: [
       "https://r.jina.ai/*",
+      "https://markdown.new/*",
       "https://x.com/*",
       "https://twitter.com/*",
       "https://api.x.com/*",
