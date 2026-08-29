@@ -345,13 +345,20 @@ export default {
     failedBookmarks: {
       title: "⚠️ 失敗 / 無効ブックマーク管理",
       description:
-        "これらのブックマークはインデックス処理中にエラーが発生しました。URL が無効になっている可能性があります。リンクをクリックしてテストするか、直接ブックマークを削除してください。",
+        "これらのリンクはコンテンツ抽出またはインデックス処理中に失敗しました（GitHub リポジトリの README 取得失敗を含む）。URL が無効になっている可能性があります。リンクをクリックして確認、再試行、または削除してください。",
       noTitle: "タイトルなし",
       visit: "クリックしてアクセス",
       errorLabel: "エラー",
       deleteConfirm:
         "ブラウザからこのブックマークを完全に削除してもよろしいですか？",
       deleteFailed: "削除に失敗しました",
+      retry: "再試行",
+      retryQueued: "再試行キューに追加しました。処理完了後にリストが更新されます",
+      retryFailed: "再試行に失敗しました",
+      stageExtract: "コンテンツ抽出失敗",
+      stageEnrich: "README 取得失敗",
+      stageEmbed: "ベクトル化失敗",
+      stageWrite: "書き込み失敗",
     },
 
     dataManagement: {

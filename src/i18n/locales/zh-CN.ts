@@ -393,12 +393,19 @@ export default {
     failedBookmarks: {
       title: "⚠️ 失效 / 索引失败管理",
       description:
-        "以下书签在索引过程中遇到错误，可能是网址已失效。你可以点击链接测试或直接删除书签。",
+        "以下链接在内容提取或索引过程中失败（含 GitHub 仓库 README 提取失败），可能是网址已失效。你可以点击链接验证、重试或直接删除。",
       noTitle: "无标题",
       visit: "点击访问",
       errorLabel: "错误",
       deleteConfirm: "确定要从浏览器中永久删除这个书签吗？",
       deleteFailed: "删除失败",
+      retry: "重试",
+      retryQueued: "已加入重试队列，处理完成后会自动更新",
+      retryFailed: "重试失败",
+      stageExtract: "内容提取失败",
+      stageEnrich: "README 提取失败",
+      stageEmbed: "向量化失败",
+      stageWrite: "数据写入失败",
     },
 
     dataManagement: {

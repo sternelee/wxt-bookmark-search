@@ -1,5 +1,6 @@
 import { createSignal, onMount, For, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
+import { Badge } from "../../../src/components/ui/badge";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { useI18n } from "../../../src/i18n";
@@ -9,10 +10,32 @@ interface FailedItem {
   url: string;
   title: string;
   error?: string;
+  failureStage?: "extract" | "enrich" | "embed" | "write";
+  source?: "github" | "twitter" | "bookmark" | "history";
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  twitter: "Twitter/X",
+  history: "History",
+};
 
 export default function FailedBookmarks() {
   const { t } = useI18n();
+
+  /** 失败阶段标签（t() 仅接受字面量 key，故用 switch） */
+  const stageLabel = (stage: NonNullable<FailedItem["failureStage"]>): string => {
+    switch (stage) {
+      case "extract":
+        return t("options.failedBookmarks.stageExtract");
+      case "enrich":
+        return t("options.failedBookmarks.stageEnrich");
+      case "embed":
+        return t("options.failedBookmarks.stageEmbed");
+      case "write":
+        return t("options.failedBookmarks.stageWrite");
+    }
+  };
   const [failedItems, setFailedItems] = createSignal<FailedItem[]>([]);
   const [isVisible, setIsVisible] = createSignal(false);
   const [status, setStatus] = createSignal<{
@@ -61,6 +84,42 @@ export default function FailedBookmarks() {
     setConfirmId(item.id);
     setConfirmTitle(item.title || item.url);
     setConfirmOpen(true);
+  };
+
+  // 二次验证：重新入队提取/索引（或重排 README 丰富化）
+  const [retryingId, setRetryingId] = createSignal("");
+  const handleRetry = async (item: FailedItem) => {
+    setStatus(null);
+    setRetryingId(item.id);
+    try {
+      const res = await browser.runtime.sendMessage({
+        type: "RETRY_BOOKMARK",
+        id: item.id,
+      });
+
+      if (res.success) {
+        setFailedItems(failedItems().filter((i) => i.id !== item.id));
+        if (failedItems().length === 0) {
+          setIsVisible(false);
+        }
+        setStatus({
+          message: t("options.failedBookmarks.retryQueued"),
+          type: "success",
+        });
+      } else {
+        setStatus({
+          message: t("options.failedBookmarks.retryFailed") + ": " + (res.error || t("common.unknownError")),
+          type: "error",
+        });
+      }
+    } catch (error) {
+      setStatus({
+        message: t("options.failedBookmarks.retryFailed") + ": " + (error instanceof Error ? error.message : String(error)),
+        type: "error",
+      });
+    } finally {
+      setRetryingId("");
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -121,10 +180,31 @@ export default function FailedBookmarks() {
                     >
                       {item.url}
                     </a>
+                    <div class="flex items-center gap-1.5 mt-1">
+                      <Show when={item.failureStage}>
+                        <Badge variant="destructive" class="text-[10px] px-1.5 py-0">
+                          {stageLabel(item.failureStage!)}
+                        </Badge>
+                      </Show>
+                      <Show when={item.source && SOURCE_LABELS[item.source!]}>
+                        <Badge variant="outline" class="text-[10px] px-1.5 py-0">
+                          {SOURCE_LABELS[item.source!]}
+                        </Badge>
+                      </Show>
+                    </div>
                     <div class="text-[11px] text-destructive mt-0.5 opacity-80">
                       {t("options.failedBookmarks.errorLabel")}: {item.error || t("common.unknownError")}
                     </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retryingId() === item.id}
+                    onClick={() => handleRetry(item)}
+                    class="whitespace-nowrap"
+                  >
+                    {retryingId() === item.id ? "…" : t("options.failedBookmarks.retry")}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

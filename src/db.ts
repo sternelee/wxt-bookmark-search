@@ -274,6 +274,15 @@ export async function getFailedBookmarks(): Promise<BookmarkRecord[]> {
   return db.bookmarks.where("status").equals("failed").toArray();
 }
 
+/**
+ * 获取失败/降级链接列表（供用户二次验证与删除）
+ * 包含：索引失败（status=failed）、内容提取失败或 README 丰富化失败（error 已记录）
+ */
+export async function getFailureList(): Promise<BookmarkRecord[]> {
+  return db.bookmarks
+    .filter((r) => r.status === "failed" || r.error !== undefined)
+    .toArray();
+}
 /** 获取可进行链接检查的书签（已索引，按上次检查时间升序，未检查的优先） */
 export async function getUncheckedBookmarks(
   limit?: number,

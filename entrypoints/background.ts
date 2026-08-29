@@ -52,6 +52,7 @@ import {
   pauseIndexing,
   resumeIndexing,
   retryFailed,
+  retryFailedBookmark,
   getIndexingStatus,
   getBookmarkFolders,
   indexFolders,
@@ -1489,10 +1490,17 @@ export default defineBackground(() => {
           case "RETRY_FAILED":
             retryFailed();
             return { success: true };
-          case "GET_FAILED_BOOKMARKS":
-            const { getFailedBookmarks } = await import("../src/db");
-            const failed = await getFailedBookmarks();
+          case "GET_FAILED_BOOKMARKS": {
+            const { getFailureList } = await import("../src/db");
+            const failed = await getFailureList();
             return { success: true, failed };
+          }
+          case "RETRY_BOOKMARK": {
+            const ok = await retryFailedBookmark(message.id);
+            return ok
+              ? { success: true }
+              : { success: false, error: "Record not found or missing retry prerequisites" };
+          }
           case "DELETE_BOOKMARK":
             const { deleteBookmark } = await import("../src/db");
             try {

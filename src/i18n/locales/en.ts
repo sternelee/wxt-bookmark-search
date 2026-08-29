@@ -408,13 +408,20 @@ export default {
     failedBookmarks: {
       title: "⚠️ Failed / Broken Bookmark Management",
       description:
-        "These bookmarks encountered errors during indexing, possibly because the URL is no longer valid. Click the link to test or delete the bookmark directly.",
+        "These links failed during content extraction or indexing (including GitHub README fetch failures), possibly because the URL is no longer valid. Click the link to verify, retry, or delete it.",
       noTitle: "No Title",
       visit: "Click to visit",
       errorLabel: "Error",
       deleteConfirm:
         "Are you sure you want to permanently delete this bookmark from the browser?",
       deleteFailed: "Delete failed",
+      retry: "Retry",
+      retryQueued: "Re-queued for retry; the list updates once processed",
+      retryFailed: "Retry failed",
+      stageExtract: "Content extraction failed",
+      stageEnrich: "README fetch failed",
+      stageEmbed: "Embedding failed",
+      stageWrite: "DB write failed",
     },
 
     dataManagement: {

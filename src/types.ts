@@ -27,6 +27,8 @@ export interface BookmarkRecord {
   status: "pending" | "indexed" | "failed";
   indexedAt?: number; // 索引时间戳
   error?: string; // 失败原因
+  /** 失败阶段：extract=页面内容提取失败（已降级为标题索引）；enrich=GitHub README 丰富化失败；embed=向量化失败；write=数据库写入失败 */
+  failureStage?: "extract" | "enrich" | "embed" | "write";
   needsEnrichment?: boolean; // 快速路径索引后，待后台丰富化（如 GitHub README）
   llmEnhanced?: boolean; // 是否经过 LLM 增强
   source?: "github" | "twitter" | "bookmark" | "history";

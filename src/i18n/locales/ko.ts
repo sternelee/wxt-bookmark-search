@@ -341,12 +341,19 @@ export default {
     failedBookmarks: {
       title: "⚠️ 실패 / 무효 북마크 관리",
       description:
-        "이 북마크들은 색인 처리 중 오류가 발생했습니다. URL이 더 이상 유효하지 않을 수 있습니다. 링크를 클릭하여 테스트하거나 북마크를 직접 삭제하세요.",
+        "이 링크들은 콘텐츠 추출 또는 색인 처리 중 실패했습니다(GitHub 저장소 README 가져오기 실패 포함). URL이 더 이상 유효하지 않을 수 있습니다. 링크를 클릭하여 확인하거나 재시도 또는 삭제하세요.",
       noTitle: "제목 없음",
       visit: "클릭하여 방문",
       errorLabel: "오류",
       deleteConfirm: "브라우저에서 이 북마크를 영구적으로 삭제하시겠습니까?",
       deleteFailed: "삭제에 실패했습니다",
+      retry: "재시도",
+      retryQueued: "재시도 대기열에 추가되었습니다. 처리 후 목록이 갱신됩니다",
+      retryFailed: "재시도 실패",
+      stageExtract: "콘텐츠 추출 실패",
+      stageEnrich: "README 가져오기 실패",
+      stageEmbed: "임베딩 실패",
+      stageWrite: "쓰기 실패",
     },
 
     dataManagement: {

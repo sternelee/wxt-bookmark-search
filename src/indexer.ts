@@ -12,7 +12,7 @@ import {
   getIndexedBookmarkIds,
   getIndexStats,
   getIndexedUrls,
-  getFailedBookmarks,
+  getFailureList,
   db,
   saveSettings,
 } from "./db";
@@ -660,6 +660,8 @@ async function processEnrichmentQueue(): Promise<void> {
           needsEnrichment: false,
           indexedAt: Date.now(),
           llmEnhanced,
+          error: undefined,
+          failureStage: undefined,
         });
         console.log(`[indexer] Enriched: ${job.owner}/${job.repo}`);
       }
@@ -668,6 +670,11 @@ async function processEnrichmentQueue(): Promise<void> {
         `[indexer] Enrichment failed for ${job.owner}/${job.repo}:`,
         err,
       );
+      // 记录失败原因，供用户在选项页二次验证或删除；needsEnrichment 保持 true 以便重试
+      await updateBookmark(job.bookmarkId, {
+        error: `README 提取失败: ${err instanceof Error ? err.message : String(err)}`,
+        failureStage: "enrich",
+      }).catch(() => {});
     }
     // 低优先级：慢速处理，避免抢占主队列
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -1420,6 +1427,7 @@ async function processQueue(): Promise<void> {
             await updateBookmark(job.bookmarkId, {
               status: "failed",
               error: errorMessage,
+              failureStage: "embed",
             });
           }
         }
@@ -1443,6 +1451,7 @@ async function processQueue(): Promise<void> {
           await updateBookmark(job.bookmarkId, {
             status: "failed",
             error: errorMessage,
+            failureStage: "embed",
           });
         }
       }
@@ -1477,7 +1486,11 @@ async function processQueue(): Promise<void> {
           embedding: embeddings[i],
           status: hasEmbedding ? ("indexed" as const) : ("pending" as const),
           indexedAt: hasEmbedding ? Date.now() : existing?.indexedAt,
-          error: undefined,
+          // 内容提取失败（所有策略均未取到正文）：仍保留标题索引，但记录失败供用户验证
+          error: content
+            ? undefined
+            : "内容提取失败：无法获取页面正文，已降级为标题索引",
+          failureStage: content ? undefined : ("extract" as const),
           llmEnhanced: llmEnhanced || existing?.llmEnhanced || false,
           source: existing?.source || "bookmark",
           quickSummary: quickSummary || existing?.quickSummary,
@@ -1556,6 +1569,7 @@ async function processQueue(): Promise<void> {
           await updateBookmark(job.bookmarkId, {
             status: "failed",
             error: "Database write failed",
+            failureStage: "write",
           });
         }
       }
@@ -1896,10 +1910,10 @@ export async function indexAllBookmarks(): Promise<{
 }
 
 /**
- * 重新索引失败的书签
+ * 重新索引失败的书签（含内容提取失败的降级记录）
  */
 export async function retryFailed(): Promise<number> {
-  const failedRecords = await getFailedBookmarks();
+  const failedRecords = await getFailureList();
   console.log(`[indexer] Retrying ${failedRecords.length} failed bookmarks`);
 
   if (failedRecords.length === 0) return 0;
@@ -1911,11 +1925,10 @@ export async function retryFailed(): Promise<number> {
     title: r.title,
   }));
 
-  // 批量更新状态为 pending
+  // 批量更新状态为 pending 并清除错误标记
   await db.bookmarks
-    .where("status")
-    .equals("failed")
-    .modify({ status: "pending" });
+    .filter((r) => r.status === "failed" || r.error !== undefined)
+    .modify({ status: "pending", error: undefined, failureStage: undefined });
 
   await enqueueIndexJobs(
     toRetry.map((bookmark) => ({
@@ -1928,6 +1941,51 @@ export async function retryFailed(): Promise<number> {
 
   processQueue();
   return toRetry.length;
+}
+/**
+ * 二次验证单条失败/降级链接
+ * - enrich 失败：重新排入 README 丰富化队列
+ * - 其他失败：重置为 pending 并重新入队完整提取 + 索引
+ * 返回 false 表示记录不存在或缺少重试条件（如未配置 GitHub Token）
+ */
+export async function retryFailedBookmark(bookmarkId: string): Promise<boolean> {
+  const record = await db.bookmarks.get(bookmarkId);
+  if (!record) return false;
+
+  if (record.failureStage === "enrich") {
+    const settings = await getSettings();
+    if (!settings.githubToken) return false;
+    const match = record.url.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+    if (!match) return false;
+    if (!enrichmentQueue.some((j) => j.bookmarkId === bookmarkId)) {
+      enrichmentQueue.push({
+        bookmarkId,
+        url: record.url,
+        owner: match[1],
+        repo: match[2].replace(/\/$/, ""),
+        token: settings.githubToken,
+      });
+      await persistEnrichmentQueue();
+    }
+    processEnrichmentQueue().catch(() => {});
+    return true;
+  }
+
+  await updateBookmark(bookmarkId, {
+    status: "pending",
+    error: undefined,
+    failureStage: undefined,
+  });
+  await enqueueIndexJobs([
+    {
+      bookmarkId,
+      url: record.url,
+      title: record.title,
+      retryCount: 0,
+    },
+  ]);
+  processQueue();
+  return true;
 }
 
 /**
