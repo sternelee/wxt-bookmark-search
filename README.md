@@ -17,6 +17,7 @@ Built with **WXT + TypeScript + Solid.js + Tailwind CSS**.
 - **Twitter/X Bookmarks sync** — indexes your Twitter bookmarks with GraphQL API
 - **LLM Enhancement** — auto-generates summaries and tags using DeepSeek-V3
 - **Privacy-first** — all data stored locally in IndexedDB
+- **Bookmark wall (书签墙)** — masonry card wall for browsing and searching the index, with source filters, hot tags, sort order and RAG Q&A
 - **Modern UI** — Solid.js components with Tailwind CSS, dark mode support
 
 ## Installation
@@ -72,8 +73,9 @@ entrypoints/
   background.ts       — Service worker (omnibox handlers, debounced search, caching)
   popup/              — Extension popup UI (Solid.js + Tailwind)
     components/       — Popup components (Header, StatsGrid, RecentList, etc.)
-  options/            — Settings page (Solid.js + Tailwind)
+  options/            — Settings page, opens in its own tab (Solid.js + Tailwind)
     components/       — Options components (APISettings, IndexManager, FolderTree, etc.)
+  board/              — Bookmark wall 书签墙 (Solid.js + Tailwind)
 ```
 
 ## Tech Stack

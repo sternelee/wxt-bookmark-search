@@ -10,7 +10,7 @@ Stack: **WXT** · **TypeScript** · **Solid.js** · **Tailwind CSS** · **Dexie.
 
 ## Project Overview
 
-Flow Search indexes browser bookmarks with AI-generated summaries, tags, and embeddings, then provides fast hybrid search (keyword + vector) through the Chrome omnibox and a dedicated search page. It supports syncing bookmarks across devices via GitHub Gist, WebDAV, Google Drive, Dropbox, or generic blob storage, and includes a tag-cloud explorer and RAG-based Q&A over the bookmark corpus.
+Flow Search indexes browser bookmarks with AI-generated summaries, tags, and embeddings, then provides fast hybrid search (keyword + vector) through the Chrome omnibox and a dedicated bookmark-wall board page (书签墙). It supports syncing bookmarks across devices via GitHub Gist, WebDAV, Google Drive, Dropbox, or generic blob storage, and includes a tag-cloud explorer and RAG-based Q&A over the bookmark corpus.
 
 ---
 
@@ -29,7 +29,7 @@ Flow Search indexes browser bookmarks with AI-generated summaries, tags, and emb
 
 1. **Omnibox search:** query → `getQueryEmbedding()` (cached) → `searchHybrid()` in Orama engine → frequency-boosted results → omnibox suggestions with XML-escaped descriptions
 2. **Indexing:** bookmark URL → content extraction (active tab → `@mozilla/readability` → Jina Reader fallback) → `llm.ts` (DeepSeek-V3 summaries/tags) → `embedding.ts` (SiliconFlow BGE-M3 batch API) → Dexie IndexedDB + Orama search engine
-3. **Full-page search:** Same pipeline as omnibox, surfaced in `entrypoints/search/` Solid.js UI
+3. **Bookmark wall (书签墙):** Same pipeline as omnibox, surfaced in `entrypoints/board/` — masonry card wall (bookmark/GitHub/Twitter), source filter, top-24 hot tags, RAG Q&A
 4. **RAG Q&A:** `rag.ts` → vector search via `searchVector()` → assemble context (max 6000 chars) → LLM completion with citations
 5. **Tag cloud explorer:** `tag-cloud.ts` builds hierarchical tag clouds with co-occurrence drill-down; rendered in `entrypoints/graph/`
 6. **Sync:** `gist-sync.ts` (GitHub Gist), `cloud-sync/` (WebDAV, Google Drive, Dropbox, Blob) — union merge with deletion tracking
@@ -50,9 +50,9 @@ Flow Search indexes browser bookmarks with AI-generated summaries, tags, and emb
 | `src/components/ui/` | Reusable UI primitives (Button, Card, Badge, Progress, Input, Select, etc.) |
 | `src/i18n/` | Type-safe i18n system; locales: `zh-CN`, `en`, `ja`, `ko` — use `t('key')` |
 | `entrypoints/background.ts` | Service worker — omnibox handlers, message router, indexer init, sync scheduling |
-| `entrypoints/popup/` | Extension popup UI (Solid.js) |
+| `entrypoints/popup/` | Extension popup UI (Solid.js) — quick search, index stats, indexing HUD |
 | `entrypoints/options/` | Settings page — API keys, indexing controls, folder filters, sync config |
-| `entrypoints/search/` | Full-page search UI (Solid.js) |
+| `entrypoints/board/` | Bookmark wall (书签墙) — full-page card wall with hybrid search and RAG Q&A |
 | `entrypoints/graph/` | Tag cloud visualization with `TagCloud.tsx` and `BookmarkPanel.tsx` |
 | `entrypoints/content.ts` | Content script placeholder |
 | `docs/superpowers/` | Plans, specs, changelog, roadmap |
@@ -138,8 +138,8 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 |------|---------|
 | `entrypoints/background.ts` | Service worker (~1700 lines). Omnibox handlers (150ms debounce + AbortController), message passing router (40+ message types), indexer initialization, Gist/cloud sync scheduling |
 | `entrypoints/popup/App.tsx` | Extension popup UI |
-| `entrypoints/options/App.tsx` | Settings page UI |
-| `entrypoints/search/App.tsx` | Full-page search UI |
+| `entrypoints/options/App.tsx` | Settings page UI (opens in its own tab) |
+| `entrypoints/board/App.tsx` | Bookmark wall (书签墙) — source filter, hot tags, AI hybrid search (`FULL_SEARCH`), RAG ask (`ASK_BOOKMARKS`) |
 | `entrypoints/graph/App.tsx` | Tag cloud visualization page |
 | `entrypoints/content.ts` | Content script placeholder |
 
@@ -204,7 +204,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 1. Run `pnpm dev` and load `.output/chrome-mv3/` as an unpacked extension in `chrome://extensions/`
 2. Test omnibox search with `bi <query>`
-3. Test popup, options, search page, and graph page UIs
+3. Test popup, options, bookmark wall (`board.html`), and graph page UIs
 4. Verify indexing flow by adding bookmarks and checking for summaries/tags
 5. Run `pnpm compile` for TypeScript type-checking
 
