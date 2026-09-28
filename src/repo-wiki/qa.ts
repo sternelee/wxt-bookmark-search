@@ -4,6 +4,7 @@
  */
 import type { CodeChunk } from "../types";
 import { getQueryEmbedding } from "../embedding";
+import { normalizeBaseURL } from "../service-config";
 
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 2000;
@@ -188,7 +189,7 @@ export async function askCodebase(
   }
 
   // 4) 调用 LLM（使用 llmModel；llmApiKey 可独立于 embed apiKey）
-  const endpoint = `${baseURL}/chat/completions`;
+  const endpoint = `${normalizeBaseURL(baseURL)}/chat/completions`;
   const systemPrompt = buildCodeQASystemPrompt();
   const llmApiKey = apiKeyForLLM || apiKey;
 

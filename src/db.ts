@@ -3,6 +3,7 @@
  * 存储书签向量索引数据
  */
 import Dexie, { Table } from "dexie";
+import { isEmbedConfigured, isLLMConfigured } from "./service-config";
 import type {
   BookmarkRecord,
   IndexQueueRecord,
@@ -379,7 +380,7 @@ export async function getLinkHealthStats(): Promise<{
 
 const defaultSettings: Settings = {
   openaiApiKey: undefined,
-  baseURL: "https://api.openai.com",
+  baseURL: "https://api.openai.com/v1",
   searchMode: "hybrid",
   vectorWeight: 0.4,
   selectedFolderIds: [],
@@ -436,10 +437,13 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   });
 }
 
-/** 检查是否已配置 API Key */
+/**
+ * 检查 AI 能力是否可用。
+ * 兼容 per-service 配置（llmApiKey / embedApiKey）以及本地 embedding 后端（无需 Key）。
+ */
 export async function hasApiKey(): Promise<boolean> {
   const settings = await getSettings();
-  return !!settings.openaiApiKey;
+  return isEmbedConfigured(settings) || isLLMConfigured(settings);
 }
 
 // === 知识库管理 ===

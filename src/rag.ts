@@ -1,6 +1,8 @@
 /**
  * RAG (Retrieval-Augmented Generation) — 基于书签语料库的问答
  */
+import { normalizeBaseURL } from "./service-config";
+
 const MAX_CONTEXT_LENGTH = 6000;
 
 interface BookmarkContext {
@@ -74,7 +76,7 @@ export async function askBookmarks(
     };
   }
 
-  const apiUrl = `${(baseURL || "https://api.openai.com").replace(/\/$/, "")}/v1/chat/completions`;
+  const apiUrl = `${normalizeBaseURL(baseURL || "https://api.openai.com/v1")}/chat/completions`;
   const llmModel = model || "gpt-4o-mini";
 
   // 构建上下文 — 按书签边界截断，确保每个条目完整

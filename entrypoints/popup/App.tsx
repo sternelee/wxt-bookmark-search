@@ -115,7 +115,7 @@ function App() {
   const openSearchPage = (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    const searchPageUrl = browser.runtime.getURL("/search.html") + "?q=" + encodeURIComponent(trimmed);
+    const searchPageUrl = (browser.runtime.getURL as any)("/board.html") + "?q=" + encodeURIComponent(trimmed);
     browser.tabs.create({ url: searchPageUrl, active: true });
   };
 

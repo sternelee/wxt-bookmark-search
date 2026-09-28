@@ -11,8 +11,14 @@ import {
   highlightBookmarkPlain,
   escapeXml,
 } from "../src/highlight";
-import { getSettings, hasApiKey, saveSettings } from "../src/db";
-import { resolveEmbedConfig, resolveLLMConfig } from "../src/service-config";
+import { getSettings, saveSettings } from "../src/db";
+import {
+  normalizeBaseURL,
+  resolveEmbedConfig,
+  resolveLLMConfig,
+  isLLMConfigured,
+  isEmbedConfigured,
+} from "../src/service-config";
 import type {
   BookmarkRecord,
   SearchResult,
@@ -512,10 +518,10 @@ export default defineBackground(() => {
   initCloudSyncAlarm();
   initDailyDigestAlarm();
 
-  // 首次启动时检查是否需要索引
-  hasApiKey().then((hasKey) => {
-    if (hasKey) {
-      console.log("[FlowSearch] API key found, starting initial index...");
+  // 首次启动时检查是否需要索引（索引只需要 embedding，本地后端无需 Key）
+  getSettings().then((settings) => {
+    if (isEmbedConfigured(settings)) {
+      console.log("[FlowSearch] Embedding configured, starting initial index...");
       indexAllBookmarks();
     }
   });
@@ -1088,7 +1094,7 @@ export default defineBackground(() => {
     // Code Wiki trigger: "cw ..." — open wiki page or suggest a query
     if (rawInput === "cw" || rawInput.startsWith("cw ")) {
       const query = rawInput === "cw" ? "" : rawInput.substring(3).trim();
-      const wikiPageUrl = browser.runtime.getURL("/wiki.html" as unknown as `/search.html${string}`);
+      const wikiPageUrl = (browser.runtime.getURL as any)("/wiki.html");
       suggest([
         {
           content: wikiPageUrl,
@@ -1353,10 +1359,10 @@ export default defineBackground(() => {
       incrementFreq(targetUrl);
     } else {
       // 用户按下 Enter 选中了默认建议（原始查询文本）
-      // 打开独立搜索页
+      // 打开书签墙（集成 AI 搜索）
       const searchPageUrl =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (browser.runtime.getURL as any)("/search.html") +
+        (browser.runtime.getURL as any)("/board.html") +
         "?q=" +
         encodeURIComponent(text);
       targetUrl = searchPageUrl;
@@ -1392,7 +1398,8 @@ export default defineBackground(() => {
 
     if (
       oldVal?.aiProvider !== newVal?.aiProvider ||
-      oldVal?.openaiApiKey !== newVal?.openaiApiKey
+      resolveLLMConfig(oldVal ?? newVal).apiKey !== resolveLLMConfig(newVal).apiKey ||
+      resolveLLMConfig(oldVal ?? newVal).baseURL !== resolveLLMConfig(newVal).baseURL
     ) {
       try {
         const provider = await autoCreateLLMProvider(newVal);
@@ -1771,7 +1778,7 @@ export default defineBackground(() => {
           }
           case "SUMMARIZE_URL": {
             const summarizeSettings = await getSettings();
-            if (!summarizeSettings.openaiApiKey) {
+            if (!isLLMConfigured(summarizeSettings)) {
               return {
                 success: false,
                 error: t("background.apiKeyNotConfigured"),
@@ -2314,8 +2321,8 @@ function langNameForSettings(lang: string | undefined): string {
 }
 
 function normaliseBaseURL(url: string | undefined, fallback: string): string {
-  const base = (url || fallback).replace(/\/$/, "");
-  return base.endsWith("/v1") ? base : `${base}/v1`;
+  // 与 OpenAI SDK 约定一致：baseURL 以 /v1 结尾，端点只拼接资源路径
+  return normalizeBaseURL(url || fallback);
 }
 
 /** 从 symbols 构造最小可用 chunks（fallback when Orama engine empty） */
@@ -2365,11 +2372,11 @@ async function buildCodeGraphHandler(
   const embedCfgForWiki = resolveEmbedConfig(settings);
   const embedBaseURL = normaliseBaseURL(
     settings.embedBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
   const llmBaseURL = normaliseBaseURL(
     settings.llmBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
   const embedModel = settings.embeddingModel;
   const llmModel = settings.llmModel;
@@ -2574,11 +2581,11 @@ async function syncWikiHandler(
   const embedCfgForWiki = resolveEmbedConfig(settings);
   const embedBaseURL = normaliseBaseURL(
     settings.embedBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
   const llmBaseURL = normaliseBaseURL(
     settings.llmBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
   const embedModel = settings.embeddingModel;
   const llmModel = settings.llmModel;
@@ -2726,11 +2733,11 @@ async function askCodebaseHandler(
 
   const embedBaseURL = normaliseBaseURL(
     settings.embedBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
   const llmBaseURL = normaliseBaseURL(
     settings.llmBaseURL || settings.baseURL,
-    "https://api.siliconflow.cn",
+      "https://api.siliconflow.cn/v1",
   );
 
   // 3) Embed query + pool-based cosine sim across N workers

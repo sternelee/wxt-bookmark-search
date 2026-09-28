@@ -10,6 +10,7 @@ import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { isEmbedConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
 
 export default function TwitterSettings() {
@@ -53,7 +54,7 @@ export default function TwitterSettings() {
 
   const handleSync = async () => {
     const settings = await getSettings();
-    if (!settings.openaiApiKey) {
+    if (!isEmbedConfigured(settings)) {
       setStatus({ message: t("options.twitter.apiKeyRequired"), type: "error" });
       return;
     }

@@ -44,7 +44,7 @@ export default function APISettings() {
   // 初始化
   getSettings().then((settings) => {
     setApiKey(settings.openaiApiKey || "");
-    setBaseURL(settings.baseURL || "https://api.siliconflow.cn");
+    setBaseURL(settings.baseURL || "https://api.siliconflow.cn/v1");
     setEmbeddingModel(settings.embeddingModel || "");
     setLLMModel(settings.llmModel || "");
     setEnableLLMEnrichment(settings.enableLLMEnrichment ?? true);
@@ -65,7 +65,10 @@ export default function APISettings() {
   });
 
   const handleSave = async () => {
-    if (embedBackend() !== "local" && !apiKey()) {
+    // 本地 embedding 无需 Key；远程 embedding 可用 per-service Key 覆盖共享 Key
+    const embedUsable =
+      embedBackend() === "local" || !!(embedApiKey() || apiKey()).trim();
+    if (!embedUsable) {
       setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
       return;
     }
@@ -130,7 +133,7 @@ export default function APISettings() {
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      if (embedBackend() !== "local" && !apiKey()) {
+      if (embedBackend() !== "local" && !(embedApiKey() || apiKey()).trim()) {
         setStatus({ message: t("options.api.apiKeyRequired"), type: "error" });
         return;
       }
@@ -339,7 +342,7 @@ export default function APISettings() {
               <Show when={embedBackend() === "remote"}>
                 <Input
                   label="Base URL"
-                  placeholder="https://api.siliconflow.cn"
+                  placeholder="https://api.siliconflow.cn/v1"
                   value={baseURL()}
                   onInput={(e) => setBaseURL(e.currentTarget.value)}
                   hint={t("options.api.baseURLHint")}
@@ -409,7 +412,7 @@ export default function APISettings() {
                   label={t("options.api.perServiceBaseURL")}
                   placeholder={
                     baseURL() ||
-                    "https://api.openai.com"
+                    "https://api.openai.com/v1"
                   }
                   value={embedBaseURL()}
                   onInput={(e) => setEmbedBaseURL(e.currentTarget.value)}
@@ -448,7 +451,7 @@ export default function APISettings() {
                   label={t("options.api.perServiceBaseURL")}
                   placeholder={
                     baseURL() ||
-                    "https://api.openai.com"
+                    "https://api.openai.com/v1"
                   }
                   value={llmBaseURL()}
                   onInput={(e) => setLLMBaseURL(e.currentTarget.value)}

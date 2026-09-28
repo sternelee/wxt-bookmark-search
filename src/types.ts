@@ -124,7 +124,7 @@ export interface DeletedBookmarkEntry {
 /** 设置存储结构 */
 export interface Settings {
   openaiApiKey?: string;
-  baseURL?: string; // API 基础地址 (默认: https://api.siliconflow.cn)
+  baseURL?: string; // API 基础地址，含 /v1 (默认: https://api.siliconflow.cn/v1)
   searchMode: SearchMode;
   vectorWeight: number;
   selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID
