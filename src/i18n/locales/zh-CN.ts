@@ -563,6 +563,8 @@ export default {
     noTags: "暂无标签",
     openGraph: "标签云",
     openSettings: "设置",
+    openDigest: "每日日报",
+    openResearch: "研究助手",
     searchPlaceholder: "AI 语义搜索书签… ( / 聚焦，Enter 问 AI )",
     searchFailed: "搜索失败",
     resultsCount: "{{count}} 条结果",

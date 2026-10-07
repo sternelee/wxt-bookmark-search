@@ -520,6 +520,8 @@ export default {
     noTags: "タグなし",
     openGraph: "タグクラウド",
     openSettings: "設定",
+    openDigest: "日次ダイジェスト",
+    openResearch: "リサーチエージェント",
     searchPlaceholder: "AI セマンティック検索… ( / でフォーカス、Enter で質問 )",
     searchFailed: "検索に失敗しました",
     resultsCount: "{{count}} 件の結果",

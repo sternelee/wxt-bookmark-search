@@ -10,9 +10,13 @@ import type { BookmarkRecord, SearchResult } from "../../src/types";
 import { incrementFreq } from "../../src/freq";
 import { getSettings } from "../../src/db";
 import { useI18n, setReactiveLocale } from "../../src/i18n";
+import DigestPanel from "../../src/components/DigestPanel";
+import ResearchPanel from "../../src/components/ResearchPanel";
 
 type SourceFilter = "all" | "bookmark" | "github" | "twitter";
 type SortOrder = "newest" | "oldest";
+/** 右侧面板（同时只开一个） */
+type SidePanel = "none" | "digest" | "research";
 
 /** 记录排序时间：优先推文发布时间，其次索引时间 */
 function recordTime(r: BookmarkRecord): number {
@@ -85,6 +89,7 @@ function App() {
   const [activeTag, setActiveTag] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal(initialQuery);
   const [sortOrder, setSortOrder] = createSignal<SortOrder>("newest");
+  const [sidePanel, setSidePanel] = createSignal<SidePanel>("none");
 
   // AI 搜索状态（null = 浏览模式）
   const [searchResults, setSearchResults] = createSignal<SearchResult[] | null>(null);
@@ -311,6 +316,11 @@ function App() {
     setActiveTag((prev) => (prev === tag ? null : tag));
   }
 
+  /** 切换右侧面板（日报 / 研究），再次点击同一按钮则关闭 */
+  function togglePanel(panel: Exclude<SidePanel, "none">) {
+    setSidePanel((prev) => (prev === panel ? "none" : panel));
+  }
+
   function openRecord(r: BookmarkRecord) {
     incrementFreq(r.url);
     browser.tabs.create({ url: r.url });
@@ -329,6 +339,8 @@ function App() {
     } else if (e.key === "Escape" && active === searchRef) {
       clearSearch();
       searchRef?.blur();
+    } else if (e.key === "Escape" && sidePanel() !== "none") {
+      setSidePanel("none");
     }
   }
 
@@ -413,6 +425,30 @@ function App() {
 
         {/* 底部导航 */}
         <div class="border-t border-border px-3 py-3 space-y-0.5">
+          <button
+            type="button"
+            class={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              sidePanel() === "digest"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            onClick={() => togglePanel("digest")}
+          >
+            <span class="w-5 text-center">📚</span>
+            {t("board.openDigest")}
+          </button>
+          <button
+            type="button"
+            class={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              sidePanel() === "research"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            onClick={() => togglePanel("research")}
+          >
+            <span class="w-5 text-center">🔬</span>
+            {t("board.openResearch")}
+          </button>
           <button
             type="button"
             class="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -615,6 +651,14 @@ function App() {
           </Show>
         </div>
       </main>
+
+      {/* 右侧面板：日报 / 研究（同一时刻只挂载一个） */}
+      <Show when={sidePanel() === "digest"}>
+        <DigestPanel onClose={() => setSidePanel("none")} />
+      </Show>
+      <Show when={sidePanel() === "research"}>
+        <ResearchPanel onClose={() => setSidePanel("none")} />
+      </Show>
     </div>
   );
 }

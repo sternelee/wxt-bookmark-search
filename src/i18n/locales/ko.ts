@@ -512,6 +512,8 @@ export default {
     noTags: "태그 없음",
     openGraph: "태그 클라우드",
     openSettings: "설정",
+    openDigest: "일일 다이제스트",
+    openResearch: "리서치 에이전트",
     searchPlaceholder: "AI 시맨틱 검색… ( / 포커스, Enter 질문 )",
     searchFailed: "검색 실패",
     resultsCount: "{{count}}개 결과",

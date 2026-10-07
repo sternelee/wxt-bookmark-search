@@ -582,6 +582,8 @@ export default {
     noTags: "No tags yet",
     openGraph: "Tag Cloud",
     openSettings: "Settings",
+    openDigest: "Daily Digest",
+    openResearch: "Research Agent",
     searchPlaceholder: "AI semantic search… ( / to focus, Enter to ask )",
     searchFailed: "Search failed",
     resultsCount: "{{count}} results",
