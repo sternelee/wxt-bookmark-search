@@ -11,23 +11,30 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
-import { EMBEDDING_VECTOR_DIM } from "../types";
+import { REMOTE_VECTOR_DIM } from "../embedding-space";
 import type { CodeSearchResult, CodeChunk } from "../types";
 
-/** Orama schema（code 专用） */
-const codeSchema = {
-  id: "string",
-  content: "string",
-  language: "string",
-  filePath: "string",
-  symbolName: "string",
-  kind: "enum",
-  lineStart: "number",
-  lineEnd: "number",
-  repoUrl: "string",
-  branch: "string",
-  embedding: `vector[${EMBEDDING_VECTOR_DIM}]`,
-} as const;
+/**
+ * Orama schema（code 专用）
+ *
+ * embedding 维度随 embedding 后端变化（local 384 / remote 1024），
+ * 必须与写入向量时使用的维度一致。
+ */
+function buildCodeSchema(dim: number) {
+  return {
+    id: "string",
+    content: "string",
+    language: "string",
+    filePath: "string",
+    symbolName: "string",
+    kind: "enum",
+    lineStart: "number",
+    lineEnd: "number",
+    repoUrl: "string",
+    branch: "string",
+    embedding: `vector[${dim}]`,
+  } as const;
+}
 
 type CodeDocument = {
   id: string;
@@ -44,20 +51,35 @@ type CodeDocument = {
 };
 
 let codeEngine: AnyOrama | null = null;
+/** 当前代码引擎的向量维度 */
+let currentCodeDim: number = REMOTE_VECTOR_DIM;
 export const ORAMA_CODE_INDEX_STORAGE_KEY = "orama_code_index";
+/** 与 ORAMA_CODE_INDEX_STORAGE_KEY 配套的向量空间指纹 */
+export const ORAMA_CODE_INDEX_SPACE_KEY = "orama_code_index_space";
 
-/** 初始化代码搜索引擎 */
-export async function initCodeSearchEngine(): Promise<void> {
+/** 当前代码引擎向量维度 */
+export function getCodeSearchEngineDim(): number {
+  return currentCodeDim;
+}
+
+/** 初始化代码搜索引擎（dim 省略时沿用上一次的维度） */
+export async function initCodeSearchEngine(dim?: number): Promise<void> {
+  if (dim && dim > 0) currentCodeDim = dim;
   codeEngine = create({
-    schema: codeSchema as any,
+    schema: buildCodeSchema(currentCodeDim) as any,
     id: "flowsearch_code",
   });
 }
 
-/** 从序列化数据恢复代码搜索引擎 */
-export function loadCodeSearchEngine(raw: RawData): void {
+/** 从序列化数据恢复代码搜索引擎（dim 必须与当前引擎一致，否则抛错） */
+export function loadCodeSearchEngine(raw: RawData, dim?: number): void {
+  if (dim && dim !== currentCodeDim) {
+    throw new Error(
+      `Orama code index dim mismatch: stored=${dim} current=${currentCodeDim}`,
+    );
+  }
   if (!codeEngine) {
-    codeEngine = create({ schema: codeSchema as any, id: "flowsearch_code" });
+    codeEngine = create({ schema: buildCodeSchema(currentCodeDim) as any, id: "flowsearch_code" });
   }
   load(codeEngine, raw);
 }
@@ -73,9 +95,14 @@ export function isCodeSearchEngineReady(): boolean {
   return codeEngine !== null;
 }
 
-/** 确保代码搜索引擎已初始化（懒初始化） */
-export async function ensureCodeSearchEngine(): Promise<void> {
-  if (!codeEngine) await initCodeSearchEngine();
+/**
+ * 确保代码搜索引擎已初始化（懒初始化）。
+ * 传 dim 时若与当前维度不一致则重建 —— 避免用新后端的查询向量去搜旧维度的索引。
+ */
+export async function ensureCodeSearchEngine(dim?: number): Promise<void> {
+  if (!codeEngine || (dim && dim !== currentCodeDim)) {
+    await initCodeSearchEngine(dim);
+  }
 }
 
 function chunkToDoc(chunk: CodeChunk, embedding: number[]): CodeDocument {

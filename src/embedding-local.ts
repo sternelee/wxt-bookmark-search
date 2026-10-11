@@ -15,12 +15,13 @@ import init, {
   embed as _embed,
   config_summary as _configSummary,
 } from "@ternlight/mini/web";
+import { LOCAL_VECTOR_DIM, LOCAL_SPACE_MODEL } from "./embedding-space";
 
 /** Ternlight 引擎输出维度（hard-coded by @ternlight/mini） */
-export const LOCAL_EMBEDDING_DIM = 384;
+export const LOCAL_EMBEDDING_DIM = LOCAL_VECTOR_DIM;
 
 /** 引擎信息（dimensions/format/vocab 等） */
-export const LOCAL_MODEL_NAME = "ternlight/mini";
+export const LOCAL_MODEL_NAME = LOCAL_SPACE_MODEL;
 
 const WASM_URL = "tern_engine_bg.wasm";
 

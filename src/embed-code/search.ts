@@ -3,6 +3,7 @@
  */
 import type { CodeSearchResult } from "../types";
 import { getQueryEmbedding } from "../embedding";
+import { getDimForBackend } from "../embedding-space";
 import { ensureCodeSearchEngine, searchCodeHybrid } from "./index";
 
 /**
@@ -27,7 +28,8 @@ export async function semanticCodeSearch(
   } = {},
 ): Promise<CodeSearchResult[]> {
   const { baseURL, model, signal, backend, ...searchOpts } = options;
-  await ensureCodeSearchEngine();
+  // 引擎维度必须与查询向量一致（后端不同 → 维度不同）
+  await ensureCodeSearchEngine(getDimForBackend(backend ?? "remote"));
   const queryEmbedding = await getQueryEmbedding(query, apiKey, signal, model, baseURL, backend);
   return searchCodeHybrid(query, queryEmbedding, searchOpts);
 }
@@ -42,6 +44,7 @@ export {
 } from "./embed";
 export {
   initCodeSearchEngine,
+  getCodeSearchEngineDim,
   ensureCodeSearchEngine,
   populateCodeSearchEngine,
   upsertCodeSearchBatch,

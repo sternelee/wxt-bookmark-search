@@ -42,8 +42,16 @@ import {
   flushSaveSearchEngine,
   registerSaveFn,
   resetSearchEngine,
+  isSearchEngineReady,
+  getSearchEngineDim,
   ORAMA_INDEX_STORAGE_KEY,
+  ORAMA_INDEX_SPACE_KEY,
 } from "../src/search-engine";
+import {
+  embeddingSpaceId,
+  getEmbeddingDim,
+  isVectorInSpace,
+} from "../src/embedding-space";
 import type { RawData } from "@orama/orama";
 import {
   initIndexer,
@@ -118,6 +126,9 @@ let isSyncingGist = false;
 let gistSyncLock = false;
 /** 同步进行中若又有本地变更，完成后补一次同步，避免丢事件 */
 let pendingGistSync = false;
+
+/** 启动期向量空间校验 — 多个初始化共用同一个 Promise，避免重复重建 */
+let embedSpaceGuard: Promise<number> | null = null;
 
 // 云端书签同步防抖状态（复用 cloudSync provider 配置）
 const CLOUD_BOOKMARK_SYNC_DEBOUNCE_MS = 5000;
@@ -266,13 +277,24 @@ async function buildKeywordSuggestions(
   }));
 }
 
+/**
+ * 丢弃内存与 storage 中的书签 Orama 索引（用于重建）。
+ * 传 dim 时用新维度重建空引擎（切换 embedding 后端后必须调用）。
+ */
+async function clearBookmarkIndexStorage(dim?: number): Promise<void> {
+  await resetSearchEngine(dim);
+  await browser.storage.local.remove([
+    ORAMA_INDEX_STORAGE_KEY,
+    ORAMA_INDEX_SPACE_KEY,
+  ]);
+}
+
 async function resetIndexedData(): Promise<void> {
   const { clearAll } = await import("../src/db");
   clearEmbeddingCache();
   await resetIndexerState();
   await clearAll();
-  await resetSearchEngine();
-  await browser.storage.local.remove(ORAMA_INDEX_STORAGE_KEY);
+  await clearBookmarkIndexStorage();
 }
 
 async function reindexStoredEmbeddings(): Promise<number> {
@@ -291,8 +313,10 @@ async function reindexStoredEmbeddings(): Promise<number> {
   clearEmbeddingCache();
   await resetIndexerState();
   await db.bookmarks.bulkPut(pendingRecords);
-  await resetSearchEngine();
-  await browser.storage.local.remove(ORAMA_INDEX_STORAGE_KEY);
+
+  // 索引维度跟随当前 embedding 后端：切换后端后不能继续用旧维度的空引擎
+  const settings = await getSettings();
+  await clearBookmarkIndexStorage(getEmbeddingDim(settings));
 
   return enqueueBookmarksForReindex(
     pendingRecords.map((record) => ({
@@ -492,8 +516,13 @@ export default defineBackground(() => {
       console.warn("[FlowSearch] Orama index too large, skipping save");
       return;
     }
+    // 空间指纹与索引一起落盘：加载时据此判断旧索引是否仍可用。
+    // 每次现算而非缓存 —— 云同步导入等路径可能在 SW 运行期改变设置，
+    // 缓存值会给新索引写入过期的指纹，导致下次启动误判不匹配
+    const space = embeddingSpaceId(await getSettings());
     await browser.storage.local.set({
       [ORAMA_INDEX_STORAGE_KEY]: JSON.parse(json),
+      [ORAMA_INDEX_SPACE_KEY]: space,
     });
   });
 
@@ -537,29 +566,171 @@ export default defineBackground(() => {
     }
   }
 
+  /**
+   * 校验存量向量与当前 embedding 后端是否属于同一向量空间。
+   *
+   * 切换后端 / 更换 embedding 模型后，旧向量与新查询向量不再可比（余弦相似度
+   * 失去意义），必须丢弃并重建。仅靠「用户在设置页重新保存」不够：云同步导入、
+   * 跨设备覆盖、直接修改 storage 都不会经过那条路径。
+   *
+   * 两种触发情形：
+   * 1. 指纹变更：后端 / 模型被换掉，存量向量必然失效
+   * 2. 首次引入指纹（升级迁移）：本地后端存量向量仍是零填充的 1024 维
+   *
+   * 不对远端模型的维度做推断 —— 远端模型维度不受控，按维度判定会导致
+   * 「重建 → 维度仍不匹配 → 再重建」的死循环。跨设备导入的错位向量由
+   * `cloud-sync/blob.ts` 在导入时就地剥离并重新入队。
+   */
+  async function runEmbeddingSpaceGuard(): Promise<number> {
+    try {
+      const settings = await getSettings();
+      const cfg = resolveEmbedConfig(settings);
+      // 无法重新嵌入时（远端后端缺 API Key）保留现状，下次启动再校验
+      if (cfg.backend !== "local" && !cfg.apiKey) return 0;
+
+      const { db } = await import("../src/db");
+      const space = embeddingSpaceId(settings);
+      const prev = settings.embedSpaceFingerprint;
+      const records = await db.bookmarks.toArray();
+
+      const spaceChanged = prev !== undefined && prev !== space;
+      const staleCount = records.filter(
+        (r) => r.embedding?.length && !isVectorInSpace(r.embedding, settings),
+      ).length;
+      // 升级迁移：旧版本本地后端把 384 维零填充到 1024；本地维度是硬事实，可安全判定
+      const legacyPadding =
+        prev === undefined && cfg.backend === "local" && staleCount > 0;
+      const rebuildBookmarks =
+        records.length > 0 && (spaceChanged || legacyPadding);
+
+      // 代码向量与书签独立判定：无书签的 Code Wiki 用户切换后端后，
+      // 代码向量同样失效，不能因书签表为空而跳过重建
+      const codeCount = await db.codeEmbeddings.count();
+      let rebuildCode = false;
+      let staleCodeCount = 0;
+      if (codeCount > 0) {
+        staleCodeCount = (await db.codeEmbeddings.toArray()).filter(
+          (e) => e.vector?.length && !isVectorInSpace(e.vector, settings),
+        ).length;
+        rebuildCode =
+          spaceChanged ||
+          (prev === undefined && cfg.backend === "local" && staleCodeCount > 0);
+      }
+
+      if (!rebuildBookmarks && !rebuildCode) {
+        // 无需重建：首次采用当前空间，或无存量向量时直接跟进新指纹
+        if (prev !== space) await saveSettings({ embedSpaceFingerprint: space });
+        return 0;
+      }
+
+      console.warn(
+        `[FlowSearch] Embedding space mismatch (${prev ?? "legacy"} -> ${space}); ` +
+          `${staleCount} stale bookmark vectors, ${staleCodeCount} stale code vectors — rebuilding`,
+      );
+
+      let queued = 0;
+      if (rebuildBookmarks) {
+        queued = await reindexStoredEmbeddings();
+      }
+
+      if (rebuildCode) {
+        // 代码向量同源失效：按原始 chunk 重新嵌入（无需重下仓库）
+        const { reembedAllCodeEmbeddings } = await import(
+          "../src/embed-code/embed"
+        );
+        await reembedAllCodeEmbeddings(
+          cfg.apiKey,
+          cfg.model,
+          cfg.baseURL,
+          cfg.backend,
+        );
+
+        const code = await import("../src/embed-code/index");
+        await browser.storage.local.remove([
+          code.ORAMA_CODE_INDEX_STORAGE_KEY,
+          code.ORAMA_CODE_INDEX_SPACE_KEY,
+        ]);
+        // 运行期（设置页切换后端）时内存索引仍是旧维度，需立即重建；
+        // 启动期代码引擎尚未初始化，交给 initCodeSearchAndPopulate
+        if (code.isCodeSearchEngineReady()) {
+          await code.initCodeSearchEngine(getEmbeddingDim(settings));
+          await rebuildCodeIndexFromDb(settings);
+        }
+      }
+
+      await saveSettings({ embedSpaceFingerprint: space });
+      console.log(
+        `[FlowSearch] Re-queued ${queued} bookmarks for re-embedding (${space})`,
+      );
+      return queued;
+    } catch (error) {
+      console.error("[FlowSearch] Embedding space guard failed:", error);
+      return 0;
+    }
+  }
+
+  /** 向量空间校验（同一 SW 生命周期内只跑一次） */
+  function ensureEmbeddingSpace(): Promise<number> {
+    if (!embedSpaceGuard) embedSpaceGuard = runEmbeddingSpaceGuard();
+    return embedSpaceGuard;
+  }
+
+  /** 设置变更后重新校验向量空间（丢弃已缓存的结果） */
+  async function revalidateEmbeddingSpace(): Promise<number> {
+    embedSpaceGuard = null;
+    return ensureEmbeddingSpace();
+  }
+
   /** 初始化搜索引擎（Orama），优先从 storage.local 恢复 */
   async function initSearchAndPopulate(): Promise<void> {
     try {
-      await initSearchEngine();
+      await ensureEmbeddingSpace();
 
-      // 尝试从 storage.local 恢复
-      const stored = await browser.storage.local.get(ORAMA_INDEX_STORAGE_KEY);
+      const settings = await getSettings();
+      const dim = getEmbeddingDim(settings);
+      const space = embeddingSpaceId(settings);
+
+      // 维度一致时保留现有实例，避免丢掉校验期间已写入的文档
+      if (!isSearchEngineReady() || getSearchEngineDim() !== dim) {
+        await initSearchEngine(dim);
+      }
+
+      // 尝试从 storage.local 恢复（仅当向量空间指纹一致）
+      const stored = await browser.storage.local.get([
+        ORAMA_INDEX_STORAGE_KEY,
+        ORAMA_INDEX_SPACE_KEY,
+      ]);
       if (stored[ORAMA_INDEX_STORAGE_KEY]) {
-        try {
-          loadSearchEngine(stored[ORAMA_INDEX_STORAGE_KEY] as RawData);
-          console.log("[FlowSearch] Orama index restored from storage");
-          return;
-        } catch {
+        if (stored[ORAMA_INDEX_SPACE_KEY] === space) {
+          try {
+            loadSearchEngine(stored[ORAMA_INDEX_STORAGE_KEY] as RawData, dim);
+            console.log("[FlowSearch] Orama index restored from storage");
+            return;
+          } catch {
+            console.warn(
+              "[FlowSearch] Failed to load Orama index, rebuilding...",
+            );
+          }
+        } else {
           console.warn(
-            "[FlowSearch] Failed to load Orama index, rebuilding...",
+            "[FlowSearch] Stored Orama index belongs to another embedding space, rebuilding...",
           );
         }
       }
 
-      // 从 IndexedDB 重建
+      // 从 IndexedDB 重建（过滤掉其他向量空间的向量）
       const { getAllIndexedRecords } = await import("../src/db");
       const records = await getAllIndexedRecords();
-      const count = await populateSearchEngine(records);
+      const inSpace = records.filter(
+        (r) =>
+          !r.embedding?.length || isVectorInSpace(r.embedding, settings),
+      );
+      if (inSpace.length !== records.length) {
+        console.warn(
+          `[FlowSearch] Skipped ${records.length - inSpace.length} records with foreign-dimension vectors`,
+        );
+      }
+      const count = await populateSearchEngine(inSpace);
       console.log(`[FlowSearch] Orama index rebuilt: ${count} records`);
       await flushSaveSearchEngine();
     } catch (error) {
@@ -570,76 +741,123 @@ export default defineBackground(() => {
   /** 初始化代码搜索引擎（Code Wiki），优先从 storage.local 恢复 */
   async function initCodeSearchAndPopulate(): Promise<void> {
     try {
-      const { initCodeSearchEngine, loadCodeSearchEngine, populateCodeSearchEngine: populateCode } = await import("../src/embed-code/index");
-      const { registerCodeSaveFn, scheduleSaveCodeSearchEngine } = await import(
-        "../src/embed-code/index"
-      );
-      const { ORAMA_CODE_INDEX_STORAGE_KEY } = await import(
-        "../src/embed-code/index"
-      );
+      await ensureEmbeddingSpace();
 
-      await initCodeSearchEngine();
+      const settings = await getSettings();
+      const dim = getEmbeddingDim(settings);
+      const space = embeddingSpaceId(settings);
+
+      const {
+        initCodeSearchEngine,
+        loadCodeSearchEngine,
+        registerCodeSaveFn,
+        isCodeSearchEngineReady,
+        getCodeSearchEngineDim,
+        ORAMA_CODE_INDEX_STORAGE_KEY,
+        ORAMA_CODE_INDEX_SPACE_KEY,
+      } = await import("../src/embed-code/index");
+
+      if (!isCodeSearchEngineReady() || getCodeSearchEngineDim() !== dim) {
+        await initCodeSearchEngine(dim);
+      }
 
       // 注册持久化回调
       registerCodeSaveFn(async () => {
         const raw = (await import("../src/embed-code/index")).saveCodeSearchEngine();
         if (raw) {
-          await browser.storage.local.set({ [ORAMA_CODE_INDEX_STORAGE_KEY]: raw });
+          // 现算指纹（同书签 saveFn）：运行期设置可能已被云同步导入改变
+          const codeSpace = embeddingSpaceId(await getSettings());
+          await browser.storage.local.set({
+            [ORAMA_CODE_INDEX_STORAGE_KEY]: raw,
+            [ORAMA_CODE_INDEX_SPACE_KEY]: codeSpace,
+          });
         }
       });
 
-      // 尝试从 storage.local 恢复
-      const stored = await browser.storage.local.get(ORAMA_CODE_INDEX_STORAGE_KEY);
+      // 尝试从 storage.local 恢复（仅当向量空间指纹一致）
+      const stored = await browser.storage.local.get([
+        ORAMA_CODE_INDEX_STORAGE_KEY,
+        ORAMA_CODE_INDEX_SPACE_KEY,
+      ]);
       if (stored[ORAMA_CODE_INDEX_STORAGE_KEY]) {
-        try {
-          loadCodeSearchEngine(stored[ORAMA_CODE_INDEX_STORAGE_KEY] as RawData);
-          console.log("[FlowSearch] Code wiki Orama index restored from storage");
-          return;
-        } catch {
+        if (stored[ORAMA_CODE_INDEX_SPACE_KEY] === space) {
+          try {
+            loadCodeSearchEngine(
+              stored[ORAMA_CODE_INDEX_STORAGE_KEY] as RawData,
+              dim,
+            );
+            console.log(
+              "[FlowSearch] Code wiki Orama index restored from storage",
+            );
+            return;
+          } catch {
+            console.warn(
+              "[FlowSearch] Failed to load code wiki Orama index, rebuilding...",
+            );
+          }
+        } else {
           console.warn(
-            "[FlowSearch] Failed to load code wiki Orama index, rebuilding...",
+            "[FlowSearch] Stored code wiki index belongs to another embedding space, rebuilding...",
           );
         }
       }
 
-      // 从 IndexedDB 重建：取所有 embeddings + symbols，重建 chunks
-      const { db } = await import("../src/db");
-      const [embeddingRecords, symbolRecords] = await Promise.all([
-        db.codeEmbeddings.toArray(),
-        db.codeSymbols.toArray(),
-      ]);
-      if (embeddingRecords.length === 0) {
+      const count = await rebuildCodeIndexFromDb(settings);
+      if (count === 0) {
         console.log("[FlowSearch] No code wiki data to index");
         return;
       }
-      // 构造最小 chunks（symbol 级：signature + jsdoc + filePath）
-      const symbolMap = new Map(symbolRecords.map((s) => [s.id, s]));
-      const chunks: import("../src/types").CodeChunk[] = [];
-      const records: { chunk: import("../src/types").CodeChunk; embedding: number[] }[] = [];
-      for (const e of embeddingRecords) {
-        const sym = symbolMap.get(e.id);
-        if (!sym) continue;
-        const chunk: import("../src/types").CodeChunk = {
-          id: e.id,
-          content: [sym.jsdoc ? `/* ${sym.jsdoc} */` : "", sym.signature].filter(Boolean).join("\n"),
-          language: sym.filePath.split(".").pop() || "text",
-          filePath: sym.filePath,
-          symbolName: sym.name,
-          kind: sym.kind,
-          lineStart: sym.lineStart,
-          lineEnd: sym.lineEnd,
-          repoUrl: sym.repoUrl,
-          branch: sym.branch,
-        };
-        chunks.push(chunk);
-        records.push({ chunk, embedding: e.vector });
-      }
-      const count = await populateCode(records);
       console.log(`[FlowSearch] Code wiki Orama rebuilt: ${count} chunks`);
-      scheduleSaveCodeSearchEngine();
     } catch (error) {
       console.error("[FlowSearch] Failed to init code wiki search engine:", error);
     }
+  }
+
+  /**
+   * 用 Dexie 中的代码向量 + 符号表重建代码索引。
+   * chunk 元信息由符号表复原，因此无需重新下载仓库。
+   */
+  async function rebuildCodeIndexFromDb(settings: Settings): Promise<number> {
+    const { db } = await import("../src/db");
+    const {
+      populateCodeSearchEngine: populateCode,
+      scheduleSaveCodeSearchEngine,
+    } = await import("../src/embed-code/index");
+
+    const [embeddingRecords, symbolRecords] = await Promise.all([
+      db.codeEmbeddings.toArray(),
+      db.codeSymbols.toArray(),
+    ]);
+    if (embeddingRecords.length === 0) return 0;
+
+    // 构造最小 chunks（symbol 级：signature + jsdoc + filePath）
+    const symbolMap = new Map(symbolRecords.map((s) => [s.id, s]));
+    const records: { chunk: CodeChunk; embedding: number[] }[] = [];
+    for (const e of embeddingRecords) {
+      // 其他向量空间的代码向量不可用，跳过等待重新嵌入
+      if (!isVectorInSpace(e.vector, settings)) continue;
+      const sym = symbolMap.get(e.id);
+      if (!sym) continue;
+      const chunk: CodeChunk = {
+        id: e.id,
+        content: [sym.jsdoc ? `/* ${sym.jsdoc} */` : "", sym.signature]
+          .filter(Boolean)
+          .join("\n"),
+        language: sym.filePath.split(".").pop() || "text",
+        filePath: sym.filePath,
+        symbolName: sym.name,
+        kind: sym.kind,
+        lineStart: sym.lineStart,
+        lineEnd: sym.lineEnd,
+        repoUrl: sym.repoUrl,
+        branch: sym.branch,
+      };
+      records.push({ chunk, embedding: e.vector });
+    }
+
+    const count = await populateCode(records);
+    scheduleSaveCodeSearchEngine();
+    return count;
   }
 
   /** 初始化死链检测定时任务 */
@@ -1540,7 +1758,8 @@ export default defineBackground(() => {
             return { success: true };
           }
           case "REINDEX_STORED_EMBEDDINGS": {
-            const queued = await reindexStoredEmbeddings();
+            // 走空间校验：书签与代码向量一起重建，并记录新的空间指纹
+            const queued = await revalidateEmbeddingSpace();
             return { success: true, queued };
           }
           case "GIST_SYNC": {

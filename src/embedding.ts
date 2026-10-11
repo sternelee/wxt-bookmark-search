@@ -8,8 +8,7 @@
  * 旧调用方未传该参数时默认 "remote"，行为不变。
  */
 
-import { EMBEDDING_VECTOR_DIM } from "./types";
-import type { Settings } from "./types";
+import { LOCAL_VECTOR_DIM } from "./embedding-space";
 import {
   localEmbed,
   localBatchEmbed,
@@ -24,17 +23,6 @@ const MAX_INPUT_LENGTH = 8000;
 
 /** 嵌入后端选择 */
 export type EmbedBackend = "local" | "remote";
-
-/**
- * 将本地 384 维向量零填充到 EMBEDDING_VECTOR_DIM (1024)。
- * 零填充不改变余弦相似度（点积/模长不变），使 local 与 remote 向量可在同一 Orama 索引中共存。
- */
-function padLocalVector(v: number[]): number[] {
-  if (v.length >= EMBEDDING_VECTOR_DIM) return v;
-  const padded = new Array<number>(EMBEDDING_VECTOR_DIM).fill(0);
-  for (let i = 0; i < v.length; i++) padded[i] = v[i];
-  return padded;
-}
 
 /** 缓存配置 */
 const CACHE_CONFIG = {
@@ -204,7 +192,8 @@ export async function getEmbedding(
 
   if (backend === "local") {
     // 本地后端：忽略 apiKey / baseURL / model；忽略 signal（同步 CPU 调用）
-    embedding = padLocalVector(await localEmbed(text));
+    // 不加零填充 —— Orama schema 维度由 getEmbeddingDim() 决定（local=384）
+    embedding = await localEmbed(text);
   } else {
     // 远程后端
     const truncatedText = text.slice(0, MAX_INPUT_LENGTH);
@@ -277,14 +266,13 @@ export async function batchEmbedTexts(
     `[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length} (backend=${backend})`,
   );
 
-  // 2. 本地后端：串行推理，零填充到 EMBEDDING_VECTOR_DIM
+  // 2. 本地后端：串行推理（维度 = LOCAL_VECTOR_DIM）
   if (backend === "local") {
     const vectors = await localBatchEmbed(uncachedTexts);
     vectors.forEach((vec, i) => {
       const globalIdx = uncachedIndices[i];
-      const padded = padLocalVector(vec);
-      results[globalIdx] = padded;
-      embeddingCache.set(uncachedTexts[i], padded, "doc", effectiveModel, backend);
+      results[globalIdx] = vec;
+      embeddingCache.set(uncachedTexts[i], vec, "doc", effectiveModel, backend);
     });
     return results;
   }
@@ -427,5 +415,5 @@ export function hasCachedQuery(
   return embeddingCache.has(query, "query", effectiveModel, backend);
 }
 
-/** 重新导出本地模型元数据（供 UI 展示） */
-export { LOCAL_EMBEDDING_DIM, LOCAL_MODEL_NAME };
+/** 重新导出本地模型元数据 / 向量维度（供 UI 展示与索引维度推导） */
+export { LOCAL_EMBEDDING_DIM, LOCAL_MODEL_NAME, LOCAL_VECTOR_DIM };

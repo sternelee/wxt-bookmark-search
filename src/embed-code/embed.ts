@@ -66,6 +66,57 @@ export async function getCodeEmbeddings(
 }
 
 /**
+ * 用当前 embedding 后端重新计算全部代码向量。
+ *
+ * 向量空间变更（切换 local/remote 或更换模型）时，存量代码向量与新的查询向量
+ * 不再可比，必须按原始 chunk 文本重新嵌入。chunk 文本随向量一起持久化，
+ * 因此无需重新下载仓库。
+ *
+ * @returns 重新嵌入的向量条数
+ */
+export async function reembedAllCodeEmbeddings(
+  apiKey: string,
+  model?: string,
+  baseURL?: string,
+  backend: "local" | "remote" = "remote",
+): Promise<number> {
+  const total = await db.codeEmbeddings.count();
+  if (total === 0) return 0;
+
+  const BATCH_SIZE = 64;
+  let processed = 0;
+  let offset = 0;
+
+  for (;;) {
+    const batch = await db.codeEmbeddings
+      .offset(offset)
+      .limit(BATCH_SIZE)
+      .toArray();
+    if (batch.length === 0) break;
+    offset += batch.length;
+
+    // 空 chunk 无法嵌入（远程 API 会报错），保留旧向量不处理
+    const embeddable = batch.filter((e) => (e.chunk || "").trim().length > 0);
+    if (embeddable.length === 0) continue;
+
+    const vectors = await batchEmbedTexts(
+      embeddable.map((e) => e.chunk.slice(0, 4000)),
+      apiKey,
+      model,
+      baseURL,
+      backend,
+    );
+    await db.codeEmbeddings.bulkPut(
+      embeddable.map((e, i) => ({ ...e, vector: vectors[i] ?? [] })),
+    );
+    processed += embeddable.length;
+  }
+
+  console.log(`[embed-code] Re-embedded ${processed}/${total} code vectors`);
+  return processed;
+}
+
+/**
  * 删除指定仓库的代码嵌入
  *
  * @param repoUrl - 仓库 URL 前缀匹配

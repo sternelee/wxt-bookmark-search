@@ -10,34 +10,41 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
-import { EMBEDDING_VECTOR_DIM } from "./types";
+import { REMOTE_VECTOR_DIM } from "./embedding-space";
 import type { BookmarkRecord } from "./types";
 import { getFreqCache } from "./freq";
 
-/** Orama schema（字符串简写形式） */
-const bookmarkSchema = {
-  id: "string",
-  url: "string",
-  title: "string",
-  summary: "string",
-  tags: "string[]",
-  source: "enum",
-  status: "enum",
-  indexedAt: "number",
-  embedding: `vector[${EMBEDDING_VECTOR_DIM}]`,
-  freq: "number",
-  linkStatus: "number",
-  linkCheckedAt: "number",
-  error: "string",
-  tweetId: "string",
-  authorHandle: "string",
-  authorName: "string",
-  postedAt: "string",
-  engagement_likeCount: "number",
-  engagement_repostCount: "number",
-  quotedTweetText: "string",
-  media: "string[]",
-} as const;
+/**
+ * Orama schema（字符串简写形式）
+ *
+ * embedding 维度由 `getEmbeddingDim(settings)` 决定，随 embedding 后端变化：
+ * local = 384，remote = 1024。索引与查询向量必须使用同一维度。
+ */
+function buildBookmarkSchema(dim: number) {
+  return {
+    id: "string",
+    url: "string",
+    title: "string",
+    summary: "string",
+    tags: "string[]",
+    source: "enum",
+    status: "enum",
+    indexedAt: "number",
+    embedding: `vector[${dim}]`,
+    freq: "number",
+    linkStatus: "number",
+    linkCheckedAt: "number",
+    error: "string",
+    tweetId: "string",
+    authorHandle: "string",
+    authorName: "string",
+    postedAt: "string",
+    engagement_likeCount: "number",
+    engagement_repostCount: "number",
+    quotedTweetText: "string",
+    media: "string[]",
+  } as const;
+}
 
 type BookmarkDocument = {
   id: string;
@@ -64,20 +71,35 @@ type BookmarkDocument = {
 };
 
 let engine: AnyOrama | null = null;
+/** 当前引擎的向量维度（决定 schema 与查询向量长度） */
+let currentDim: number = REMOTE_VECTOR_DIM;
 export const ORAMA_INDEX_STORAGE_KEY = "orama_index";
+/** 与 ORAMA_INDEX_STORAGE_KEY 配套的向量空间指纹 — 不匹配时必须重建而非加载 */
+export const ORAMA_INDEX_SPACE_KEY = "orama_index_space";
 
-/** 初始化搜索引擎 */
-export async function initSearchEngine(): Promise<void> {
+/** 当前引擎向量维度 */
+export function getSearchEngineDim(): number {
+  return currentDim;
+}
+
+/** 初始化搜索引擎（dim 省略时沿用上一次的维度） */
+export async function initSearchEngine(dim?: number): Promise<void> {
+  if (dim && dim > 0) currentDim = dim;
   engine = create({
-    schema: bookmarkSchema as any,
+    schema: buildBookmarkSchema(currentDim) as any,
     id: "flowsearch",
   });
 }
 
-/** 从序列化数据恢复搜索引擎 */
-export function loadSearchEngine(raw: RawData): void {
+/** 从序列化数据恢复搜索引擎（dim 必须与当前引擎一致，否则抛错） */
+export function loadSearchEngine(raw: RawData, dim?: number): void {
+  if (dim && dim !== currentDim) {
+    throw new Error(
+      `Orama index dim mismatch: stored=${dim} current=${currentDim}`,
+    );
+  }
   if (!engine) {
-    engine = create({ schema: bookmarkSchema as any, id: "flowsearch" });
+    engine = create({ schema: buildBookmarkSchema(currentDim) as any, id: "flowsearch" });
   }
   load(engine, raw);
 }
@@ -267,10 +289,13 @@ export async function flushSaveSearchEngine(): Promise<void> {
   await _saveFn();
 }
 
-/** 重置内存中的搜索引擎状态，并取消任何待执行的保存。 */
-export async function resetSearchEngine(): Promise<void> {
+/**
+ * 重置内存中的搜索引擎状态，并取消任何待执行的保存。
+ * 传 dim 时同时切换索引维度（切换 embedding 后端后必须调用）。
+ */
+export async function resetSearchEngine(dim?: number): Promise<void> {
   clearPendingSaveTimer();
-  await initSearchEngine();
+  await initSearchEngine(dim);
 }
 
 /** 混合搜索 */

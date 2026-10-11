@@ -10,6 +10,8 @@ import {
   populateSearchEngine,
   scheduleSaveSearchEngine,
 } from "../search-engine";
+import { embeddingSpaceId, getEmbeddingDim, isVectorInSpace } from "../embedding-space";
+import { enqueueBookmarksForReindex } from "../indexer";
 import type { BookmarkRecord } from "../types";
 import {
   CloudSyncError,
@@ -63,6 +65,7 @@ export async function buildSyncBlob(deviceId: string): Promise<CloudSyncBlob> {
     bookmarks,
     oramaIndex,
     settings: extractSyncableSettings(settings),
+    embedSpace: embeddingSpaceId(settings),
   };
 }
 
@@ -80,49 +83,90 @@ export async function importSyncBlob(blob: CloudSyncBlob): Promise<{
     throw new CloudSyncError("Invalid blob: bookmarks missing", "VERSION");
   }
 
+  // 先合并 settings 子集（保留本地 token / api key）——
+  // 向量空间由设置决定，必须在决定索引策略之前完成
+  if (blob.settings) {
+    await saveSettings(blob.settings);
+  }
+  const settings = await getSettings();
+  const space = embeddingSpaceId(settings);
+  const dim = getEmbeddingDim(settings);
+  // 旧版 blob 无 embedSpace → 未知，为安全起见按不匹配处理（从 Dexie 重建）
+  const spaceMatches = blob.embedSpace === space;
+
   // 清空 + 导入 Dexie
   await db.bookmarks.clear();
+  let requeue: Array<{ id: string; url: string; title: string }> = [];
   if (blob.bookmarks.length > 0) {
     // 剥离内存专用字段
     const records: BookmarkRecord[] = blob.bookmarks.map((b) => {
       const { _embeddingNorm, ...rest } = b;
       void _embeddingNorm;
+      if (!spaceMatches) {
+        // 来自其他向量空间的向量不可用：降级为待索引，交由索引器重新嵌入
+        return {
+          ...rest,
+          status: "pending" as const,
+          embedding: undefined,
+          indexedAt: undefined,
+        };
+      }
       return rest as BookmarkRecord;
     });
     await db.bookmarks.bulkPut(records);
+    if (!spaceMatches) {
+      requeue = records
+        .filter((r) => typeof r.url === "string" && r.url.length > 0)
+        .map((r) => ({ id: r.id, url: r.url, title: r.title }));
+    }
   }
 
-  // 重新初始化搜索引擎并加载 Orama 状态
-  await initSearchEngine();
-  if (blob.oramaIndex) {
+  // 重新初始化搜索引擎（维度随当前后端）并加载 Orama 状态
+  await initSearchEngine(dim);
+  if (spaceMatches && blob.oramaIndex) {
     try {
-      loadSearchEngine(blob.oramaIndex);
+      loadSearchEngine(blob.oramaIndex, dim);
     } catch (e) {
       console.warn(
         "[cloud-sync] loadSearchEngine failed, repopulating from Dexie:",
         e,
       );
-      const indexed = await db.bookmarks
-        .where("status")
-        .equals("indexed")
-        .toArray();
-      await populateSearchEngine(indexed);
+      await repopulateFromDexie(settings);
     }
   } else {
-    const indexed = await db.bookmarks
-      .where("status")
-      .equals("indexed")
-      .toArray();
-    await populateSearchEngine(indexed);
+    if (!spaceMatches) {
+      console.warn(
+        `[cloud-sync] Blob embedding space (${blob.embedSpace ?? "unknown"}) != local (${space}); re-embedding`,
+      );
+    }
+    await repopulateFromDexie(settings);
   }
   scheduleSaveSearchEngine();
 
-  // 合并 settings 子集（保留本地 token / api key）
-  if (blob.settings) {
-    await saveSettings(blob.settings);
+  // 空间不一致时重新入队，等待索引器用当前后端生成向量
+  if (requeue.length > 0) {
+    await enqueueBookmarksForReindex(requeue);
   }
 
+  // 导入后本地向量必然属于当前空间（已加载或已剥离重嵌入），
+  // 顺手同步指纹，避免下次启动的守卫再做一次多余的全量重建
+  await saveSettings({ embedSpaceFingerprint: space });
+
   return { bookmarkCount: blob.bookmarks.length };
+}
+
+/** 从 Dexie 重建书签索引（仅收录当前向量空间内的向量） */
+async function repopulateFromDexie(
+  settings: Awaited<ReturnType<typeof getSettings>>,
+): Promise<void> {
+  const indexed = await db.bookmarks
+    .where("status")
+    .equals("indexed")
+    .toArray();
+  const inSpace = indexed.filter(
+    (r) => !r.embedding?.length || isVectorInSpace(r.embedding, settings),
+  );
+  await populateSearchEngine(inSpace);
 }
 
 /** 将 blob 序列化为 gzip Uint8Array */
@@ -193,7 +237,8 @@ async function gzipDecompress(input: Uint8Array): Promise<Uint8Array> {
 
 /** 暴露：确保搜索引擎已初始化（导入前调用，避免空 engine 状态） */
 export async function ensureSearchEngineReady(): Promise<void> {
-  if (!isSearchEngineReady()) {
-    await initSearchEngine();
-  }
+  if (isSearchEngineReady()) return;
+  // 维度跟随当前 embedding 后端，避免用 1024 维空引擎序列化 local 用户的索引
+  const settings = await getSettings();
+  await initSearchEngine(getEmbeddingDim(settings));
 }

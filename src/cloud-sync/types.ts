@@ -85,6 +85,12 @@ export interface CloudSyncBlob {
   bookmarks: BookmarkRecord[];
   oramaIndex: RawData | null;
   settings: CloudSyncSettingsSubset;
+  /**
+   * 导出端的向量空间指纹（`embeddingSpaceId()`）。
+   * 与本机不一致时，blob 中的向量与索引都不可用，必须重新嵌入。
+   * 旧版本 blob 无此字段 → 视为未知，按需从 Dexie 重建。
+   */
+  embedSpace?: string;
 }
 
 /** 云同步错误 */

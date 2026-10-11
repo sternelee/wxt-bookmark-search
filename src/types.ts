@@ -12,8 +12,11 @@ export interface OmniboxSuggestion {
   description: string;
 }
 
-/** Orama 向量索引维度 — 本地后端 (384) 会零填充到该值以匹配远程 (1024) */
-export const EMBEDDING_VECTOR_DIM = 1024;
+/**
+ * 向量维度由 embedding 后端决定，见 `embedding-space.ts`：
+ * local = 384（@ternlight/mini），remote = 1024（BGE-M3 等）。
+ * 两种后端是互不兼容的向量空间，切换后必须重建存量向量。
+ */
 
 /** 向量化书签记录 */
 export interface BookmarkRecord {
@@ -22,7 +25,7 @@ export interface BookmarkRecord {
   title: string;
   summary: string; // AI 提取的摘要
   tags?: string[]; // LLM 生成的标签
-  embedding?: number[]; // 向量 (1024 维)
+  embedding?: number[]; // 向量（维度随后端：local 384 / remote 1024）
   vectorId?: number; // EdgeVec 向量 ID
   status: "pending" | "indexed" | "failed";
   indexedAt?: number; // 索引时间戳
@@ -148,6 +151,12 @@ export interface Settings {
 
   /** Embedding 后端: "local" = on-device WASM (@ternlight/mini, 384 维, 无 API), "remote" = HTTP API */
   embedBackend?: "local" | "remote";
+
+  /**
+   * 存量向量所属的向量空间指纹（`embeddingSpaceId()` 生成：后端 + 模型 + 维度）。
+   * 与当前设置不一致时，说明存量向量来自另一个向量空间，必须全量重建。
+   */
+  embedSpaceFingerprint?: string;
 
   /** 页面内容提取后端: "markdown" = markdown.new (Cloudflare AI), "jina" = Jina Reader */
   readerBackend?: "markdown" | "jina";
@@ -346,7 +355,7 @@ export interface WikiDoc {
 /** 代码嵌入向量 */
 export interface CodeEmbedding {
   id: string; // symbol id
-  vector: number[]; // 1024-dim
+  vector: number[]; // 维度随后端（local 384 / remote 1024）
   chunk: string; // 原始代码片段
   repoUrl: string;
 }
