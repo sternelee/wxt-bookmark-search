@@ -1,9 +1,10 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
+import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Progress } from "../../../src/components/ui/progress";
 import { Alert } from "../../../src/components/ui/alert";
-import { getIndexStats, getSettings } from "../../../src/db";
+import { getIndexStats, getSettings, saveSettings } from "../../../src/db";
 import { isEmbedConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
 import FolderTree from "./FolderTree";
@@ -12,6 +13,8 @@ export default function IndexManager() {
   const { t } = useI18n();
   const [stats, setStats] = createSignal({ total: 0, indexed: 0, pending: 0, failed: 0 });
   const [selectedFolders, setSelectedFolders] = createSignal<string[]>([]);
+  const [autoIndex, setAutoIndex] = createSignal(true);
+  const [excludedDomains, setExcludedDomains] = createSignal("");
   const [progress, setProgress] = createSignal<{ processed: number; total: number; status: string } | null>(null);
   const [isIndexing, setIsIndexing] = createSignal(false);
   const [isPaused, setIsPaused] = createSignal(false);
@@ -38,6 +41,25 @@ export default function IndexManager() {
   const loadSelectedFolders = async () => {
     const settings = await getSettings();
     setSelectedFolders(settings.selectedFolderIds || []);
+    setAutoIndex(settings.autoIndexEnabled ?? true);
+    setExcludedDomains((settings.excludedDomains ?? []).join("\n"));
+  };
+
+  /** 保存索引行为设置（自动索引开关 + 排除域名） */
+  const handleSaveIndexBehavior = async () => {
+    try {
+      const domains = excludedDomains()
+        .split(/\r?\n/)
+        .map((d) => d.trim())
+        .filter((d) => d.length > 0);
+      await saveSettings({
+        autoIndexEnabled: autoIndex(),
+        excludedDomains: domains,
+      });
+      setStatus({ message: t("options.categorize.saved"), type: "success" });
+    } catch (error) {
+      setStatus({ message: `${t("common.saveFailed")}: ${error}`, type: "error" });
+    }
   };
 
   // 初始化
@@ -196,6 +218,33 @@ export default function IndexManager() {
           <p class="text-xs text-muted-foreground mt-1.5">
             {t("options.indexManager.scopeHint")}
           </p>
+        </div>
+
+        {/* 索引行为 */}
+        <div class="mb-5 rounded-md border border-border p-3 space-y-3">
+          <Checkbox
+            label={t("options.indexManager.autoIndexLabel")}
+            checked={autoIndex()}
+            onChange={(e) => setAutoIndex(e.currentTarget.checked)}
+            hint={t("options.indexManager.autoIndexHint")}
+          />
+          <div>
+            <label class="text-sm font-medium block mb-1">
+              {t("options.indexManager.excludedDomainsLabel")}
+            </label>
+            <textarea
+              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[60px] font-mono"
+              placeholder={"example.com\nsub.example.org"}
+              value={excludedDomains()}
+              onInput={(e) => setExcludedDomains(e.currentTarget.value)}
+            />
+            <p class="text-xs text-muted-foreground mt-1">
+              {t("options.indexManager.excludedDomainsHint")}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={handleSaveIndexBehavior}>
+            {t("common.save")}
+          </Button>
         </div>
 
         {/* 控制按钮 */}

@@ -7,10 +7,12 @@ import {
   updateLinkStatus,
   getLinkHealthStats,
   getDeadLinks,
+  getSettings,
 } from "./db";
 
-const CONCURRENCY = 5;
-const REQUEST_TIMEOUT_MS = 8000;
+/** 批间延迟固定；并发与超时可由 settings.linkCheckConcurrency / linkCheckTimeoutMs 配置 */
+const DEFAULT_CONCURRENCY = 5;
+const DEFAULT_TIMEOUT_MS = 8000;
 const BATCH_DELAY_MS = 100;
 
 export interface LinkCheckProgress {
@@ -44,9 +46,13 @@ function broadcastProgress(progress: LinkCheckProgress): void {
 }
 
 /** 对一批书签执行 HEAD 请求，返回 HTTP 状态码（0=网络错误/超时） */
-async function checkUrl(url: string, signal: AbortSignal): Promise<number> {
+async function checkUrl(
+  url: string,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<number> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const linkedSignal = signal
     ? (() => {
         if (signal.aborted) return signal;
@@ -84,6 +90,15 @@ export async function checkLinks(
   }
 
   const bookmarks = await getUncheckedBookmarks();
+  const settings = await getSettings();
+  const concurrency = Math.min(
+    20,
+    Math.max(1, settings.linkCheckConcurrency ?? DEFAULT_CONCURRENCY),
+  );
+  const timeoutMs = Math.min(
+    60000,
+    Math.max(1000, settings.linkCheckTimeoutMs ?? DEFAULT_TIMEOUT_MS),
+  );
   const total = bookmarks.length;
   let checked = 0;
   let alive = 0;
@@ -98,12 +113,12 @@ export async function checkLinks(
     status: "scanning",
   });
 
-  for (let i = 0; i < bookmarks.length; i += CONCURRENCY) {
+  for (let i = 0; i < bookmarks.length; i += concurrency) {
     if (internalSignal.aborted) break;
 
-    const chunk = bookmarks.slice(i, i + CONCURRENCY);
+    const chunk = bookmarks.slice(i, i + concurrency);
     const results = await Promise.allSettled(
-      chunk.map((b) => checkUrl(b.url, internalSignal)),
+      chunk.map((b) => checkUrl(b.url, internalSignal, timeoutMs)),
     );
 
     const updates: {
@@ -131,8 +146,8 @@ export async function checkLinks(
 
     await updateLinkStatus(updates);
 
-    if (i + CONCURRENCY < bookmarks.length && !internalSignal.aborted) {
-      const nextUrl = bookmarks[i + CONCURRENCY]?.url;
+    if (i + concurrency < bookmarks.length && !internalSignal.aborted) {
+      const nextUrl = bookmarks[i + concurrency]?.url;
       broadcastProgress({
         total,
         checked,

@@ -1596,6 +1596,28 @@ async function processQueue(): Promise<void> {
   browser.runtime.sendMessage({ type: "INDEXING_COMPLETE" }).catch(() => {});
 }
 
+/** 判断 URL 是否命中用户配置的排除域名（支持子域匹配） */
+function isUrlExcluded(url: string, excludedDomains: string[]): boolean {
+  if (excludedDomains.length === 0) return false;
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return excludedDomains.some((raw) => {
+    const domain = raw.trim().toLowerCase().replace(/^\./, "");
+    if (!domain) return false;
+    return hostname === domain || hostname.endsWith(`.${domain}`);
+  });
+}
+
+/** 读取用户配置的排除域名列表 */
+async function loadExcludedDomains(): Promise<string[]> {
+  const settings = await getSettings();
+  return (settings.excludedDomains ?? []).filter((d) => d.trim().length > 0);
+}
+
 /**
  * 添加书签到索引队列 (增量索引)
  * 检查是否已索引，避免重复处理
@@ -1608,6 +1630,12 @@ export async function enqueueBookmark(bookmark: {
   // 检查是否已在队列中
   const existsInQueue = queue.some((j) => j.bookmarkId === bookmark.id);
   if (existsInQueue) return false;
+
+  // 用户配置的排除域名：跳过索引
+  if (isUrlExcluded(bookmark.url, await loadExcludedDomains())) {
+    console.log(`[indexer] Skip excluded domain: ${bookmark.url}`);
+    return false;
+  }
 
   // 检查该书签 ID 是否已索引。相同 URL 的其他书签不应阻止当前书签入队。
   const indexedIds = await getIndexedBookmarkIds([bookmark.id]);
@@ -1656,12 +1684,20 @@ export async function enqueueBookmarks(
 ): Promise<number> {
   if (bookmarks.length === 0) return 0;
 
+  // 用户配置的排除域名：跳过索引（返回的 queued 数不含被排除项）
+  const excludedDomains = await loadExcludedDomains();
+  const candidates =
+    excludedDomains.length > 0
+      ? bookmarks.filter((b) => !isUrlExcluded(b.url, excludedDomains))
+      : bookmarks;
+  if (candidates.length === 0) return 0;
+
   // 批量查询已索引的书签 ID，同 URL 的不同书签仍需单独索引。
-  const ids = bookmarks.map((b) => b.id);
+  const ids = candidates.map((b) => b.id);
   const indexedIds = await getIndexedBookmarkIds(ids);
 
   // 过滤出未索引的书签
-  const toIndex = bookmarks.filter((b) => !indexedIds.has(b.id));
+  const toIndex = candidates.filter((b) => !indexedIds.has(b.id));
 
   // 过滤已在队列中的
   const queuedIds = new Set(queue.map((j) => j.bookmarkId));
@@ -1677,7 +1713,7 @@ export async function enqueueBookmarks(
   );
 
   console.log(
-    `[indexer] ${bookmarks.length} total, ${indexedIds.size} indexed, ${newBookmarks.length} to queue`,
+    `[indexer] ${candidates.length} total (${bookmarks.length - candidates.length} excluded), ${indexedIds.size} indexed, ${newBookmarks.length} to queue`,
   );
 
   // 触发队列处理
@@ -2041,27 +2077,34 @@ export async function initIndexer(): Promise<void> {
     console.warn("[indexer] Failed to restore persistent queue:", err);
   }
 
-  // 新增书签
-  browser.bookmarks.onCreated.addListener((id, bookmark) => {
-    if (bookmark.url) {
-      // 异步入队，不等待结果
-      enqueueBookmark({
-        id: bookmark.id,
-        url: bookmark.url,
-        title: bookmark.title || "",
-      });
-    }
+  // 新增书签（可由 settings.autoIndexEnabled 关闭自动入队）
+  browser.bookmarks.onCreated.addListener((_id, bookmark) => {
+    if (!bookmark.url) return;
+    getSettings()
+      .then((settings) => {
+        if (settings.autoIndexEnabled === false) return;
+        enqueueBookmark({
+          id: bookmark.id,
+          url: bookmark.url as string,
+          title: bookmark.title || "",
+        });
+      })
+      .catch(() => {});
   });
 
   // 书签更新
   browser.bookmarks.onChanged.addListener((id, changeInfo) => {
-    if (changeInfo.url) {
-      enqueueBookmark({
-        id,
-        url: changeInfo.url,
-        title: changeInfo.title || "",
-      });
-    }
+    if (!changeInfo.url) return;
+    getSettings()
+      .then((settings) => {
+        if (settings.autoIndexEnabled === false) return;
+        enqueueBookmark({
+          id,
+          url: changeInfo.url as string,
+          title: changeInfo.title || "",
+        });
+      })
+      .catch(() => {});
   });
 
   // 书签删除

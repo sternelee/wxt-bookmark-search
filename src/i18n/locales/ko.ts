@@ -142,6 +142,10 @@ export default {
       modeVector: "벡터 검색만",
       modeKeyword: "키워드 일치 (클래식)",
       vectorWeight: "벡터 검색 가중치",
+      resultLimit: "전체 검색 결과 수",
+      resultLimitHint: "보드 페이지 검색당 최대 결과 수 (5-50, 기본 20)",
+      ragTopK: "Q&A 검색 결과 수 (topK)",
+      ragTopKHint: "북마크 Q&A에서 검색하는 관련 북마크 수 (기본 8)",
       vectorWeightHint:
         "값을 높이면 의미적 유사성이 선호됩니다. 낮추면 문자열 일치가 선호됩니다",
       applied: "✓ 검색 설정이 적용되었습니다",
@@ -159,6 +163,10 @@ export default {
         "✓ 동기화 성공! {{total}}개 리포지토리를 색인 대기열에 추가했습니다",
       saved: "✓ GitHub 설정이 저장되었습니다",
       tokenRequired: "먼저 GitHub Token을 입력하세요",
+      autoSyncLabel: "예약 자동 동기화",
+      autoSyncHint: "설정한 간격으로 GitHub Stars 자동 동기화 (Token 필요)",
+      intervalLabel: "동기화 간격 (시간)",
+      intervalHint: "1-720, 기본 24",
     },
 
     twitter: {
@@ -177,6 +185,13 @@ export default {
       syncingBookmarks: "동기화 중...",
       syncSuccess: "✓ 동기화 성공! {{total}}개 북마크를 색인에 추가했습니다",
       saved: "✓ Twitter 설정이 저장되었습니다",
+      autoSyncLabel: "예약 자동 동기화",
+      autoSyncHint: "설정한 간격으로 트윗 북마크 자동 동기화",
+      intervalLabel: "동기화 간격 (시간)",
+      intervalHint: "1-720, 기본 24",
+      autoExtract: "⚡ 쿠키 자동 추출",
+      autoExtractSuccess: "✓ 쿠키 추출 완료: ct0 + auth_token",
+      autoExtractFailed: "✗ 추출 실패 — 먼저 x.com에 로그인하거나 수동으로 입력하세요",
       apiKeyRequired: "먼저 API 키를 설정하세요",
     },
 
@@ -194,6 +209,8 @@ export default {
       syncSuccess: "✓ 동기화 완료! {{added}}개 추가, {{skipped}}개 건 넘김",
       syncError: "동기화 오류",
       saved: "✓ 기록 동기화 설정이 저장되었습니다",
+      intervalLabel: "동기화 간격 (시간)",
+      intervalHint: "1-720, 기본 24",
     },
 
     gist: {
@@ -336,6 +353,10 @@ export default {
       startFailed: "시작에 실패했습니다",
       pauseFailed: "일시정지에 실패했습니다",
       resumeFailed: "재개에 실패했습니다",
+      autoIndexLabel: "새/변경 북마크 자동 색인",
+      autoIndexHint: "북마크 생성·변경 시 AI 색인 큐에 자동 추가",
+      excludedDomainsLabel: "색인 제외 도메인",
+      excludedDomainsHint: "한 줄에 하나의 도메인 (예: example.com, 서브도메인 포함). 브라우저 북마크 색인에만 적용됩니다.",
     },
 
     failedBookmarks: {
@@ -359,6 +380,23 @@ export default {
     dataManagement: {
       description:
         "쿼리 캐시를 지우거나 로컬 데이터베이스에서 모든 인덱스 데이터를 삭제합니다. 브라우저 북마크 자체는 삭제되지 않습니다.",
+      exportButton: "⬇️ 데이터 내보내기 (JSON)",
+      exportSuccess: "✓ {{count}}개 레코드를 내보냈습니다",
+      exportFailed: "내보내기 실패",
+      importButton: "⬆️ 데이터 가져오기 (JSON)",
+      importPickFile: "JSON 파일 선택",
+      importSuccess: "✓ {{imported}}개 레코드 가져옴 ({{requeued}}개 벡터 생성 대기열 추가)",
+      importFailed: "가져오기 실패",
+      importInvalid: "잘못된 파일: 북마크 레코드가 없습니다",
+      resetButton: "↩️ 설정 초기화",
+      resetConfirmTitle: "⚠️ 설정 초기화",
+      resetConfirmBody: "모든 설정(API 키, 동기화 구성, 검색 전략)이 기본값으로 복원됩니다. 색인 데이터는 영향을 받지 않습니다. 이 작업은 되돌릴 수 없습니다.",
+      resetDone: "✓ 설정이 기본값으로 복원되었습니다",
+      rebuildButton: "🔄 전체 벡터 재구축",
+      rebuildConfirm: "저장된 모든 임베딩을 버리고 현재 embedding 구성으로 다시 생성합니다. 계속할까요?",
+      rebuildQueued: "✓ {{count}}개 북마크가 재임베딩 대기열에 추가되었습니다",
+      rebuildFailed: "재구축 시작 실패",
+      cacheStats: "벡터 쿼리 캐시: {{size}} / {{maxSize}}",
     },
 
     folderTree: {
@@ -372,6 +410,11 @@ export default {
       enableLabel: "정기적 깨진 링크 검사 활성화",
       enableHint: "색인된 북마크 URL이 여전히 유효한지 정기적으로 확인",
       intervalLabel: "검사 간격",
+      intervalHint: "1-720시간",
+      concurrencyLabel: "동시 실행 수",
+      concurrencyHint: "병렬 HEAD 요청 수 (1-20, 기본 5)",
+      timeoutLabel: "요청 타임아웃 (초)",
+      timeoutHint: "요청당 타임아웃 (1-60, 기본 8)",
       checkNow: "지금 확인",
       checking: "확인 중...",
       checkSummary:
@@ -403,8 +446,6 @@ export default {
 
     categorize: {
       title: "🏷️ AI 자동 분류",
-      enableLabel: "AI 자동 분류 활성화",
-      enableHint: "LLM을 사용하여 콘텐츠에 따라 북마크를 주제 폴더로 자동 분류",
       selectFolders: "분류 범위 선택",
       analyzeButton: "분류 제안 분석",
       analyzing: "분석 중...",
@@ -429,6 +470,24 @@ export default {
       currentFolder: "현재 폴더",
       suggestedCategory: "제안",
     },
+    nav: {
+      pages: "기능 페이지",
+      pageBoard: "북마크 월",
+      pageGraph: "태그 클라우드",
+      pageWiki: "Code Wiki",
+    },
+
+    digest: {
+      title: "📰 매일 지식 다이제스트",
+      enableLabel: "매일 다이제스트 생성",
+      enableHint: "설정 시간에 전날 색인된 내용을 요약한 다이제스트 생성",
+      hourLabel: "생성 시간 (시)",
+      hourHint: "0-23, 기본 9시. 저장 후 즉시 적용됩니다.",
+      notifyLabel: "생성 완료 시 알림",
+      notifyHint: "알림 권한 필요",
+      saved: "✓ 다이제스트 설정 저장됨",
+    },
+
   },
 
   search: {
@@ -555,6 +614,8 @@ export default {
     syncInProgress: "동기화가 이미 진행 중입니다",
     contentExtractionFailed: "콘텐츠 추출에 실패했습니다",
     noRelevantBookmarks: "관련 북마크를 찾지 못했습니다.",
+    digestNotifyTitle: "📚 오늘의 지식 다이제스트가 준비되었습니다",
+    digestNotifyBody: "어제 {{pages}}개를 읽고 {{concepts}}개의 새 개념을 발견했습니다",
   },
 
   codeWiki: {

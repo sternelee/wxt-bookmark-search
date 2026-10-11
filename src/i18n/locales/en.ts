@@ -145,6 +145,10 @@ export default {
       modeVector: "Semantic Search Only",
       modeKeyword: "Keyword Match (Classic)",
       vectorWeight: "Vector Search Weight",
+      resultLimit: "Full-page Search Results",
+      resultLimitHint: "Maximum results per search on the board page (5-50, default 20)",
+      ragTopK: "Q&A Recall Count (topK)",
+      ragTopKHint: "Number of relevant bookmarks retrieved for bookmark Q&A (default 8)",
       vectorWeightHint:
         "Higher value makes results more semantically similar; lower value favors literal matching",
       applied: "✓ Search settings applied",
@@ -161,6 +165,10 @@ export default {
       syncSuccess: "✓ Sync successful! {{total}} repos added to index queue",
       saved: "✓ GitHub settings saved",
       tokenRequired: "Please fill in GitHub Token first",
+      autoSyncLabel: "Scheduled auto-sync",
+      autoSyncHint: "Sync starred repos periodically (requires Token above)",
+      intervalLabel: "Sync Interval (hours)",
+      intervalHint: "1-720, default 24",
     },
 
     twitter: {
@@ -178,6 +186,13 @@ export default {
       syncingBookmarks: "Syncing...",
       syncSuccess: "✓ Sync successful! {{total}} bookmarks added to index",
       saved: "✓ Twitter settings saved",
+      autoSyncLabel: "Scheduled auto-sync",
+      autoSyncHint: "Sync bookmarks periodically at the interval below",
+      intervalLabel: "Sync Interval (hours)",
+      intervalHint: "1-720, default 24",
+      autoExtract: "⚡ Auto-extract Cookies",
+      autoExtractSuccess: "✓ Cookies extracted: ct0 + auth_token",
+      autoExtractFailed: "✗ Cookie extraction failed — log into x.com first or fill in manually",
       apiKeyRequired: "Please configure API Key first",
     },
 
@@ -195,6 +210,8 @@ export default {
       syncSuccess: "✓ Sync complete! {{added}} added, {{skipped}} skipped",
       syncError: "Sync error",
       saved: "✓ History sync settings saved",
+      intervalLabel: "Sync Interval (hours)",
+      intervalHint: "1-720, default 24",
     },
 
     gist: {
@@ -403,6 +420,10 @@ export default {
       startFailed: "Failed to start",
       pauseFailed: "Failed to pause",
       resumeFailed: "Failed to resume",
+      autoIndexLabel: "Auto-index new/changed bookmarks",
+      autoIndexHint: "Enqueue bookmarks for AI indexing when created or changed",
+      excludedDomainsLabel: "Excluded Domains",
+      excludedDomainsHint: "One domain per line, e.g. example.com (subdomains included). Applies to browser bookmark indexing only.",
     },
 
     failedBookmarks: {
@@ -427,6 +448,23 @@ export default {
     dataManagement: {
       description:
         "Clear the query cache or delete all indexed data from the local database. Browser bookmarks themselves will not be deleted.",
+      exportButton: "⬇️ Export Data (JSON)",
+      exportSuccess: "✓ Exported {{count}} records",
+      exportFailed: "Export failed",
+      importButton: "⬆️ Import Data (JSON)",
+      importPickFile: "Select JSON file",
+      importSuccess: "✓ Imported {{imported}} records ({{requeued}} queued for embedding)",
+      importFailed: "Import failed",
+      importInvalid: "Invalid file: no bookmark records found",
+      resetButton: "↩️ Reset Settings to Defaults",
+      resetConfirmTitle: "⚠️ Reset Settings",
+      resetConfirmBody: "All settings (API keys, sync configs, search strategy) will be restored to defaults. Indexed data is not affected. This action cannot be undone.",
+      resetDone: "✓ Settings restored to defaults",
+      rebuildButton: "🔄 Rebuild All Vectors",
+      rebuildConfirm: "This will discard all stored embeddings and re-generate them with the current embedding configuration. Continue?",
+      rebuildQueued: "✓ {{count}} bookmarks queued for re-embedding",
+      rebuildFailed: "Failed to start rebuild",
+      cacheStats: "Vector query cache: {{size}} / {{maxSize}}",
     },
 
     folderTree: {
@@ -440,6 +478,11 @@ export default {
       enableLabel: "Enable periodic dead link scanning",
       enableHint: "Periodically check if indexed bookmark URLs are still valid",
       intervalLabel: "Scan Interval",
+      intervalHint: "1-720 hours",
+      concurrencyLabel: "Concurrency",
+      concurrencyHint: "Parallel HEAD requests (1-20, default 5)",
+      timeoutLabel: "Request Timeout (seconds)",
+      timeoutHint: "Per-request timeout (1-60, default 8)",
       checkNow: "Check Now",
       checking: "Checking...",
       checkSummary: "{{checked}} checked, {{alive}} alive, {{dead}} dead",
@@ -471,9 +514,6 @@ export default {
 
     categorize: {
       title: "🏷️ AI Auto-Categorization",
-      enableLabel: "Enable AI auto-categorization",
-      enableHint:
-        "Use LLM to automatically classify bookmarks into topic folders based on content",
       selectFolders: "Select Scope",
       analyzeButton: "Analyze Suggestions",
       analyzing: "Analyzing...",
@@ -498,6 +538,24 @@ export default {
       currentFolder: "Current Folder",
       suggestedCategory: "Suggested",
     },
+    nav: {
+      pages: "Feature Pages",
+      pageBoard: "Bookmark Wall",
+      pageGraph: "Tag Cloud",
+      pageWiki: "Code Wiki",
+    },
+
+    digest: {
+      title: "📰 Daily Knowledge Digest",
+      enableLabel: "Generate daily digest",
+      enableHint: "Summarize pages indexed the previous day into a digest at the scheduled time",
+      hourLabel: "Generation Time (hour)",
+      hourHint: "0-23, default 9:00. Takes effect immediately after saving.",
+      notifyLabel: "Notify when digest is ready",
+      notifyHint: "Shows a browser notification after generation",
+      saved: "✓ Digest settings saved",
+    },
+
   },
 
   search: {
@@ -625,6 +683,8 @@ export default {
     syncInProgress: "Sync is already in progress",
     contentExtractionFailed: "Content extraction failed",
     noRelevantBookmarks: "No relevant bookmarks found.",
+    digestNotifyTitle: "📚 Your daily digest is ready",
+    digestNotifyBody: "Yesterday you read {{pages}} pages and discovered {{concepts}} new concepts",
   },
 
   codeWiki: {

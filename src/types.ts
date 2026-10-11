@@ -198,15 +198,45 @@ export interface Settings {
   linkCheckEnabled?: boolean;
   /** 死链检测：扫描间隔（小时），默认 24 */
   linkCheckInterval?: number;
+  /** 死链检测：并发数，默认 5 */
+  linkCheckConcurrency?: number;
+  /** 死链检测：单请求超时（毫秒），默认 8000 */
+  linkCheckTimeoutMs?: number;
   /** 死链检测：上次扫描完成时间 */
   lastLinkCheck?: number;
 
-  /** AI 自动分类：是否启用 */
-  autoCategorizeEnabled?: boolean;
   /** AI 自动分类：用户自定义分类规则（追加到 prompt） */
   categoryRules?: string;
   /** AI 自动分类：分类名 → 浏览器文件夹 ID 映射 */
   categoryFolderMap?: Record<string, string>;
+
+  // 搜索行为
+  /** 全页搜索（board / omnibox Enter）返回的最大结果数，默认 20 */
+  searchResultLimit?: number;
+  /** RAG 书签问答的召回条数（topK），默认 8 */
+  ragTopK?: number;
+
+  // 索引行为
+  /** 新增/修改书签时自动入队索引，默认 true */
+  autoIndexEnabled?: boolean;
+  /** 索引排除的域名列表（对浏览器书签索引生效），如 ["example.com"] */
+  excludedDomains?: string[];
+
+  // 外部数据源定时同步（小时）
+  /** GitHub Stars 定时同步间隔（小时），默认 24；仅在 githubSyncEnabled 时生效 */
+  githubSyncInterval?: number;
+  /** Twitter 书签定时同步间隔（小时），默认 24；仅在 twitterSyncEnabled 时生效 */
+  twitterSyncInterval?: number;
+  /** 浏览历史定时同步间隔（小时），默认 24；仅在 historySyncEnabled 时生效 */
+  historySyncInterval?: number;
+
+  // 每日知识简报
+  /** 是否启用每日简报定时生成，默认 true */
+  digestEnabled?: boolean;
+  /** 每日简报生成时间（小时，0-23），默认 9 */
+  digestHour?: number;
+  /** 简报生成后是否发送浏览器通知，默认 true */
+  digestNotifyEnabled?: boolean;
 
   // 云盘同步（Google Drive / Dropbox / WebDAV）— 同步 Orama 索引 + 全部 BookmarkRecord
   /** 启用的云盘 provider；null/undefined 表示未启用 */

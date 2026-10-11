@@ -7,7 +7,7 @@ import {
 } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
 import { Checkbox } from "../../../src/components/ui/checkbox";
-import { Select } from "../../../src/components/ui/select";
+import { Input } from "../../../src/components/ui/input";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
@@ -20,6 +20,8 @@ export default function HealthSettings() {
   const { t } = useI18n();
   const [enabled, setEnabled] = createSignal(false);
   const [interval, setInterval] = createSignal(24);
+  const [concurrency, setConcurrency] = createSignal(5);
+  const [timeoutSec, setTimeoutSec] = createSignal(8);
   const [status, setStatus] = createSignal<{
     message: string;
     type: "success" | "error" | "info";
@@ -40,6 +42,8 @@ export default function HealthSettings() {
     const settings = await getSettings();
     setEnabled(settings.linkCheckEnabled || false);
     setInterval(settings.linkCheckInterval || 24);
+    setConcurrency(settings.linkCheckConcurrency || 5);
+    setTimeoutSec(Math.round((settings.linkCheckTimeoutMs ?? 8000) / 1000));
 
     try {
       const response = await browser.runtime.sendMessage({
@@ -58,10 +62,19 @@ export default function HealthSettings() {
 
   const handleSave = async () => {
     try {
+      const clampedInterval = Math.min(720, Math.max(1, Math.round(interval())));
+      const clampedConcurrency = Math.min(20, Math.max(1, Math.round(concurrency())));
+      const clampedTimeout = Math.min(60, Math.max(1, Math.round(timeoutSec())));
       await saveSettings({
         linkCheckEnabled: enabled(),
-        linkCheckInterval: interval(),
+        linkCheckInterval: clampedInterval,
+        linkCheckConcurrency: clampedConcurrency,
+        linkCheckTimeoutMs: clampedTimeout * 1000,
       });
+      // 保存后立即刷新后台定时任务
+      browser.runtime
+        .sendMessage({ type: "REFRESH_ALARMS" })
+        .catch(() => {});
       setStatus({ message: t("options.health.saved"), type: "success" });
     } catch (e) {
       setStatus({ message: formatErrorMessage(e), type: "error" });
@@ -118,14 +131,6 @@ export default function HealthSettings() {
     }
   };
 
-  const intervalOptions = [
-    { value: "6", label: "6h" },
-    { value: "12", label: "12h" },
-    { value: "24", label: "24h" },
-    { value: "48", label: "48h" },
-    { value: "168", label: "7d" },
-  ];
-
   const formatLastCheck = (ts?: number) => {
     if (!ts) return t("options.health.never");
     const date = new Date(ts);
@@ -145,12 +150,39 @@ export default function HealthSettings() {
           hint={t("options.health.enableHint")}
         />
 
-        <div class="mt-3">
-          <Select
+        <div class="mt-3 grid grid-cols-1 gap-3">
+          <Input
             label={t("options.health.intervalLabel")}
+            type="number"
+            placeholder="24"
             value={String(interval())}
-            options={intervalOptions}
-            onChange={(value) => setInterval(Number(value))}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value, 10);
+              if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
+            }}
+            hint={t("options.health.intervalHint")}
+          />
+          <Input
+            label={t("options.health.concurrencyLabel")}
+            type="number"
+            placeholder="5"
+            value={String(concurrency())}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value, 10);
+              if (!isNaN(v) && v >= 1 && v <= 20) setConcurrency(v);
+            }}
+            hint={t("options.health.concurrencyHint")}
+          />
+          <Input
+            label={t("options.health.timeoutLabel")}
+            type="number"
+            placeholder="8"
+            value={String(timeoutSec())}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value, 10);
+              if (!isNaN(v) && v >= 1 && v <= 60) setTimeoutSec(v);
+            }}
+            hint={t("options.health.timeoutHint")}
           />
         </div>
 

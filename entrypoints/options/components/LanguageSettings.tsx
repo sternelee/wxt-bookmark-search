@@ -24,7 +24,8 @@ function formatErrorMessage(error: unknown): string {
 
 export default function LanguageSettings() {
   const { t, setLocale } = useI18n();
-  const [locale, setLocaleSignal] = createSignal<Locale>("zh-CN");
+  // 与 defaultSettings.language 保持一致（src/db.ts 默认 "en"）
+  const [locale, setLocaleSignal] = createSignal<Locale>("en");
   const [status, setStatus] = createSignal<{
     message: string;
     type: "success" | "error";
@@ -32,7 +33,7 @@ export default function LanguageSettings() {
 
   // 初始化
   getSettings().then((settings) => {
-    const lang = (settings.language as Locale) || "zh-CN";
+    const lang = (settings.language as Locale) || "en";
     setLocaleSignal(lang);
   });
 

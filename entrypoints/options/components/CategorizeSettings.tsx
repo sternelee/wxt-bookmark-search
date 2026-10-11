@@ -6,7 +6,6 @@ import {
   CardContent,
 } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { isLLMConfigured } from "../../../src/service-config";
@@ -18,7 +17,6 @@ function formatErrorMessage(error: unknown): string {
 
 export default function CategorizeSettings() {
   const { t } = useI18n();
-  const [enabled, setEnabled] = createSignal(false);
   const [rules, setRules] = createSignal("");
   const [status, setStatus] = createSignal<{
     message: string;
@@ -46,7 +44,6 @@ export default function CategorizeSettings() {
 
   onMount(async () => {
     const settings = await getSettings();
-    setEnabled(settings.autoCategorizeEnabled || false);
     setRules(settings.categoryRules || "");
     setCategoryFolderMap(settings.categoryFolderMap || {});
   });
@@ -54,7 +51,6 @@ export default function CategorizeSettings() {
   const handleSave = async () => {
     try {
       await saveSettings({
-        autoCategorizeEnabled: enabled(),
         categoryRules: rules(),
         categoryFolderMap: categoryFolderMap(),
       });
@@ -229,13 +225,6 @@ export default function CategorizeSettings() {
         <CardTitle>{t("options.categorize.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Checkbox
-          label={t("options.categorize.enableLabel")}
-          checked={enabled()}
-          onChange={(e) => setEnabled(e.currentTarget.checked)}
-          hint={t("options.categorize.enableHint")}
-        />
-
         <div class="mt-4">
           <label class="text-sm font-medium block mb-1">
             {t("options.categorize.rulesLabel")}

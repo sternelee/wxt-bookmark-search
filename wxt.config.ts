@@ -33,6 +33,8 @@ export default defineConfig({
       "cookies",
       "history",
       "alarms",
+      // Daily digest completion notification
+      "notifications",
       // Code Wiki: spawn offscreen document to host the parser Web Worker
       // (Chrome MV3 only — Firefox falls back to in-SW cooperative yielding).
       "offscreen",

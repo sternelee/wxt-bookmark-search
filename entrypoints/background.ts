@@ -340,8 +340,60 @@ async function reindexStoredEmbeddings(): Promise<number> {
 }
 
 /**
+ * IMPORT_DATA：导入书签数据（来自设置页的 JSON 导入）。
+ * 向量属于当前 embedding 空间的记录直接进搜索引擎；
+ * 缺向量 / 异空间向量的记录重置为 pending 并重新入队生成。
+ */
+async function importBookmarksData(
+  records: unknown,
+): Promise<{ imported: number; requeued: number }> {
+  const { db } = await import("../src/db");
+  const list = (Array.isArray(records) ? records : []) as BookmarkRecord[];
+  const valid = list.filter(
+    (r) =>
+      r && typeof r.id === "string" && typeof r.url === "string" && r.url.length > 0,
+  );
+  if (valid.length === 0) return { imported: 0, requeued: 0 };
+
+  const settings = await getSettings();
+  const inSpace = valid.filter(
+    (r) =>
+      Array.isArray(r.embedding) &&
+      r.embedding.length > 0 &&
+      isVectorInSpace(r.embedding, settings),
+  );
+  const stale = valid
+    .filter((r) => !inSpace.includes(r))
+    .map((r) => ({
+      ...r,
+      embedding: undefined,
+      indexedAt: undefined,
+      error: undefined,
+      failureStage: undefined,
+      status: "pending" as const,
+    }));
+
+  await db.bookmarks.bulkPut([...inSpace, ...stale]);
+
+  if (inSpace.length > 0) {
+    const count = await populateSearchEngine(inSpace);
+    console.log(`[FlowSearch] Imported ${count} records into search engine`);
+    await flushSaveSearchEngine();
+  }
+
+  let requeued = 0;
+  if (stale.length > 0) {
+    requeued = await enqueueBookmarksForReindex(
+      stale.map((r) => ({ id: r.id, url: r.url, title: r.title })),
+    );
+  }
+
+  return { imported: valid.length, requeued };
+}
+
+/**
  * 执行全局搜索（供独立搜索页调用）
- * 复用 omnibox 搜索的完整逻辑，返回最多 20 条 SearchResult
+ * 复用 omnibox 搜索的完整逻辑，返回最多 searchResultLimit 条 SearchResult
  */
 async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   let query = rawInput.trim();
@@ -427,10 +479,11 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   }
 
   const mode = settings.searchMode || "hybrid";
+  const resultLimit = Math.min(50, Math.max(5, settings.searchResultLimit ?? 20));
   const embedCfg = resolveEmbedConfig(settings);
   if (mode === "keyword" || (embedCfg.backend !== "local" && !embedCfg.apiKey)) {
     return buildKeywordSearchResults(query, valid, {
-      limit: 20,
+      limit: resultLimit,
       allowedUrls,
       sourceFilter,
     });
@@ -447,7 +500,9 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     );
     let results: BookmarkRecord[];
 
-    const oramaLimit = allowedUrls ? Math.max(60, 20 * 3) : 20;
+    const oramaLimit = allowedUrls
+      ? Math.max(60, resultLimit * 3)
+      : resultLimit;
 
     if (mode === "vector") {
       results = await searchVector(queryVector, {
@@ -471,7 +526,7 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   } catch (err) {
     console.error("[FlowSearch] performFullSearch error:", err);
     return buildKeywordSearchResults(query, valid, {
-      limit: 20,
+      limit: resultLimit,
       allowedUrls,
       sourceFilter,
     });
@@ -553,6 +608,7 @@ export default defineBackground(() => {
   // 初始化云盘同步定时任务
   initCloudSyncAlarm();
   initDailyDigestAlarm();
+  initSourceSyncAlarms();
 
   // 首次启动时检查是否需要索引（索引只需要 embedding，本地后端无需 Key）
   getSettings().then((settings) => {
@@ -952,10 +1008,70 @@ export default defineBackground(() => {
   // === 每日知识简报 ===
 
   async function initDailyDigestAlarm(): Promise<void> {
+    const settings = await getSettings();
+
+    try {
+      await browser.alarms.clear("daily-digest");
+    } catch {}
+
+    if (settings.digestEnabled === false) {
+      console.log("[FlowSearch] Daily digest disabled");
+      return;
+    }
+
+    // 按用户设定的整点触发，之后每 24 小时重复
+    const hour = Math.min(23, Math.max(0, Math.floor(settings.digestHour ?? 9)));
+    const next = new Date();
+    next.setHours(hour, 0, 0, 0);
+    if (next.getTime() <= Date.now()) {
+      next.setDate(next.getDate() + 1);
+    }
     browser.alarms.create("daily-digest", {
+      when: next.getTime(),
       periodInMinutes: 24 * 60,
     });
-    console.log("[FlowSearch] Daily digest alarm set");
+    console.log(
+      `[FlowSearch] Daily digest alarm set at ${String(hour).padStart(2, "0")}:00`,
+    );
+  }
+
+  /** 外部数据源（GitHub / Twitter / History）定时同步 alarm */
+  async function initSourceSyncAlarm(
+    alarmName: string,
+    enabled: boolean,
+    intervalHours: number | undefined,
+  ): Promise<void> {
+    try {
+      await browser.alarms.clear(alarmName);
+    } catch {}
+
+    if (enabled && intervalHours && intervalHours > 0) {
+      browser.alarms.create(alarmName, {
+        periodInMinutes: intervalHours * 60,
+      });
+      console.log(
+        `[FlowSearch] ${alarmName} alarm set: every ${intervalHours}h`,
+      );
+    }
+  }
+
+  async function initSourceSyncAlarms(): Promise<void> {
+    const settings = await getSettings();
+    await initSourceSyncAlarm(
+      "githubSync",
+      settings.githubSyncEnabled === true && !!settings.githubToken,
+      settings.githubSyncInterval,
+    );
+    await initSourceSyncAlarm(
+      "twitterSync",
+      settings.twitterSyncEnabled === true,
+      settings.twitterSyncInterval,
+    );
+    await initSourceSyncAlarm(
+      "historySync",
+      settings.historySyncEnabled === true,
+      settings.historySyncInterval,
+    );
   }
 
   async function handleDailyDigest(): Promise<void> {
@@ -972,12 +1088,18 @@ export default defineBackground(() => {
       const digest = await generateDailyDigest(provider || undefined, yesterday);
 
       if (digest) {
-        browser.notifications.create("daily-digest", {
-          type: "basic",
-          iconUrl: "/icon/128.png",
-          title: "📚 今日知识简报已生成",
-          message: `昨天你阅读了 ${digest.stats.pagesIndexed} 篇内容，发现 ${digest.newConcepts.length} 个新概念`,
-        });
+        const settings = await getSettings();
+        if (settings.digestNotifyEnabled !== false) {
+          browser.notifications.create("daily-digest", {
+            type: "basic",
+            iconUrl: "/icon/128.png",
+            title: t("background.digestNotifyTitle"),
+            message: t("background.digestNotifyBody", {
+              pages: digest.stats.pagesIndexed,
+              concepts: digest.newConcepts.length,
+            }),
+          });
+        }
       }
     } catch (err) {
       console.error("[FlowSearch] Daily digest failed:", err);
@@ -1724,6 +1846,45 @@ export default defineBackground(() => {
       console.log("[FlowSearch] Running daily digest generation...");
       await handleDailyDigest();
     }
+    if (alarm.name === "githubSync") {
+      console.log("[FlowSearch] Running scheduled GitHub Stars sync...");
+      try {
+        const settings = await getSettings();
+        if (!settings.githubSyncEnabled || !settings.githubToken) return;
+        const result = await syncGithubStars();
+        console.log(
+          `[FlowSearch] Scheduled GitHub sync done: ${result.total} repos, ${result.queued} queued`,
+        );
+      } catch (error) {
+        console.warn("[FlowSearch] Scheduled GitHub sync failed:", error);
+      }
+    }
+    if (alarm.name === "twitterSync") {
+      console.log("[FlowSearch] Running scheduled Twitter sync...");
+      try {
+        const settings = await getSettings();
+        if (!settings.twitterSyncEnabled) return;
+        const result = await syncTwitterBookmarks();
+        console.log(
+          `[FlowSearch] Scheduled Twitter sync done: ${result.total} bookmarks, ${result.queued} queued`,
+        );
+      } catch (error) {
+        console.warn("[FlowSearch] Scheduled Twitter sync failed:", error);
+      }
+    }
+    if (alarm.name === "historySync") {
+      console.log("[FlowSearch] Running scheduled history sync...");
+      try {
+        const settings = await getSettings();
+        if (!settings.historySyncEnabled) return;
+        const result = await syncHistoryBookmarks();
+        console.log(
+          `[FlowSearch] Scheduled history sync done: ${result.added} added, ${result.skipped} skipped`,
+        );
+      } catch (error) {
+        console.warn("[FlowSearch] Scheduled history sync failed:", error);
+      }
+    }
   });
 
   // 监听来自 Options 页面的消息
@@ -1807,6 +1968,18 @@ export default defineBackground(() => {
             // 走空间校验：书签与代码向量一起重建，并记录新的空间指纹
             const queued = await revalidateEmbeddingSpace();
             return { success: true, queued };
+          }
+          case "REFRESH_ALARMS": {
+            // 设置保存后刷新全部定时任务（死链 / 云同步 / 简报 / 外部数据源）
+            await initLinkCheckAlarm();
+            await initCloudSyncAlarm();
+            await initDailyDigestAlarm();
+            await initSourceSyncAlarms();
+            return { success: true };
+          }
+          case "IMPORT_DATA": {
+            const result = await importBookmarksData(message.records);
+            return { success: true, ...result };
           }
           case "GIST_SYNC": {
             const syncResult = await triggerGistSync(true);
@@ -2155,7 +2328,7 @@ export default defineBackground(() => {
               askEmbedCfg.baseURL,
               askEmbedCfg.backend,
             );
-            const topK = message.topK || 8;
+            const topK = message.topK || askSettings.ragTopK || 8;
             const results = await searchVector(queryVector, { limit: topK });
             if (results.length === 0) {
               return {

@@ -6,6 +6,7 @@ import {
   CardContent,
 } from "../../../src/components/ui/card";
 import { Input } from "../../../src/components/ui/input";
+import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Button } from "../../../src/components/ui/button";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
@@ -14,6 +15,8 @@ import { useI18n } from "../../../src/i18n";
 export default function GitHubSettings() {
   const { t } = useI18n();
   const [githubToken, setGithubToken] = createSignal("");
+  const [autoSync, setAutoSync] = createSignal(false);
+  const [interval, setInterval] = createSignal(24);
   const [lastSync, setLastSync] = createSignal<string | null>(null);
   const [status, setStatus] = createSignal<{
     message: string;
@@ -24,6 +27,8 @@ export default function GitHubSettings() {
   // 初始化
   getSettings().then((settings) => {
     setGithubToken(settings.githubToken || "");
+    setAutoSync(settings.githubSyncEnabled || false);
+    setInterval(settings.githubSyncInterval ?? 24);
     if (settings.lastGithubSync) {
       setLastSync(new Date(settings.lastGithubSync).toLocaleString());
     }
@@ -31,7 +36,16 @@ export default function GitHubSettings() {
 
   const handleSave = async () => {
     try {
-      await saveSettings({ githubToken: githubToken() });
+      const clampedInterval = Math.min(720, Math.max(1, Math.round(interval())));
+      await saveSettings({
+        githubToken: githubToken(),
+        githubSyncEnabled: autoSync() && !!githubToken().trim(),
+        githubSyncInterval: clampedInterval,
+      });
+      // 保存后立即刷新后台定时任务
+      browser.runtime
+        .sendMessage({ type: "REFRESH_ALARMS" })
+        .catch(() => {});
       setStatus({ message: t("options.github.saved"), type: "success" });
     } catch (error) {
       setStatus({ message: `${t("common.saveFailed")}: ${error}`, type: "error" });
@@ -86,6 +100,28 @@ export default function GitHubSettings() {
           onInput={(e) => setGithubToken(e.currentTarget.value)}
           hint={t("options.github.tokenHint")}
         />
+
+        <Checkbox
+          label={t("options.github.autoSyncLabel")}
+          checked={autoSync()}
+          onChange={(e) => setAutoSync(e.currentTarget.checked)}
+          hint={t("options.github.autoSyncHint")}
+          class="mt-4"
+        />
+
+        <div class="mt-3">
+          <Input
+            label={t("options.github.intervalLabel")}
+            type="number"
+            placeholder="24"
+            value={String(interval())}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value, 10);
+              if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
+            }}
+            hint={t("options.github.intervalHint")}
+          />
+        </div>
 
         <div class="flex gap-3 flex-wrap mt-4">
           <Button onClick={handleSave}>

@@ -139,6 +139,10 @@ export default {
       modeVector: "纯向量检索 (Semantic Only)",
       modeKeyword: "纯关键词匹配 (Classic)",
       vectorWeight: "向量检索权重 (Vector Weight)",
+      resultLimit: "全页搜索结果数",
+      resultLimitHint: "书签墙页面每次搜索返回的最大结果数（5-50，默认 20）",
+      ragTopK: "问答召回条数 (topK)",
+      ragTopKHint: "书签问答时召回的相关书签数量（默认 8）",
       vectorWeightHint:
         "调高此值将让搜索结果更偏向意思相近，调低则更偏向字面匹配",
       applied: "✓ 搜索设置已应用",
@@ -155,6 +159,10 @@ export default {
       syncSuccess: "✓ 同步成功！已将 {{total}} 个仓库加入索引队列",
       saved: "✓ GitHub 设置已保存",
       tokenRequired: "请先填写 GitHub Token",
+      autoSyncLabel: "定时自动同步",
+      autoSyncHint: "按设定间隔自动同步 GitHub Stars（需先填 Token）",
+      intervalLabel: "同步间隔（小时）",
+      intervalHint: "1-720，默认 24",
     },
 
     twitter: {
@@ -172,6 +180,13 @@ export default {
       syncingBookmarks: "正在同步...",
       syncSuccess: "✓ 同步成功！已将 {{total}} 个书签加入索引",
       saved: "✓ Twitter 设置已保存",
+      autoSyncLabel: "定时自动同步",
+      autoSyncHint: "按设定间隔自动同步推文书签",
+      intervalLabel: "同步间隔（小时）",
+      intervalHint: "1-720，默认 24",
+      autoExtract: "⚡ 自动提取 Cookies",
+      autoExtractSuccess: "✓ 已提取 Cookies：ct0 + auth_token",
+      autoExtractFailed: "✗ 提取失败 — 请先登录 x.com，或手动填写",
       apiKeyRequired: "请先配置 API Key",
     },
 
@@ -188,6 +203,8 @@ export default {
       syncSuccess: "✓ 同步完成！新增 {{added}} 条，跳过 {{skipped}} 条",
       syncError: "同步出错",
       saved: "✓ 历史同步设置已保存",
+      intervalLabel: "同步间隔（小时）",
+      intervalHint: "1-720，默认 24",
     },
 
     gist: {
@@ -388,6 +405,10 @@ export default {
       startFailed: "启动失败",
       pauseFailed: "暂停失败",
       resumeFailed: "恢复失败",
+      autoIndexLabel: "自动索引新增/修改的书签",
+      autoIndexHint: "书签创建或修改时自动加入 AI 索引队列",
+      excludedDomainsLabel: "索引排除域名",
+      excludedDomainsHint: "每行一个域名，如 example.com（含子域名）。仅对浏览器书签索引生效。",
     },
 
     failedBookmarks: {
@@ -411,6 +432,23 @@ export default {
     dataManagement: {
       description:
         "清空查询缓存或删除本地数据库中的所有索引数据。浏览器书签本身不会被删除。",
+      exportButton: "⬇️ 导出数据 (JSON)",
+      exportSuccess: "✓ 已导出 {{count}} 条记录",
+      exportFailed: "导出失败",
+      importButton: "⬆️ 导入数据 (JSON)",
+      importPickFile: "选择 JSON 文件",
+      importSuccess: "✓ 导入 {{imported}} 条记录（{{requeued}} 条已排队生成向量）",
+      importFailed: "导入失败",
+      importInvalid: "文件无效：未找到书签记录",
+      resetButton: "↩️ 恢复默认设置",
+      resetConfirmTitle: "⚠️ 恢复默认设置",
+      resetConfirmBody: "所有设置（API Key、同步配置、搜索策略）将恢复为默认值。索引数据不受影响。此操作不可撤销。",
+      resetDone: "✓ 已恢复默认设置",
+      rebuildButton: "🔄 重建全部向量",
+      rebuildConfirm: "将丢弃现有全部向量，并用当前 embedding 配置重新生成。继续？",
+      rebuildQueued: "✓ {{count}} 条书签已排队重新生成向量",
+      rebuildFailed: "重建启动失败",
+      cacheStats: "向量查询缓存：{{size}} / {{maxSize}}",
     },
 
     folderTree: {
@@ -424,6 +462,11 @@ export default {
       enableLabel: "启用定期死链扫描",
       enableHint: "定期检测已索引书签的链接是否仍然有效",
       intervalLabel: "扫描间隔",
+      intervalHint: "1-720 小时",
+      concurrencyLabel: "并发数",
+      concurrencyHint: "并行 HEAD 请求数（1-20，默认 5）",
+      timeoutLabel: "请求超时（秒）",
+      timeoutHint: "单个请求超时时间（1-60，默认 8）",
       checkNow: "立即检测",
       checking: "正在检测...",
       checkSummary: "已检测 {{checked}} 个，其中 {{alive}} 个正常，{{dead}} 个失效",
@@ -454,8 +497,6 @@ export default {
 
     categorize: {
       title: "🏷️ AI 自动分类",
-      enableLabel: "启用 AI 自动分类",
-      enableHint: "使用 LLM 根据书签内容自动归类到技术主题文件夹",
       selectFolders: "选择分类范围",
       analyzeButton: "分析分类建议",
       analyzing: "分析中...",
@@ -480,6 +521,24 @@ export default {
       currentFolder: "当前文件夹",
       suggestedCategory: "建议分类",
     },
+    nav: {
+      pages: "功能页面",
+      pageBoard: "书签墙",
+      pageGraph: "标签云",
+      pageWiki: "Code Wiki",
+    },
+
+    digest: {
+      title: "📰 每日知识简报",
+      enableLabel: "启用每日简报",
+      enableHint: "在设定时间汇总前一天索引的内容生成简报",
+      hourLabel: "生成时间（小时）",
+      hourHint: "0-23，默认 9 点。保存后立即生效。",
+      notifyLabel: "生成完成后发送浏览器通知",
+      notifyHint: "需要通知权限",
+      saved: "✓ 简报设置已保存",
+    },
+
   },
 
   search: {
@@ -606,6 +665,8 @@ export default {
     syncInProgress: "同步正在进行中",
     contentExtractionFailed: "内容提取失败",
     noRelevantBookmarks: "未找到相关书签。",
+    digestNotifyTitle: "📚 今日知识简报已生成",
+    digestNotifyBody: "昨天你阅读了 {{pages}} 篇内容，发现 {{concepts}} 个新概念",
   },
 
   codeWiki: {

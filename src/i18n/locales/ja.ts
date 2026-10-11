@@ -145,6 +145,10 @@ export default {
       modeVector: "ベクトル検索のみ",
       modeKeyword: "キーワード一致 (クラシック)",
       vectorWeight: "ベクトル検索ウェイト",
+      resultLimit: "全画面検索結果数",
+      resultLimitHint: "ボードページの1回の検索で返す最大件数（5-50、初期値 20）",
+      ragTopK: "Q&A 召回件数 (topK)",
+      ragTopKHint: "ブックマークQ&Aで召回する関連ブックマーク数（初期値 8）",
       vectorWeightHint:
         "値を上げると意味的な類似性が重視されます。下げると文字列一致が重視されます",
       applied: "✓ 検索設定を適用しました",
@@ -162,6 +166,10 @@ export default {
         "✓ 同期成功！{{total}} 個のリポジトリをインデックスキューに追加しました",
       saved: "✓ GitHub 設定を保存しました",
       tokenRequired: "まず GitHub Token を入力してください",
+      autoSyncLabel: "定時自動同期",
+      autoSyncHint: "設定間隔で GitHub Stars を自動同期（Token が必要）",
+      intervalLabel: "同期間隔（時間）",
+      intervalHint: "1-720、初期値 24",
     },
 
     twitter: {
@@ -181,6 +189,13 @@ export default {
       syncSuccess:
         "✓ 同期成功！{{total}} 個のブックマークをインデックスに追加しました",
       saved: "✓ Twitter 設定を保存しました",
+      autoSyncLabel: "定時自動同期",
+      autoSyncHint: "設定間隔でツイートブックマークを自動同期",
+      intervalLabel: "同期間隔（時間）",
+      intervalHint: "1-720、初期値 24",
+      autoExtract: "⚡ Cookie を自動抽出",
+      autoExtractSuccess: "✓ Cookie を抽出しました：ct0 + auth_token",
+      autoExtractFailed: "✗ 抽出失敗 — まず x.com にログインするか手動入力してください",
       apiKeyRequired: "まず API キーを設定してください",
     },
 
@@ -198,6 +213,8 @@ export default {
       syncSuccess: "✓ 同期完了！{{added}} 件追加、{{skipped}} 件スキップ",
       syncError: "同期エラー",
       saved: "✓ 履歴同期設定を保存しました",
+      intervalLabel: "同期間隔（時間）",
+      intervalHint: "1-720、初期値 24",
     },
 
     gist: {
@@ -340,6 +357,10 @@ export default {
       startFailed: "開始に失敗しました",
       pauseFailed: "一時停止に失敗しました",
       resumeFailed: "再開に失敗しました",
+      autoIndexLabel: "新規/変更ブックマークを自動索引",
+      autoIndexHint: "ブックマークの作成・変更時に AI 索引キューへ自動追加",
+      excludedDomainsLabel: "索引除外ドメイン",
+      excludedDomainsHint: "1行に1ドメイン（例: example.com、サブドメイン含む）。ブラウザブックマークの索引にのみ適用。",
     },
 
     failedBookmarks: {
@@ -364,6 +385,23 @@ export default {
     dataManagement: {
       description:
         "クエリキャッシュをクリアするか、ローカルデータベースからすべてのインデックスデータを削除します。ブラウザのブックマーク自体は削除されません。",
+      exportButton: "⬇️ データ書き出し (JSON)",
+      exportSuccess: "✓ {{count}} 件を書き出しました",
+      exportFailed: "書き出しに失敗しました",
+      importButton: "⬆️ データ取り込み (JSON)",
+      importPickFile: "JSON ファイルを選択",
+      importSuccess: "✓ {{imported}} 件を取り込みました（{{requeued}} 件をベクトル生成キューへ）",
+      importFailed: "取り込みに失敗しました",
+      importInvalid: "無効なファイル：ブックマークレコードが見つかりません",
+      resetButton: "↩️ 設定を初期化",
+      resetConfirmTitle: "⚠️ 設定の初期化",
+      resetConfirmBody: "すべての設定（API Key、同期設定、検索戦略）が初期値に戻ります。索引データには影響しません。この操作は取り消せません。",
+      resetDone: "✓ 設定を初期化しました",
+      rebuildButton: "🔄 全ベクトルを再構築",
+      rebuildConfirm: "既存のベクトルをすべて破棄し、現在の embedding 設定で再生成します。続行しますか？",
+      rebuildQueued: "✓ {{count}} 件を再ベクトル化キューに追加しました",
+      rebuildFailed: "再構築の開始に失敗しました",
+      cacheStats: "ベクトルクエリキャッシュ：{{size}} / {{maxSize}}",
     },
 
     folderTree: {
@@ -378,6 +416,11 @@ export default {
       enableHint:
         "インデックス済みブックマークのURLがまだ有効か定期的に確認します",
       intervalLabel: "スキャン間隔",
+      intervalHint: "1-720 時間",
+      concurrencyLabel: "並列数",
+      concurrencyHint: "同時 HEAD リクエスト数（1-20、初期値 5）",
+      timeoutLabel: "リクエストタイムアウト（秒）",
+      timeoutHint: "1リクエストのタイムアウト（1-60、初期値 8）",
       checkNow: "今すぐチェック",
       checking: "チェック中...",
       checkSummary:
@@ -409,9 +452,6 @@ export default {
 
     categorize: {
       title: "🏷️ AI 自動分類",
-      enableLabel: "AI 自動分類を有効化",
-      enableHint:
-        "LLM を使用してコンテンツに基づいてブックマークをトピックフォルダに自動分類",
       selectFolders: "分類範囲を選択",
       analyzeButton: "分類案を分析",
       analyzing: "分析中...",
@@ -436,6 +476,24 @@ export default {
       currentFolder: "現在のフォルダ",
       suggestedCategory: "提案",
     },
+    nav: {
+      pages: "機能ページ",
+      pageBoard: "ブックマークウォール",
+      pageGraph: "タグクラウド",
+      pageWiki: "Code Wiki",
+    },
+
+    digest: {
+      title: "📰 毎日ナレッジダイジェスト",
+      enableLabel: "毎日ダイジェストを生成",
+      enableHint: "設定時刻に前日分の内容をまとめたダイジェストを生成",
+      hourLabel: "生成時刻（時）",
+      hourHint: "0-23、初期値 9 時。保存後すぐに反映されます。",
+      notifyLabel: "生成完了時に通知",
+      notifyHint: "通知権限が必要です",
+      saved: "✓ ダイジェスト設定を保存しました",
+    },
+
   },
 
   search: {
@@ -564,6 +622,8 @@ export default {
     syncInProgress: "同期はすでに進行中です",
     contentExtractionFailed: "コンテンツの抽出に失敗しました",
     noRelevantBookmarks: "関連するブックマークが見つかりませんでした。",
+    digestNotifyTitle: "📚 今日のダイジェストが完成しました",
+    digestNotifyBody: "昨日 {{pages}} 件を読み、{{concepts}} 個の新しい概念を発見しました",
   },
 
   codeWiki: {

@@ -88,8 +88,8 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 Synchronous: `GET_INDEXING_STATUS`
 
 Async:
-- **Search & indexing:** `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `GET_ALL_INDEXED`
-- **External sources:** `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY`
+- **Search & indexing:** `FULL_SEARCH`, `START_INDEXING`, `PAUSE_INDEXING`, `RESUME_INDEXING`, `RETRY_FAILED`, `GET_FAILED_BOOKMARKS`, `DELETE_BOOKMARK`, `GET_BOOKMARK_FOLDERS`, `INDEX_FOLDERS`, `GET_ALL_INDEXED`, `IMPORT_DATA` (JSON import from options), `REFRESH_ALARMS` (re-create all alarms after settings save)
+- **External sources:** `SYNC_GITHUB_STARS`, `SYNC_TWITTER_BOOKMARKS`, `SYNC_HISTORY` (each also runs on scheduled alarms `githubSync`/`twitterSync`/`historySync` when its enable flag + interval are set)
 - **Cache:** `GET_CACHE_STATS`, `CLEAR_EMBEDDING_CACHE`
 - **Gist:** `GIST_SYNC`, `GIST_CREATE`, `GIST_LINK`, `GIST_UPLOAD`, `GIST_DOWNLOAD`
 - **Cloud sync:** `CLOUD_SYNC_TEST_CONNECTION`, `CLOUD_SYNC_GET_STATUS`, `CLOUD_SYNC_UPLOAD`, `CLOUD_SYNC_DOWNLOAD`, `CLOUD_SYNC_DELETE`, `CLOUD_SYNC_REFRESH_ALARM`, `CLOUD_SYNC_BOOKMARK_SYNC`, `CLOUD_SYNC_BOOKMARK_UPLOAD`, `CLOUD_SYNC_BOOKMARK_DOWNLOAD`
@@ -102,7 +102,7 @@ Broadcast (background → all listeners): `LINK_CHECK_PROGRESS`
 
 ### Data flow
 
-**Omnibox search:** `onInputChanged` → debounce 150 ms + AbortController → ensure Orama engine loaded → `getQueryEmbedding` (cached or API) → `searchHybrid` (Orama mode: `"hybrid"` with `hybridWeights`) → freq-boost rerank → suggestions (max 9) → `browser.omnibox.setDefaultSuggestion`.
+**Omnibox search:** `onInputChanged` → debounce 300 ms + AbortController → ensure Orama engine loaded → `getQueryEmbedding` (cached or API) → `searchHybrid` (Orama mode: `"hybrid"` with `hybridWeights`) → freq-boost rerank → suggestions (max 9) → `browser.omnibox.setDefaultSuggestion`.
 
 **Full-page search:** popup/options or Enter in omnibox → `performFullSearch` → same pipeline returning `SearchResult[]` DTOs (max 20) with source/folder filters (`/github`, `/twitter`, `/history`, `/folder:name`).
 
@@ -219,7 +219,7 @@ WXT handles most manifest differences automatically. Code-level considerations:
 
 ## Manifest (`wxt.config.ts`)
 
-- `permissions`: `storage`, `tabs`, `bookmarks`, `cookies`, `history`, `alarms`
+- `permissions`: `storage`, `tabs`, `bookmarks`, `cookies`, `history`, `alarms`, `notifications`, `offscreen`
 - `host_permissions`: `https://r.jina.ai/*`, `https://x.com/*`, `https://twitter.com/*`, `https://api.x.com/*`, `https://www.googleapis.com/*`, `https://content.googleapis.com/*`, `https://api.dropboxapi.com/*`, `https://content.dropboxapi.com/*`
 - `omnibox.keyword`: `bi`
 - Optional `trial_tokens` via `CHROME_AI_TRIAL_TOKEN` env (Chrome AI deprecated but token still wired for future re-enable)

@@ -420,9 +420,20 @@ const defaultSettings: Settings = {
   githubReadmeVersion: 0,
   linkCheckEnabled: false,
   linkCheckInterval: 24,
-  autoCategorizeEnabled: false,
+  linkCheckConcurrency: 5,
+  linkCheckTimeoutMs: 8000,
   categoryRules: "",
   categoryFolderMap: {},
+  searchResultLimit: 20,
+  ragTopK: 8,
+  autoIndexEnabled: true, // 新增/修改书签自动入队索引
+  excludedDomains: [],
+  githubSyncInterval: 24,
+  twitterSyncInterval: 24,
+  historySyncInterval: 24,
+  digestEnabled: true,
+  digestHour: 9,
+  digestNotifyEnabled: true,
   cloudSyncProvider: null,
   cloudSyncToken: undefined,
   cloudSyncEnabled: false,
@@ -443,6 +454,13 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
   const current = await getSettings();
   await browser.storage.local.set({
     [SETTINGS_KEY]: { ...current, ...settings },
+  });
+}
+
+/** 恢复全部设置为默认值（不清除索引数据） */
+export async function resetSettings(): Promise<void> {
+  await browser.storage.local.set({
+    [SETTINGS_KEY]: { ...defaultSettings },
   });
 }
 

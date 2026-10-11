@@ -136,7 +136,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 
 | File | Purpose |
 |------|---------|
-| `entrypoints/background.ts` | Service worker (~1700 lines). Omnibox handlers (150ms debounce + AbortController), message passing router (40+ message types), indexer initialization, Gist/cloud sync scheduling |
+| `entrypoints/background.ts` | Service worker (~1700 lines). Omnibox handlers (300ms debounce + AbortController), message passing router (40+ message types), indexer initialization, Gist/cloud sync scheduling |
 | `entrypoints/popup/App.tsx` | Extension popup UI |
 | `entrypoints/options/App.tsx` | Settings page UI (opens in its own tab) |
 | `entrypoints/board/App.tsx` | Bookmark wall (书签墙) — source filter, hot tags, AI hybrid search (`FULL_SEARCH`), RAG ask (`ASK_BOOKMARKS`) |
@@ -151,7 +151,7 @@ pnpm compile       # TypeScript type-check only (tsc --noEmit)
 | `src/db.ts` | Dexie.js IndexedDB + `browser.storage.local` settings + in-memory cache for omnibox hot path |
 | `src/search-engine.ts` | Orama search engine wrapper — keyword/vector/hybrid search with frequency boost, persistence callback injection |
 | `src/search.ts` | Legacy keyword-only search + Levenshtein fuzzy reranking (sliding window). Retained as fallback |
-| `src/hybrid.ts` | RRF hybrid search (keyword + vector fusion) with min-max normalization. Legacy, largely superseded by `search-engine.ts` |
+| `src/hybrid.ts` | (removed) Legacy RRF hybrid search — superseded by `search-engine.ts`; RRF survives only in `src/code-graph/worker-client.ts` |
 | `src/embedding.ts` | SiliconFlow BGE-M3 API client with LRU cache + AbortSignal + batch API |
 | `src/llm.ts` | SiliconFlow Chat API (DeepSeek-V3) for summaries/tags |
 | `src/ai-providers/` | LLM provider abstraction — `llm-base.ts`, `llm-remote.ts`, `detect.ts`, `types.ts` |
