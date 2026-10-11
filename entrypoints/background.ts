@@ -129,6 +129,12 @@ let pendingGistSync = false;
 
 /** 启动期向量空间校验 — 多个初始化共用同一个 Promise，避免重复重建 */
 let embedSpaceGuard: Promise<number> | null = null;
+/**
+ * 后台代码向量重嵌入（守卫触发时赋值）。
+ * 代码索引初始化必须等它完成，避免用混合空间的向量重建索引；
+ * 书签索引初始化不等待它，避免本地后端的串行 CPU 推理阻塞搜索可用性。
+ */
+let codeReembed: Promise<void> | null = null;
 
 // 云端书签同步防抖状态（复用 cloudSync provider 配置）
 const CLOUD_BOOKMARK_SYNC_DEBOUNCE_MS = 5000;
@@ -634,28 +640,58 @@ export default defineBackground(() => {
       }
 
       if (rebuildCode) {
-        // 代码向量同源失效：按原始 chunk 重新嵌入（无需重下仓库）
-        const { reembedAllCodeEmbeddings } = await import(
-          "../src/embed-code/embed"
-        );
-        await reembedAllCodeEmbeddings(
-          cfg.apiKey,
-          cfg.model,
-          cfg.baseURL,
-          cfg.backend,
-        );
+        // 代码向量同源失效：按原始 chunk 重新嵌入（无需重下仓库）。
+        // 本地后端是串行 CPU 推理，全量重嵌入可能耗时数分钟，因此不阻塞
+        // 守卫返回（书签索引初始化不等它）；initCodeSearchAndPopulate 会
+        // 等待 codeReembed 完成后再加载 / 重建代码索引。
+        // 指纹在重嵌入完成后才落盘：SW 中途被杀时指纹仍是旧值，下次启动
+        // 守卫会幂等重跑（书签重建为入队操作，重复执行无害）。
+        codeReembed = (async () => {
+          const { reembedAllCodeEmbeddings } = await import(
+            "../src/embed-code/embed"
+          );
+          const reembedded = await reembedAllCodeEmbeddings(
+            cfg.apiKey,
+            cfg.model,
+            cfg.baseURL,
+            cfg.backend,
+          );
 
-        const code = await import("../src/embed-code/index");
-        await browser.storage.local.remove([
-          code.ORAMA_CODE_INDEX_STORAGE_KEY,
-          code.ORAMA_CODE_INDEX_SPACE_KEY,
-        ]);
-        // 运行期（设置页切换后端）时内存索引仍是旧维度，需立即重建；
-        // 启动期代码引擎尚未初始化，交给 initCodeSearchAndPopulate
-        if (code.isCodeSearchEngineReady()) {
-          await code.initCodeSearchEngine(getEmbeddingDim(settings));
-          await rebuildCodeIndexFromDb(settings);
-        }
+          const code = await import("../src/embed-code/index");
+          await browser.storage.local.remove([
+            code.ORAMA_CODE_INDEX_STORAGE_KEY,
+            code.ORAMA_CODE_INDEX_SPACE_KEY,
+          ]);
+
+          // 重嵌入期间用户可能又改了设置：空间已变则丢弃本次结果，
+          // 交给新一轮守卫处理，避免旧空间指纹覆盖新指纹
+          const latest = await getSettings();
+          if (embeddingSpaceId(latest) !== space) {
+            console.warn(
+              "[FlowSearch] Embedding space changed during code re-embedding, discarding stale results",
+            );
+            return;
+          }
+
+          // 运行期（设置页切换后端）时内存索引仍是旧维度，需立即重建；
+          // 启动期代码引擎尚未初始化，交给 initCodeSearchAndPopulate
+          if (code.isCodeSearchEngineReady()) {
+            await code.initCodeSearchEngine(getEmbeddingDim(latest));
+            await rebuildCodeIndexFromDb(latest);
+          }
+
+          await saveSettings({ embedSpaceFingerprint: space });
+          console.log(
+            `[FlowSearch] Re-embedded ${reembedded} code vectors (${space})`,
+          );
+        })().catch((error) => {
+          console.error("[FlowSearch] Code re-embedding failed:", error);
+        });
+        console.log(
+          `[FlowSearch] Re-queued ${queued} bookmarks for re-embedding (${space}); ` +
+            "code re-embedding continues in background",
+        );
+        return queued;
       }
 
       await saveSettings({ embedSpaceFingerprint: space });
@@ -742,6 +778,9 @@ export default defineBackground(() => {
   async function initCodeSearchAndPopulate(): Promise<void> {
     try {
       await ensureEmbeddingSpace();
+      // 守卫可能已触发后台代码重嵌入：等它完成再加载 / 重建代码索引，
+      // 避免用混合向量空间的 Dexie 数据建索引
+      if (codeReembed) await codeReembed;
 
       const settings = await getSettings();
       const dim = getEmbeddingDim(settings);

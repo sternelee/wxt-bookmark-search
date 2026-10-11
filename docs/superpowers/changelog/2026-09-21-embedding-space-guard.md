@@ -73,6 +73,7 @@
 
 1. **代码向量重建与书签解耦**：守卫原实现中 `records.length === 0` 会提前返回，导致「只用 Code Wiki、没有书签」的用户切换后端后代码向量永不重建（外来向量被 `rebuildCodeIndexFromDb` 过滤 → 索引永久为空）。现将书签与代码向量的重建判定拆为独立的 `rebuildBookmarks` / `rebuildCode`。
 2. **移除 `activeBookmarkSpace` / `activeCodeSpace` 缓存**：云同步导入会在 SW 运行期改变设置，缓存的指纹会让 saveFn 给新索引写入过期指纹，导致下次启动误判不匹配、多余全量重建。两个 saveFn 改为每次现算 `embeddingSpaceId(await getSettings())`。
+3. **代码重嵌入后台化**：本地后端是串行 CPU 推理，全量重嵌入可能耗时数分钟，原先同步阻塞守卫 → 阻塞书签索引初始化。现改为守卫只 await 书签重建（入队操作，毫秒级），代码重嵌入作为后台 Promise 执行；`initCodeSearchAndPopulate` 等待该 Promise 完成后再加载/重建代码索引。指纹在重嵌入完成后才落盘 —— SW 中途被杀时下次启动守卫幂等重跑；重嵌入期间若设置再次变更，丢弃过期结果避免旧指纹覆盖新指纹。
 
 ## 验证
 
