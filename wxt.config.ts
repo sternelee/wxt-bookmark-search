@@ -52,6 +52,8 @@ export default defineConfig({
       "https://api.dropboxapi.com/*",
       "https://content.dropboxapi.com/*",
       "https://api.github.com/*",
+      // TypeSafe Jev 评估 API（无 CORS 头，必须走 host permission）
+      "https://api.typesafe.ai/*",
     ],
     // 本地 embedding (@ternlight/mini) 需要 WASM 实例化：
     // MV3 默认 CSP (script-src 'self') 禁止 wasm-eval，需显式放开。

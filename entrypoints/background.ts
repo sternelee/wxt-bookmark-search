@@ -58,6 +58,7 @@ import {
   getEmbeddingDim,
   isVectorInSpace,
 } from "../src/embedding-space";
+import { jevRerank, JEV_RERANK_BATCH, type JevConfig } from "../src/jev";
 import type { RawData } from "@orama/orama";
 import {
   initIndexer,
@@ -395,6 +396,47 @@ async function importBookmarksData(
  * 执行全局搜索（供独立搜索页调用）
  * 复用 omnibox 搜索的完整逻辑，返回最多 searchResultLimit 条 SearchResult
  */
+
+/** 是否启用 jev 评审重排（设置中选中了 jev 且配置了 API Key） */
+function isJevEnabled(settings: Settings): boolean {
+  return settings.searchEngine === "jev" && !!settings.jevApiKey?.trim();
+}
+
+/** omnibox jev 召回的候选池上限（保持与历史行为一致的 27 条） */
+const JEV_OMNIBOX_RECALL_LIMIT = 27;
+
+/**
+ * 用 Jev (TypeSafe System One) 对召回的候选书签逐条评审相关性并重排。
+ * 候选取 title + summary/quickSummary/tags 作为评审上下文；
+ * 失败时抛出异常，由调用方决定兜底策略。
+ */
+async function rerankWithJev(
+  settings: Settings,
+  query: string,
+  results: BookmarkRecord[],
+  signal?: AbortSignal,
+): Promise<BookmarkRecord[]> {
+  const items = results.map((record, index) => ({
+    id: String(index),
+    title: record.title,
+    snippet:
+      record.summary ||
+      record.quickSummary ||
+      (record.tags ?? []).join(", ") ||
+      record.url,
+    source: record.source,
+  }));
+  const config: JevConfig = {
+    apiKey: settings.jevApiKey!.trim(),
+    baseURL: settings.jevBaseURL,
+  };
+  const scores = await jevRerank(config, query, items, signal);
+  return results
+    .map((record, index) => ({ record, index, score: scores.get(String(index)) ?? 0 }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.record);
+}
+
 async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   let query = rawInput.trim();
   let explicitFolderNames: string[] = [];
@@ -481,7 +523,30 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
   const mode = settings.searchMode || "hybrid";
   const resultLimit = Math.min(50, Math.max(5, settings.searchResultLimit ?? 20));
   const embedCfg = resolveEmbedConfig(settings);
+  const jevOn = isJevEnabled(settings);
   if (mode === "keyword" || (embedCfg.backend !== "local" && !embedCfg.apiKey)) {
+    // jev 引擎：用 Orama 全文召回候选，交给 jev 评审重排（无需 Embedding Key）
+    if (jevOn) {
+      try {
+        let candidates = await searchKeyword(query, {
+          limit: Math.max(resultLimit, JEV_RERANK_BATCH),
+          sourceFilter: sourceFilter || undefined,
+        });
+        if (allowedUrls) {
+          candidates = candidates.filter((r) => allowedUrls!.has(r.url));
+        }
+        // 候选池为空时跳过重排，直接走关键词兜底
+        if (candidates.length > 0) {
+          const ranked = await rerankWithJev(settings, query, candidates);
+          // 重排无结果时同样回退到关键词搜索
+          if (ranked.length > 0) {
+            return ranked.slice(0, resultLimit).map(toSearchResult);
+          }
+        }
+      } catch (err) {
+        console.warn("[FlowSearch] jev rerank failed, fallback to keyword search:", err);
+      }
+    }
     return buildKeywordSearchResults(query, valid, {
       limit: resultLimit,
       allowedUrls,
@@ -503,15 +568,17 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     const oramaLimit = allowedUrls
       ? Math.max(60, resultLimit * 3)
       : resultLimit;
+    // jev 评审需要更大的候选池（一批最多 40 条）
+    const recallLimit = jevOn ? Math.max(oramaLimit, JEV_RERANK_BATCH) : oramaLimit;
 
     if (mode === "vector") {
       results = await searchVector(queryVector, {
-        limit: oramaLimit,
+        limit: recallLimit,
         sourceFilter: sourceFilter || undefined,
       });
     } else {
       results = await searchHybrid(query, queryVector, {
-        limit: oramaLimit,
+        limit: recallLimit,
         vectorWeight: settings.vectorWeight || 0.4,
         sourceFilter: sourceFilter || undefined,
       });
@@ -520,6 +587,16 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     // 如果 scope 过滤了，手动过滤 Orama 结果
     if (allowedUrls) {
       results = results.filter((r) => allowedUrls!.has(r.url));
+    }
+
+    // jev 评审重排：按相关概率降序，失败时保留 Orama 顺序兜底
+    if (jevOn) {
+      try {
+        results = (await rerankWithJev(settings, query, results)).slice(0, resultLimit);
+      } catch (err) {
+        console.warn("[FlowSearch] jev rerank failed, keep orama order:", err);
+        results = results.slice(0, resultLimit);
+      }
     }
 
     return results.map(toSearchResult);
@@ -1638,20 +1715,9 @@ export default defineBackground(() => {
 
     const mode = settings.searchMode || "hybrid";
     const embedCfg = resolveEmbedConfig(settings);
+    const jevOn = isJevEnabled(settings);
 
-    // 2. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
-    if (mode === "keyword" || !embedCfg.apiKey) {
-      suggest(
-        await buildKeywordSuggestions(query, valid, {
-          limit: 9,
-          allowedUrls,
-          sourceFilter,
-        }),
-      );
-      return;
-    }
-
-    // 3. 防抖搜索
+    // 2. 防抖与中止控制（关键词 jev 分支与下方混合分支共用）
     if (searchTimer) clearTimeout(searchTimer);
     if (searchAbortController) searchAbortController.abort();
     searchAbortController = new AbortController();
@@ -1666,6 +1732,67 @@ export default defineBackground(() => {
           ? t("background.searching")
           : t("background.searching"),
       });
+    }
+
+    // 3. 关键词模式或无 API Key：直接走全文关键词路径，不生成 embedding
+    if (mode === "keyword" || !embedCfg.apiKey) {
+      // jev 引擎：用 Orama 全文召回候选，交给 jev 评审重排（无需 Embedding Key）
+      if (jevOn) {
+        searchTimer = setTimeout(async () => {
+          try {
+            let candidates = await searchKeyword(query, {
+              limit: JEV_OMNIBOX_RECALL_LIMIT,
+              sourceFilter: sourceFilter || undefined,
+            });
+            if (allowedUrls) {
+              candidates = candidates.filter((r) => allowedUrls!.has(r.url));
+            }
+            // 候选池为空时跳过重排，回退到关键词建议
+            if (candidates.length > 0) {
+              const ranked = await rerankWithJev(settings, query, candidates, signal);
+              // 如果已中止，直接返回
+              if (signal.aborted) return;
+              // 重排无结果时同样回退到关键词建议
+              if (ranked.length > 0) {
+                suggest(
+                  ranked.slice(0, 9).map((record) => ({
+                    content: record.url,
+                    description: formatSuggestion(record, query, true),
+                  })),
+                );
+                return;
+              }
+            }
+            suggest(
+              await buildKeywordSuggestions(query, valid, {
+                limit: 9,
+                allowedUrls,
+                sourceFilter,
+              }),
+            );
+          } catch (err) {
+            // 中止时静默返回
+            if (signal.aborted) return;
+            console.warn("[FlowSearch] jev rerank failed, fallback to keyword:", err);
+            suggest(
+              await buildKeywordSuggestions(query, valid, {
+                limit: 9,
+                allowedUrls,
+                sourceFilter,
+              }),
+            );
+          }
+        }, debounceMs);
+        return;
+      }
+      suggest(
+        await buildKeywordSuggestions(query, valid, {
+          limit: 9,
+          allowedUrls,
+          sourceFilter,
+        }),
+      );
+      return;
     }
 
     searchTimer = setTimeout(async () => {
@@ -1688,15 +1815,17 @@ export default defineBackground(() => {
         let results: BookmarkRecord[];
 
         const oramaLimit = allowedUrls ? Math.max(27, 9 * 3) : 9;
+        // jev 评审需要更大的候选池
+        const recallLimit = jevOn ? Math.max(oramaLimit, JEV_OMNIBOX_RECALL_LIMIT) : oramaLimit;
 
         if (mode === "vector") {
           results = await searchVector(queryVector, {
-            limit: oramaLimit,
+            limit: recallLimit,
             sourceFilter: sourceFilter || undefined,
           });
         } else {
           results = await searchHybrid(query, queryVector, {
-            limit: oramaLimit,
+            limit: recallLimit,
             vectorWeight: settings.vectorWeight || 0.4,
             sourceFilter: sourceFilter || undefined,
           });
@@ -1705,6 +1834,17 @@ export default defineBackground(() => {
         // 应用 scope 过滤
         if (allowedUrls) {
           results = results.filter((r) => allowedUrls!.has(r.url));
+        }
+
+        // jev 评审重排：按相关概率降序，失败时保留 Orama 顺序兜底
+        if (jevOn) {
+          try {
+            results = (await rerankWithJev(settings, query, results, signal)).slice(0, 9);
+          } catch (err) {
+            if (signal.aborted) return;
+            console.warn("[FlowSearch] jev rerank failed, keep orama order:", err);
+            results = results.slice(0, 9);
+          }
         }
 
         suggest(

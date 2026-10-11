@@ -155,6 +155,21 @@ export default {
         "값을 높이면 의미적 유사성이 선호됩니다. 낮추면 문자열 일치가 선호됩니다",
       applied: "✓ 검색 설정이 적용되었습니다",
       applyFailed: "검색 설정 적용에 실패했습니다",
+      engine: "랭킹 엔진",
+      engineHint:
+        "Jev는 로컬에서 검색된 후보를 TypeSafe Jev 평가 모델로 재정렬하여 자연어 쿼리를 이해합니다. 참고: 활성화하면 검색할 때마다 쿼리와 순위가 매겨진 후보의 제목, 요약, 태그, URL이 TypeSafe (api.typesafe.ai)로 전송됩니다.",
+      engineOrama: "로컬 하이브리드 검색 (Orama)",
+      engineJev: "Jev 심사 재정렬 (TypeSafe)",
+      jevApiKey: "Jev API 키",
+      jevApiKeyHint: "https://typesafe.ai 에서 발급 — jev-latest 평가 모델에 사용",
+      jevBaseURL: "Jev Base URL (선택)",
+      jevBaseURLHint: "기본값: https://api.typesafe.ai/v1/systemone (보통 변경 불필요)",
+      jevKeyRequired: "Jev 엔진을 사용하려면 Jev API 키를 먼저 입력하세요",
+      jevTest: "연결 테스트",
+      jevTesting: "테스트 중...",
+      jevTestOk: "✓ 연결 성공! Jev 서비스를 사용할 수 있습니다",
+      jevTestFailed: "연결 실패: {{error}}",
+      jevTestNeedKey: "먼저 Jev API 키를 입력하세요",
     },
 
     github: {

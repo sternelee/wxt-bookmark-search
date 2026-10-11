@@ -94,6 +94,9 @@ export interface SearchResult {
 /** 搜索模式 */
 export type SearchMode = "keyword" | "vector" | "hybrid";
 
+/** 结果排序引擎 */
+export type SearchEngine = "orama" | "jev";
+
 /** 搜索选项 */
 export interface SearchOptions {
   mode?: SearchMode;
@@ -131,6 +134,17 @@ export interface Settings {
   openaiApiKey?: string;
   baseURL?: string; // API 基础地址，含 /v1 (默认: https://api.siliconflow.cn/v1)
   searchMode: SearchMode;
+  /**
+   * 结果排序引擎：
+   * - "orama" = 本地 Orama 混合检索得分（默认）
+   * - "jev" = 本地召回候选后，交给 Jev (TypeSafe System One) 评审模型
+   *   逐条评估相关概率并重排（参考 superagents-lab/jev-search）
+   */
+  searchEngine?: SearchEngine;
+  /** Jev (TypeSafe System One) API Key — https://typesafe.ai */
+  jevApiKey?: string;
+  /** Jev Base URL 覆写（默认 https://api.typesafe.ai/v1/systemone） */
+  jevBaseURL?: string;
   vectorWeight: number;
   selectedFolderIds?: string[]; // 持久化存储选中的文件夹 ID
   githubToken?: string; // GitHub PAT

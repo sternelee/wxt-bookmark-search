@@ -22,6 +22,32 @@ function polyfillAbortSignalTimeout(): void {
   }
 }
 
+/** Polyfill AbortSignal.any for older browsers (e.g. Firefox <124). */
+function polyfillAbortSignalAny(): void {
+  if (
+    typeof AbortSignal !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    !AbortSignal.any
+  ) {
+    (AbortSignal as any).any = function (signals: AbortSignal[]): AbortSignal {
+      const controller = new AbortController();
+      for (const signal of signals) {
+        if (signal.aborted) {
+          controller.abort(signal.reason);
+          return controller.signal;
+        }
+        signal.addEventListener(
+          "abort",
+          () => controller.abort(signal.reason),
+          { once: true },
+        );
+      }
+      return controller.signal;
+    };
+  }
+}
+
 export function installPolyfills(): void {
   polyfillAbortSignalTimeout();
+  polyfillAbortSignalAny();
 }

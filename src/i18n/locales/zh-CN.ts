@@ -152,6 +152,21 @@ export default {
         "调高此值将让搜索结果更偏向意思相近，调低则更偏向字面匹配",
       applied: "✓ 搜索设置已应用",
       applyFailed: "应用搜索设置失败",
+      engine: "排序引擎 (Ranking Engine)",
+      engineHint:
+        "Jev 模式在本地召回候选后，由 TypeSafe Jev 评审模型逐条评估相关概率并重排，可理解自然语言查询。注意：启用后每次搜索会将你的查询词及候选书签的标题、摘要、标签和 URL 发送至 TypeSafe（api.typesafe.ai）。",
+      engineOrama: "本地混合检索 (Orama)",
+      engineJev: "Jev 评审重排 (TypeSafe)",
+      jevApiKey: "Jev API Key",
+      jevApiKeyHint: "在 https://typesafe.ai 获取 — 用于 jev-latest 评估模型",
+      jevBaseURL: "Jev Base URL（可选）",
+      jevBaseURLHint: "默认 https://api.typesafe.ai/v1/systemone，一般无需修改",
+      jevKeyRequired: "选择 Jev 引擎需要先填写 Jev API Key",
+      jevTest: "测试连接",
+      jevTesting: "正在测试...",
+      jevTestOk: "✓ 连接成功！Jev 服务可用",
+      jevTestFailed: "连接失败：{{error}}",
+      jevTestNeedKey: "请先填写 Jev API Key",
     },
 
     github: {

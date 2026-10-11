@@ -158,6 +158,21 @@ export default {
         "Higher value makes results more semantically similar; lower value favors literal matching",
       applied: "✓ Search settings applied",
       applyFailed: "Failed to apply search settings",
+      engine: "Ranking Engine",
+      engineHint:
+        "Jev reranks locally-recalled candidates with the TypeSafe Jev evaluation model, understanding natural-language queries. Note: when enabled, each search sends your query and the titles, summaries, tags and URLs of the ranked candidates to TypeSafe (api.typesafe.ai).",
+      engineOrama: "Local hybrid (Orama)",
+      engineJev: "Jev judge rerank (TypeSafe)",
+      jevApiKey: "Jev API Key",
+      jevApiKeyHint: "Get one at https://typesafe.ai — used by the jev-latest evaluation model",
+      jevBaseURL: "Jev Base URL (optional)",
+      jevBaseURLHint: "Defaults to https://api.typesafe.ai/v1/systemone; rarely needs changing",
+      jevKeyRequired: "Jev engine requires a Jev API key first",
+      jevTest: "Test connection",
+      jevTesting: "Testing...",
+      jevTestOk: "✓ Connection succeeded! Jev service is available",
+      jevTestFailed: "Connection failed: {{error}}",
+      jevTestNeedKey: "Please enter a Jev API key first",
     },
 
     github: {

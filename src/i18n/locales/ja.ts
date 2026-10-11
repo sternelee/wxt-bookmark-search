@@ -158,6 +158,21 @@ export default {
         "値を上げると意味的な類似性が重視されます。下げると文字列一致が重視されます",
       applied: "✓ 検索設定を適用しました",
       applyFailed: "検索設定の適用に失敗しました",
+      engine: "ランキングエンジン",
+      engineHint:
+        "Jev はローカルで召回した候補を TypeSafe Jev 評価モデルで再順位付けし、自然言語クエリを理解します。注意: 有効にすると、検索のたびにクエリおよび順位付けされた候補のタイトル、要約、タグ、URL が TypeSafe (api.typesafe.ai) に送信されます。",
+      engineOrama: "ローカルハイブリッド検索 (Orama)",
+      engineJev: "Jev ジャッジ再順位付け (TypeSafe)",
+      jevApiKey: "Jev API キー",
+      jevApiKeyHint: "https://typesafe.ai で取得 — jev-latest 評価モデルで使用",
+      jevBaseURL: "Jev Base URL（オプション）",
+      jevBaseURLHint: "既定値: https://api.typesafe.ai/v1/systemone（通常は変更不要）",
+      jevKeyRequired: "Jev エンジンを選ぶには Jev API キーが必要です",
+      jevTest: "接続テスト",
+      jevTesting: "テスト中...",
+      jevTestOk: "✓ 接続に成功しました！Jev サービスを利用できます",
+      jevTestFailed: "接続に失敗しました: {{error}}",
+      jevTestNeedKey: "先に Jev API キーを入力してください",
     },
 
     github: {
