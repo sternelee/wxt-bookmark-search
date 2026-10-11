@@ -898,18 +898,24 @@ interface ReaderExtraction {
   summary?: string;
 }
 
+/** reader 调用结果：content 为 null 时通过 error 携带具体失败原因 */
+interface ReaderOutcome {
+  content: ReaderExtraction | null;
+  error?: string;
+}
+
 /**
  * 通过 markdown.new (Cloudflare AI) 提取页面 markdown（默认 reader）
  */
 async function fetchWithMarkdownNew(
   url: string,
-): Promise<ReaderExtraction | null> {
+): Promise<ReaderOutcome> {
   const safeUrl = sanitizeReaderUrl(url);
   if (!safeUrl) {
     console.warn(
       `[indexer] markdown.new: Skipping private or unsupported URL: ${url}`,
     );
-    return null;
+    return { content: null, error: "URL 不支持第三方提取" };
   }
 
   console.log(`[indexer] markdown.new: Requesting ${url}`);
@@ -928,15 +934,22 @@ async function fetchWithMarkdownNew(
       signal: AbortSignal.timeout(10000),
     });
 
-    if (markdownResponse.status === 429) {
+    // 429 与 439 均为 markdown.new 限流码
+    if (markdownResponse.status === 429 || markdownResponse.status === 439) {
       markdownLimiter.onRateLimit();
-      return null;
+      return {
+        content: null,
+        error: `markdown.new HTTP ${markdownResponse.status}（限流）`,
+      };
     }
     if (!markdownResponse.ok) {
       console.warn(
         `[indexer] markdown.new: HTTP ${markdownResponse.status} for ${url}`,
       );
-      return null;
+      return {
+        content: null,
+        error: `markdown.new HTTP ${markdownResponse.status}`,
+      };
     }
 
     markdownLimiter.onSuccess();
@@ -956,12 +969,16 @@ async function fetchWithMarkdownNew(
         frontTitle || data.title || "",
       );
       console.log(`[indexer] markdown.new: success for ${url}`);
-      return { markdown: body, title, summary };
+      return { content: { markdown: body, title, summary } };
     }
+    return { content: null, error: "markdown.new 返回内容为空" };
   } catch (e) {
     console.warn(`[indexer] markdown.new: failed for ${url}:`, e);
+    return {
+      content: null,
+      error: `markdown.new 请求失败: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
-  return null;
 }
 
 /**
@@ -969,13 +986,13 @@ async function fetchWithMarkdownNew(
  */
 async function fetchWithJinaReader(
   url: string,
-): Promise<ReaderExtraction | null> {
+): Promise<ReaderOutcome> {
   const readerUrl = getSafeJinaReaderUrl(url);
   if (!readerUrl) {
     console.warn(
       `[indexer] Jina Reader: Skipping private or unsupported URL: ${url}`,
     );
-    return null;
+    return { content: null, error: "URL 不支持第三方提取" };
   }
 
   console.log(`[indexer] Jina Reader: Requesting ${url}`);
@@ -987,24 +1004,33 @@ async function fetchWithJinaReader(
 
     if (jinaResponse.status === 429) {
       jinaLimiter.onRateLimit();
-      return null;
+      return { content: null, error: "Jina Reader HTTP 429（限流）" };
     }
     if (!jinaResponse.ok) {
       console.warn(
         `[indexer] Jina Reader: HTTP ${jinaResponse.status} for ${url}`,
       );
-      return null;
+      return {
+        content: null,
+        error: `Jina Reader HTTP ${jinaResponse.status}`,
+      };
     }
 
     jinaLimiter.onSuccess();
     const markdown = await jinaResponse.text();
+    if (markdown.trim().length === 0) {
+      return { content: null, error: "Jina Reader 返回内容为空" };
+    }
     const { title, summary } = extractFromMarkdown(markdown, "");
     console.log(`[indexer] Jina Reader: success for ${url}`);
-    return { markdown, title, summary };
+    return { content: { markdown, title, summary } };
   } catch (e) {
     console.warn(`[indexer] Jina Reader: failed for ${url}:`, e);
+    return {
+      content: null,
+      error: `Jina Reader 请求失败: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
-  return null;
 }
 
 /**
@@ -1013,7 +1039,11 @@ async function fetchWithJinaReader(
 export async function fetchPageContent(
   url: string,
   settings: Settings,
-): Promise<{ markdown: string; title?: string; summary?: string } | null> {
+): Promise<{
+  content: { markdown: string; title?: string; summary?: string } | null;
+  /** 所选第三方 reader 的失败原因（content 非空时也可能存在，仅用于诊断） */
+  readerError?: string;
+}> {
   try {
     console.log(`[FlowSearch] fetchPageContent starting for: ${url}`);
 
@@ -1033,9 +1063,11 @@ export async function fetchPageContent(
           if (readme && readme.length > 10) {
             const plainText = stripMarkdownToPlainText(readme);
             return {
-              markdown: readme,
-              title: `${owner}/${repo}`,
-              summary: plainText.slice(0, 500),
+              content: {
+                markdown: readme,
+                title: `${owner}/${repo}`,
+                summary: plainText.slice(0, 500),
+              },
             };
           }
         } catch (ghError) {
@@ -1058,9 +1090,11 @@ export async function fetchPageContent(
           if (result && result.success) {
             console.log(`[indexer] Strategy 1: Active tab success: ${url}`);
             return {
-              markdown: result.markdown,
-              title: result.title,
-              summary: result.excerpt,
+              content: {
+                markdown: result.markdown,
+                title: result.title,
+                summary: result.excerpt,
+              },
             };
           }
         } catch (e) {
@@ -1134,25 +1168,28 @@ export async function fetchPageContent(
     // 先等本地结果；高质量则直接返回
     const localResult = await localPromise;
     if (localResult && localResult.isHighQuality) {
-      return localResult.content;
+      return { content: localResult.content };
     }
 
     // 本地不足或失败时，使用所选的第三方 reader
-    const readerResult = await readerPromise;
-    if (readerResult) {
-      return readerResult;
+    const readerOutcome = await readerPromise;
+    if (readerOutcome.content) {
+      return { content: readerOutcome.content };
     }
 
     // 最终兜底：回退到本地 best-effort
     if (localResult) {
       console.log(`[indexer] Using local best-effort result as final fallback`);
-      return localResult.content;
+      return {
+        content: localResult.content,
+        readerError: readerOutcome.error,
+      };
     }
 
-    return null;
+    return { content: null, readerError: readerOutcome.error };
   } catch (error) {
     console.warn(`[indexer] fetchPageContent failed for ${url}:`, error);
-    return null;
+    return { content: null };
   }
 }
 
@@ -1183,6 +1220,8 @@ function onRateLimit(): void {
 function isRateLimitError(error: string): boolean {
   return (
     error.includes("429") ||
+    // markdown.new 的限流码为 439
+    error.includes("439") ||
     error.includes("rate limit") ||
     error.includes("too many requests") ||
     error.includes("quota")
@@ -1268,7 +1307,13 @@ async function processQueue(): Promise<void> {
       CONTENT_FETCH_CONCURRENCY,
       async (job) => {
         try {
-          const content = await fetchPageContent(job.url, settings);
+          // 每个 job 重新读取设置：用户在索引运行中切换 reader 后端
+          // （如 markdown.new 限流后切到 Jina）能立即生效，无需重启 SW
+          const jobSettings = await getSettings();
+          const { content, readerError } = await fetchPageContent(
+            job.url,
+            jobSettings,
+          );
           let text: string;
           let summary = content?.summary || "";
           let tags: string[] = [];
@@ -1280,7 +1325,7 @@ async function processQueue(): Promise<void> {
 
           // LLM 增强（如果启用且有足够内容）
           if (
-            settings.enableLLMEnrichment &&
+            jobSettings.enableLLMEnrichment &&
             content?.markdown &&
             content.markdown.length > 100
           ) {
@@ -1361,6 +1406,7 @@ async function processQueue(): Promise<void> {
           return {
             job,
             content,
+            readerError,
             text,
             summary,
             tags,
@@ -1380,6 +1426,7 @@ async function processQueue(): Promise<void> {
           return {
             job,
             content: null,
+            readerError: undefined,
             text: job.title,
             summary: "",
             tags: [],
@@ -1473,7 +1520,7 @@ async function processQueue(): Promise<void> {
 
     // 4. 批量写入 DB
     const records: BookmarkRecord[] = contents.map(
-      ({ job, content, summary, tags, quickSummary, keyPoints, readingTime, technologies, llmEnhanced }, i) => {
+      ({ job, content, readerError, summary, tags, quickSummary, keyPoints, readingTime, technologies, llmEnhanced }, i) => {
         const existing = existingById.get(job.bookmarkId);
         const hasEmbedding = !!embeddings[i];
         return {
@@ -1489,7 +1536,7 @@ async function processQueue(): Promise<void> {
           // 内容提取失败（所有策略均未取到正文）：仍保留标题索引，但记录失败供用户验证
           error: content
             ? undefined
-            : "内容提取失败：无法获取页面正文，已降级为标题索引",
+            : `内容提取失败${readerError ? `（${readerError}）` : ""}，已降级为标题索引`,
           failureStage: content ? undefined : ("extract" as const),
           llmEnhanced: llmEnhanced || existing?.llmEnhanced || false,
           source: existing?.source || "bookmark",

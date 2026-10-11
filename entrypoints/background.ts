@@ -2223,14 +2223,16 @@ export default defineBackground(() => {
                 error: t("background.apiKeyNotConfigured"),
               };
             }
-            const content = await fetchPageContent(
+            const { content, readerError } = await fetchPageContent(
               message.url,
               summarizeSettings,
             );
             if (!content) {
               return {
                 success: false,
-                error: t("background.contentExtractionFailed"),
+                error: readerError
+                  ? `${t("background.contentExtractionFailed")} (${readerError})`
+                  : t("background.contentExtractionFailed"),
               };
             }
             const provider = getLLMProvider();
