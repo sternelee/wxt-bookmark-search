@@ -102,7 +102,7 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "Self-hosted Cloudflare Markdown",
-      cloudflareReaderUrlPlaceholder: "Service URL, e.g. https://flowsearch-markdown-reader.<subdomain>.workers.dev",
+      cloudflareReaderUrlPlaceholder: "Service URL, e.g. https://markdown-reader.leeapp.dev",
       cloudflareReaderTokenPlaceholder: "Access token (required if AUTH_TOKEN is set server-side)",
       cloudflareReaderHint:
         "Deployed from workers/markdown-reader (Workers AI toMarkdown) on your own Cloudflare account — no shared third-party rate limits. See that directory's README.",

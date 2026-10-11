@@ -34,7 +34,9 @@ interface ConversionResult {
 }
 
 interface Env {
-  AI: { toMarkdown: (inputs?: ToMarkdownInput[]) => Promise<ConversionResult[]> };
+  AI: {
+    toMarkdown: (inputs?: ToMarkdownInput[]) => Promise<ConversionResult[]>;
+  };
   /** 可选共享令牌；设置后请求必须带 Authorization: Bearer <token> */
   AUTH_TOKEN?: string;
 }
@@ -80,7 +82,7 @@ function isPrivateIpv4Host(host: string): boolean {
   return (
     a === 0 ||
     a === 10 ||
-    (a === 127) ||
+    a === 127 ||
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
@@ -133,10 +135,7 @@ function checkAuth(request: Request, env: Env): boolean {
   return header === `Bearer ${env.AUTH_TOKEN}`;
 }
 
-async function handleMarkdown(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+async function handleMarkdown(request: Request, env: Env): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const target = params.get("url");
   if (!target) {
@@ -187,8 +186,11 @@ async function handleMarkdown(
     return errorResponse("upstream returned empty body", 502);
   }
 
-  const contentType = (upstream.headers.get("Content-Type") ?? "").toLowerCase();
-  const name = targetUrl.pathname.split("/").filter(Boolean).pop() ?? "document";
+  const contentType = (
+    upstream.headers.get("Content-Type") ?? ""
+  ).toLowerCase();
+  const name =
+    targetUrl.pathname.split("/").filter(Boolean).pop() ?? "document";
 
   // 快速路径：上游已经是 markdown（Markdown for Agents 站点）
   if (contentType.startsWith("text/markdown")) {
@@ -205,7 +207,10 @@ async function handleMarkdown(
   let results: ConversionResult[];
   try {
     results = await env.AI.toMarkdown([
-      { name: name.includes(".") ? name : `${name}.html`, blob: new Blob([body], { type: contentType || "text/html" }) },
+      {
+        name: name.includes(".") ? name : `${name}.html`,
+        blob: new Blob([body], { type: contentType || "text/html" }),
+      },
     ]);
   } catch (e) {
     return errorResponse(
@@ -219,7 +224,10 @@ async function handleMarkdown(
     return errorResponse("toMarkdown returned no result", 500);
   }
   if (result.format === "error") {
-    return errorResponse(`conversion failed: ${result.error ?? "unknown"}`, 422);
+    return errorResponse(
+      `conversion failed: ${result.error ?? "unknown"}`,
+      422,
+    );
   }
 
   const markdown = result.data ?? "";
@@ -245,7 +253,7 @@ export default {
     const path = new URL(request.url).pathname;
 
     if (path === "/health") {
-      return json({ ok: true, service: "flowsearch-markdown-reader" });
+      return json({ ok: true, service: "markdown-reader" });
     }
 
     if (path === "/markdown") {

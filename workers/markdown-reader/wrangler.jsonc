@@ -1,8 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "flowsearch-markdown-reader",
+  "name": "markdown-reader",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
+  // 自定义域名（需 leeapp.dev zone 已在此 Cloudflare 账号）
+  // 部署后访问 https://markdown-reader.leeapp.dev
+  "routes": [{ "pattern": "markdown-reader.leeapp.dev", "custom_domain": true }],
   // Workers AI 始终在云端执行，本地 dev 也走真实推理
   "ai": { "binding": "AI" },
   "observability": {

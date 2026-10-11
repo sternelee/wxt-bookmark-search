@@ -32,7 +32,7 @@
   `stripYamlFrontmatter` / `extractFromMarkdown` 后处理；独立 RateLimiter 应对 Workers AI 配额 429）；
   `fetchPageContent` 分发三选一，互不兜底（保持既有策略不变）
 - 设置页：选择「自建 Cloudflare Markdown 服务」时显示服务地址 / 令牌输入框；i18n 四语言补齐
-- `wxt.config.ts`：`host_permissions` 放行 `https://*.workers.dev/*`（默认部署域；自定义域名需自行追加）
+- `wxt.config.ts`：`host_permissions` 放行 `https://markdown-reader.leeapp.dev/*`（自定义域名）
 
 ## 部署（用户操作）
 
@@ -43,7 +43,7 @@ npx wrangler deploy
 npx wrangler secret put AUTH_TOKEN   # 部署后立即设置，防止被盗用配额
 ```
 
-然后在扩展设置页填入 `https://flowsearch-markdown-reader.<子域>.workers.dev` 与令牌。
+然后在扩展设置页填入 `https://markdown-reader.leeapp.dev` 与令牌。
 
 ## 验证
 

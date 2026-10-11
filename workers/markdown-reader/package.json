@@ -1,5 +1,5 @@
 {
-  "name": "flowsearch-markdown-reader",
+  "name": "markdown-reader",
   "version": "1.0.0",
   "private": true,
   "description": "Self-hosted URL → markdown conversion service for Flow Search, built on Workers AI toMarkdown",

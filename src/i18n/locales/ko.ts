@@ -99,7 +99,7 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "자체 Cloudflare Markdown 서비스",
-      cloudflareReaderUrlPlaceholder: "서비스 URL (예: https://flowsearch-markdown-reader.<서브도메인>.workers.dev)",
+      cloudflareReaderUrlPlaceholder: "서비스 URL (예: https://markdown-reader.leeapp.dev)",
       cloudflareReaderTokenPlaceholder: "액세스 토큰 (서버에 AUTH_TOKEN 설정 시 필수)",
       cloudflareReaderHint:
         "workers/markdown-reader(Workers AI toMarkdown)를 자신의 Cloudflare 계정에 배포 — 서드파티 공유 rate limit이 없습니다. 해당 디렉터리의 README 참조.",

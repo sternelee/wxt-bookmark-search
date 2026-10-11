@@ -42,9 +42,8 @@ export default defineConfig({
     host_permissions: [
       "https://r.jina.ai/*",
       "https://markdown.new/*",
-      // 自建 Cloudflare Markdown 服务（workers/markdown-reader）默认部署域；
-      // 绑定自定义域名时需在此追加后重新构建
-      "https://*.workers.dev/*",
+      // 自建 Cloudflare Markdown 服务（workers/markdown-reader）
+      "https://markdown-reader.leeapp.dev/*",
       "https://x.com/*",
       "https://twitter.com/*",
       "https://api.x.com/*",

@@ -99,7 +99,7 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "自建 Cloudflare Markdown 服务",
-      cloudflareReaderUrlPlaceholder: "服务地址，如 https://flowsearch-markdown-reader.<子域>.workers.dev",
+      cloudflareReaderUrlPlaceholder: "服务地址，如 https://markdown-reader.leeapp.dev",
       cloudflareReaderTokenPlaceholder: "访问令牌（服务端设置了 AUTH_TOKEN 时必填）",
       cloudflareReaderHint:
         "部署在 workers/markdown-reader（Workers AI toMarkdown），使用你自己的 Cloudflare 账号，无第三方限流。见该目录 README。",

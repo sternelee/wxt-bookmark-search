@@ -1,4 +1,4 @@
-# Flow Search · Markdown Reader Worker
+# Markdown Reader Worker
 
 自托管的 **URL → Markdown** 转换服务，替代不稳定的第三方提取服务（markdown.new 限流 429/439、Jina Reader 限流）。
 
@@ -10,6 +10,8 @@
 3. 否则通过 Workers AI `env.AI.toMarkdown()` 转换（支持 HTML、PDF、图片等格式）
 
 ## 接口
+
+线上地址：`https://markdown-reader.leeapp.dev`
 
 ```
 GET /markdown?url=<encoded-url>          # 转换（设置 AUTH_TOKEN 后需带 Authorization: Bearer <token>）
@@ -26,6 +28,10 @@ GET /health                              # 健康检查
 
 ## 部署
 
+Worker 名称 `markdown-reader`，绑定自定义域名 `markdown-reader.leeapp.dev`
+（要求 `leeapp.dev` zone 已在此 Cloudflare 账号，`custom_domain: true` 会在部署时
+自动创建 DNS 记录与证书）：
+
 ```bash
 cd workers/markdown-reader
 npm install
@@ -39,7 +45,7 @@ npx wrangler secret put AUTH_TOKEN   # 交互式输入，值不会进代码库
 ```
 
 然后在扩展设置页 → 内容提取方式 → 选择「自建 Cloudflare Markdown 服务」，填入
-`https://flowsearch-markdown-reader.<你的子域>.workers.dev` 和令牌即可。
+`https://markdown-reader.leeapp.dev` 和令牌即可。
 
 ## 本地开发
 
@@ -48,8 +54,3 @@ npm install
 npx wrangler dev          # 注意：Workers AI 始终在云端执行，会消耗配额
 curl 'http://localhost:8787/markdown?url=https://blog.cloudflare.com/markdown-for-agents/'
 ```
-
-## 扩展侧权限
-
-扩展默认部署域 `*.workers.dev` 已在 `wxt.config.ts` 的 `host_permissions` 中放行。
-若绑定自定义域名，需自行把域名加入 `host_permissions` 后重新构建。
