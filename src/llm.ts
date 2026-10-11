@@ -12,6 +12,7 @@ const MAX_LLM_RETRIES = 2;
 const LLM_RETRY_BASE_MS = 2000;
 
 import type { LLMResult } from "./ai-providers/types";
+import { normalizeBaseURL } from "./service-config";
 
 export type { LLMResult as AIResult } from "./ai-providers/types";
 
@@ -40,7 +41,7 @@ The output MUST be a valid JSON object. Example:
 }`;
 
   const userPrompt = `Content to analyze:\n\n${text.slice(0, 4000)}`; // 截取前 4k 字符避免超长
-  const endpoint = `${baseURL}/v1/chat/completions`;
+  const endpoint = `${normalizeBaseURL(baseURL)}/chat/completions`;
 
   for (let attempt = 0; attempt <= MAX_LLM_RETRIES; attempt++) {
     try {
@@ -147,7 +148,7 @@ export async function testLlmModel(
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
 ): Promise<true> {
-  const endpoint = `${baseURL}/v1/chat/completions`;
+  const endpoint = `${normalizeBaseURL(baseURL)}/chat/completions`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {

@@ -9,6 +9,7 @@
  */
 
 import { LOCAL_VECTOR_DIM } from "./embedding-space";
+import { normalizeBaseURL } from "./service-config";
 import {
   localEmbed,
   localBatchEmbed,
@@ -197,7 +198,7 @@ export async function getEmbedding(
   } else {
     // 远程后端
     const truncatedText = text.slice(0, MAX_INPUT_LENGTH);
-    const endpoint = `${baseURL}/v1/embeddings`;
+    const endpoint = `${normalizeBaseURL(baseURL)}/embeddings`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -279,7 +280,7 @@ export async function batchEmbedTexts(
 
   // 3. 远程后端：分批 HTTP 请求
   const truncated = uncachedTexts.map((t) => t.slice(0, MAX_INPUT_LENGTH));
-  const endpoint = `${baseURL}/v1/embeddings`;
+  const endpoint = `${normalizeBaseURL(baseURL)}/embeddings`;
 
   for (
     let chunkStart = 0;

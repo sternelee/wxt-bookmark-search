@@ -4,6 +4,7 @@ import { Button } from "../../../src/components/ui/button";
 import { Progress } from "../../../src/components/ui/progress";
 import { Alert } from "../../../src/components/ui/alert";
 import { getIndexStats, getSettings } from "../../../src/db";
+import { isEmbedConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
 import FolderTree from "./FolderTree";
 
@@ -85,7 +86,7 @@ export default function IndexManager() {
   // 开始索引
   const handleStart = async () => {
     const settings = await getSettings();
-    if (!settings.openaiApiKey) {
+    if (!isEmbedConfigured(settings)) {
       setStatus({ message: t("options.indexManager.apiKeyRequired"), type: "error" });
       return;
     }
@@ -146,7 +147,7 @@ export default function IndexManager() {
   // 重试失败
   const handleRetry = async () => {
     const settings = await getSettings();
-    if (!settings.openaiApiKey) {
+    if (!isEmbedConfigured(settings)) {
       setStatus({ message: t("options.indexManager.apiKeyRequired"), type: "error" });
       return;
     }

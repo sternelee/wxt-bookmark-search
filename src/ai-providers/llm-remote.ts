@@ -117,7 +117,7 @@ export function createRemoteLLMProvider(
   baseURL: string,
   uiLanguage: string = "English",
 ): LLMProvider {
-  const endpoint = `${baseURL}/v1/chat/completions`;
+  const endpoint = `${baseURL}/chat/completions`;
   const systemPrompt = buildSystemPrompt(uiLanguage);
   const knowledgePrompt = buildKnowledgeExtractionPrompt(uiLanguage);
 

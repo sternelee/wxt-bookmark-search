@@ -3,6 +3,7 @@
  * 复用 src/llm.ts 和 src/ai-providers/llm-remote.ts 的远程调用模式
  */
 import type { CodeSymbol, WikiDoc } from "../types";
+import { normalizeBaseURL } from "../service-config";
 
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 2000;
@@ -92,7 +93,7 @@ async function summarizeBatch(
   model: string,
   uiLanguage: string,
 ): Promise<SymbolSummaryEntry[]> {
-  const endpoint = `${baseURL}/v1/chat/completions`;
+  const endpoint = `${normalizeBaseURL(baseURL)}/chat/completions`;
   const systemPrompt = buildSymbolSummaryPrompt(uiLanguage);
   const userPrompt = formatSymbolsForLLM(symbols);
 

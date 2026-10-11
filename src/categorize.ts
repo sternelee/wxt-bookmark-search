@@ -88,7 +88,7 @@ async function categorizeBatch(
   customRules: string,
   signal?: AbortSignal,
 ): Promise<CategorySuggestion[]> {
-  const apiUrl = `${baseURL.replace(/\/$/, "")}/v1/chat/completions`;
+  const apiUrl = `${baseURL}/chat/completions`;
 
   // 构建书签列表
   const bookmarkList = bookmarks

@@ -9,6 +9,7 @@ import { Button } from "../../../src/components/ui/button";
 import { Checkbox } from "../../../src/components/ui/checkbox";
 import { Alert } from "../../../src/components/ui/alert";
 import { getSettings, saveSettings } from "../../../src/db";
+import { isLLMConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
 
 function formatErrorMessage(error: unknown): string {
@@ -71,7 +72,7 @@ export default function CategorizeSettings() {
     try {
       // 获取所有已索引书签
       const settings = await getSettings();
-      if (!settings.openaiApiKey) {
+      if (!isLLMConfigured(settings)) {
         setStatus({
           message: t("background.apiKeyNotConfigured"),
           type: "error",

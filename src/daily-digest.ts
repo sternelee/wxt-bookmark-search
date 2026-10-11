@@ -75,7 +75,7 @@ ${conceptNames.join(", ")}
 - 如果内容太少无法关联，connections 可以为空数组`;
 
   try {
-    const response = await fetch(`${baseURL}/v1/chat/completions`, {
+    const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

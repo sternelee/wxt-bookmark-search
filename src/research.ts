@@ -52,7 +52,7 @@ async function callLLM(
   userPrompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(`${baseURL}/v1/chat/completions`, {
+  const response = await fetch(`${baseURL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

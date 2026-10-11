@@ -18,7 +18,7 @@ import {
 } from "./db";
 import { getEmbedding, batchEmbedTexts, testApiKey } from "./embedding";
 import { getLLMProvider } from "./ai-providers/llm-base";
-import { resolveEmbedConfig } from "./service-config";
+import { isEmbedConfigured, resolveEmbedConfig } from "./service-config";
 import {
   upsertSearchEngineBatch,
   removeFromSearchEngine,
@@ -2074,7 +2074,7 @@ export async function initIndexer(): Promise<void> {
 
   // === 恢复 enrichment 队列 ===
   const settings = await getSettings();
-  if (settings.githubToken && resolveEmbedConfig(settings).apiKey) {
+  if (settings.githubToken && isEmbedConfigured(settings)) {
     // 1. 先从 storage 恢复队列
     await restoreEnrichmentQueue();
 
