@@ -2044,6 +2044,9 @@ export default defineBackground(() => {
             return { success: true, results };
           }
           case "START_INDEXING":
+            // 显式启动属于用户意图，先清除后台残留的暂停态，
+            // 否则 processQueue 会立即再次播报 paused 并空转（UI 暂停按钮被禁用）
+            resumeIndexing();
             indexAllBookmarks();
             return { success: true };
           case "PAUSE_INDEXING":
@@ -2053,6 +2056,7 @@ export default defineBackground(() => {
             resumeIndexing();
             return { success: true };
           case "RETRY_FAILED":
+            resumeIndexing();
             retryFailed();
             return { success: true };
           case "GET_FAILED_BOOKMARKS": {
@@ -2081,6 +2085,7 @@ export default defineBackground(() => {
             const folders = await getBookmarkFolders();
             return { success: true, folders };
           case "INDEX_FOLDERS":
+            resumeIndexing();
             const folderResult = await indexFolders(message.folderIds);
             return { success: true, ...folderResult };
           case "SYNC_GITHUB_STARS":
