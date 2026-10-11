@@ -400,7 +400,10 @@ const defaultSettings: Settings = {
   embeddingModel: "text-embedding-3-small", // 默认 embedding 模型
   llmModel: "gpt-4o-mini", // 默认 LLM 模型
   embedBackend: "remote", // 默认远程 API；用户可在设置中切换为 local (on-device)
-  readerBackend: "markdown", // 默认 markdown.new (Cloudflare AI)；可选 jina (Jina Reader)
+  readerBackend: "markdown", // 默认 markdown.new；可选 jina / cloudflare（自建 Worker，无共享限流）
+  // 自建 Cloudflare Markdown 服务（workers/markdown-reader）
+  cloudflareReaderUrl: undefined,
+  cloudflareReaderToken: undefined,
   // Per-service overrides: undefined = fall back to shared openaiApiKey/baseURL
   embedApiKey: undefined,
   embedBaseURL: undefined,

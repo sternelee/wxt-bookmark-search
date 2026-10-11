@@ -158,8 +158,18 @@ export interface Settings {
    */
   embedSpaceFingerprint?: string;
 
-  /** 页面内容提取后端: "markdown" = markdown.new (Cloudflare AI), "jina" = Jina Reader */
-  readerBackend?: "markdown" | "jina";
+  /**
+   * 页面内容提取后端：
+   * - "markdown" = markdown.new (Cloudflare AI，第三方共享限流)
+   * - "jina" = Jina Reader (第三方共享限流)
+   * - "cloudflare" = 自建 Cloudflare Markdown 服务 (workers/markdown-reader，无共享限流)
+   */
+  readerBackend?: "markdown" | "jina" | "cloudflare";
+
+  /** 自建 Cloudflare Markdown 服务（readerBackend = "cloudflare"）的部署地址 */
+  cloudflareReaderUrl?: string;
+  /** 自建服务的访问令牌（服务端设置了 AUTH_TOKEN 时必填） */
+  cloudflareReaderToken?: string;
 
   // Per-service overrides (optional) — 为 LLM 和 Embedding 分别配置不同服务
   /** Embedding 服务的独立 API Key（覆盖 openaiApiKey） */

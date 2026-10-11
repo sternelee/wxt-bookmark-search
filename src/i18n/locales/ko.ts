@@ -98,6 +98,11 @@ export default {
       readerBackend: "콘텐츠 추출 서비스",
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
+      readerBackendCloudflare: "자체 Cloudflare Markdown 서비스",
+      cloudflareReaderUrlPlaceholder: "서비스 URL (예: https://flowsearch-markdown-reader.<서브도메인>.workers.dev)",
+      cloudflareReaderTokenPlaceholder: "액세스 토큰 (서버에 AUTH_TOKEN 설정 시 필수)",
+      cloudflareReaderHint:
+        "workers/markdown-reader(Workers AI toMarkdown)를 자신의 Cloudflare 계정에 배포 — 서드파티 공유 rate limit이 없습니다. 해당 디렉터리의 README 참조.",
       readerBackendHint:
         "로컬 추출이 실패할 때 사용할 타사 서비스입니다. 이 서비스로도 가져올 수 없다면 페이지에 더 이상 접근할 수 없는 경우가 대부분이므로, 다른 서비스로 자동 폴백하지 않습니다.",
       advanced: "고급 설정",

@@ -24,7 +24,9 @@ export default function APISettings() {
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [embedBackend, setEmbedBackend] = createSignal<"local" | "remote">("remote");
-  const [readerBackend, setReaderBackend] = createSignal<"markdown" | "jina">("markdown");
+  const [readerBackend, setReaderBackend] = createSignal<"markdown" | "jina" | "cloudflare">("markdown");
+  const [cloudflareReaderUrl, setCloudflareReaderUrl] = createSignal("");
+  const [cloudflareReaderToken, setCloudflareReaderToken] = createSignal("");
   const [localEngineInfo, setLocalEngineInfo] = createSignal("");
   const [embeddingTested, setEmbeddingTested] = createSignal(false);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
@@ -55,8 +57,14 @@ export default function APISettings() {
     );
     setEmbedBackend(settings.embedBackend === "local" ? "local" : "remote");
     setReaderBackend(
-      settings.readerBackend === "jina" ? "jina" : "markdown",
+      settings.readerBackend === "jina"
+        ? "jina"
+        : settings.readerBackend === "cloudflare"
+          ? "cloudflare"
+          : "markdown",
     );
+    setCloudflareReaderUrl(settings.cloudflareReaderUrl || "");
+    setCloudflareReaderToken(settings.cloudflareReaderToken || "");
     // Per-service override 初始化
     setEmbedApiKey(settings.embedApiKey || "");
     setEmbedBaseURL(settings.embedBaseURL || "");
@@ -93,6 +101,8 @@ export default function APISettings() {
         embeddingModel: embeddingModel() || undefined,
         embedBackend: embedBackend(),
         readerBackend: readerBackend(),
+        cloudflareReaderUrl: cloudflareReaderUrl().trim() || undefined,
+        cloudflareReaderToken: cloudflareReaderToken().trim() || undefined,
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
@@ -306,12 +316,34 @@ export default function APISettings() {
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={readerBackend()}
             onChange={(e) =>
-              setReaderBackend(e.currentTarget.value as "markdown" | "jina")
+              setReaderBackend(e.currentTarget.value as "markdown" | "jina" | "cloudflare")
             }
           >
             <option value="markdown">{t("options.api.readerBackendMarkdown")}</option>
             <option value="jina">{t("options.api.readerBackendJina")}</option>
+            <option value="cloudflare">{t("options.api.readerBackendCloudflare")}</option>
           </select>
+          {readerBackend() === "cloudflare" && (
+            <div class="mt-3 space-y-2">
+              <input
+                type="url"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder={t("options.api.cloudflareReaderUrlPlaceholder")}
+                value={cloudflareReaderUrl()}
+                onInput={(e) => setCloudflareReaderUrl(e.currentTarget.value)}
+              />
+              <input
+                type="password"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder={t("options.api.cloudflareReaderTokenPlaceholder")}
+                value={cloudflareReaderToken()}
+                onInput={(e) => setCloudflareReaderToken(e.currentTarget.value)}
+              />
+              <p class="text-xs text-muted-foreground">
+                {t("options.api.cloudflareReaderHint")}
+              </p>
+            </div>
+          )}
           <p class="text-xs text-muted-foreground mt-1">
             {t("options.api.readerBackendHint")}
           </p>

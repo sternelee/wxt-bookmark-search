@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flowsearch-markdown-reader",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // Workers AI 始终在云端执行，本地 dev 也走真实推理
+  "ai": { "binding": "AI" },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+  },
+  // 可选访问令牌：wrangler secret put AUTH_TOKEN 后启用鉴权
+  // 不设置则任何人可调用，部署后请尽快设置
+}
