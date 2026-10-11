@@ -106,10 +106,22 @@ export async function reembedAllCodeEmbeddings(
       baseURL,
       backend,
     );
-    await db.codeEmbeddings.bulkPut(
-      embeddable.map((e, i) => ({ ...e, vector: vectors[i] ?? [] })),
-    );
-    processed += embeddable.length;
+    // 嵌入失败的条目跳过（保留旧向量与 chunk，下轮守卫可重试），不写入空向量
+    const updated = embeddable
+      .map((e, i) => {
+        const vector = vectors[i];
+        return vector && vector.length > 0 ? { ...e, vector } : null;
+      })
+      .filter((r): r is CodeEmbedding => r !== null);
+    if (updated.length < embeddable.length) {
+      console.warn(
+        `[embed-code] ${embeddable.length - updated.length}/${embeddable.length} chunks failed to embed, keeping old vectors`,
+      );
+    }
+    if (updated.length > 0) {
+      await db.codeEmbeddings.bulkPut(updated);
+    }
+    processed += updated.length;
   }
 
   console.log(`[embed-code] Re-embedded ${processed}/${total} code vectors`);

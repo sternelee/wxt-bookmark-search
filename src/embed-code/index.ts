@@ -71,11 +71,11 @@ export async function initCodeSearchEngine(dim?: number): Promise<void> {
   });
 }
 
-/** 从序列化数据恢复代码搜索引擎（dim 必须与当前引擎一致，否则抛错） */
-export function loadCodeSearchEngine(raw: RawData, dim?: number): void {
-  if (dim && dim !== currentCodeDim) {
+/** 从序列化数据恢复代码搜索引擎（expectedDim 必须与当前引擎一致，否则抛错） */
+export function loadCodeSearchEngine(raw: RawData, expectedDim?: number): void {
+  if (expectedDim && expectedDim !== currentCodeDim) {
     throw new Error(
-      `Orama code index dim mismatch: stored=${dim} current=${currentCodeDim}`,
+      `Orama code index dim mismatch: expected=${expectedDim} current=${currentCodeDim}`,
     );
   }
   if (!codeEngine) {
@@ -98,8 +98,15 @@ export function isCodeSearchEngineReady(): boolean {
 /**
  * 确保代码搜索引擎已初始化（懒初始化）。
  * 传 dim 时若与当前维度不一致则重建 —— 避免用新后端的查询向量去搜旧维度的索引。
+ * 注意：重建得到的是空引擎，存量索引需由调用方（或下次 SW 启动）重新填充。
  */
 export async function ensureCodeSearchEngine(dim?: number): Promise<void> {
+  if (codeEngine && dim && dim !== currentCodeDim) {
+    console.warn(
+      `[embed-code] Engine dim mismatch (current=${currentCodeDim}, expected=${dim}); ` +
+        "recreating empty engine — index will be repopulated on next SW start",
+    );
+  }
   if (!codeEngine || (dim && dim !== currentCodeDim)) {
     await initCodeSearchEngine(dim);
   }

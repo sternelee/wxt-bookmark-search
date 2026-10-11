@@ -91,11 +91,11 @@ export async function initSearchEngine(dim?: number): Promise<void> {
   });
 }
 
-/** 从序列化数据恢复搜索引擎（dim 必须与当前引擎一致，否则抛错） */
-export function loadSearchEngine(raw: RawData, dim?: number): void {
-  if (dim && dim !== currentDim) {
+/** 从序列化数据恢复搜索引擎（expectedDim 必须与当前引擎一致，否则抛错） */
+export function loadSearchEngine(raw: RawData, expectedDim?: number): void {
+  if (expectedDim && expectedDim !== currentDim) {
     throw new Error(
-      `Orama index dim mismatch: stored=${dim} current=${currentDim}`,
+      `Orama index dim mismatch: expected=${expectedDim} current=${currentDim}`,
     );
   }
   if (!engine) {
