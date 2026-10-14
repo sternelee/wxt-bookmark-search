@@ -23,6 +23,7 @@ export default function HistorySettings() {
     type: "success" | "error" | "info";
   } | null>(null);
   const [isSyncing, setIsSyncing] = createSignal(false);
+  const [isStopping, setIsStopping] = createSignal(false);
 
   // 初始化
   getSettings().then((settings) => {
@@ -57,7 +58,9 @@ export default function HistorySettings() {
         type: "SYNC_HISTORY",
       });
 
-      if (result.success) {
+      if (result.stopped) {
+        setStatus({ message: t("common.syncStopped"), type: "info" });
+      } else if (result.success) {
         const msg = result.error
           ? `${t("options.history.syncError")}: ${result.error}`
           : t("options.history.syncSuccess", { added: result.added, skipped: result.skipped });
@@ -76,7 +79,18 @@ export default function HistorySettings() {
       });
     } finally {
       setIsSyncing(false);
+      // 同步已结束（含被用户停止）：复位停止态，避免下次运行时「停止」按钮仍处于禁用态
+      setIsStopping(false);
     }
+  };
+
+  /** 请求后台停止正在进行的浏览器历史同步 */
+  const handleStop = () => {
+    setIsStopping(true);
+    // 复位交给 handleSync 的 finally：停止态应持续到同步真正结束
+    browser.runtime
+      .sendMessage({ type: "STOP_SOURCE_SYNC", source: "history" })
+      .catch(() => {});
   };
 
   return (
@@ -125,6 +139,13 @@ export default function HistorySettings() {
           <Button onClick={handleSave}>{t("options.history.saveSettings")}</Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
             {isSyncing() ? t("common.syncing") : t("options.history.syncNow")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleStop}
+            disabled={!isSyncing() || isStopping()}
+          >
+            {isStopping() ? t("common.stopping") : t("common.stop")}
           </Button>
         </div>
 

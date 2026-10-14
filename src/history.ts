@@ -5,6 +5,7 @@
 
 import type { BookmarkRecord } from "./types";
 import { getSettings, upsertBookmarks } from "./db";
+import { beginSync, endSync } from "./sync-control";
 
 /** 需要跳过的 URL 协议前缀 */
 const SKIP_PROTOCOLS = [
@@ -57,19 +58,26 @@ function historyItemToRecord(item: HistoryItem): BookmarkRecord {
 export async function syncHistoryBookmarks(): Promise<{
   added: number;
   skipped: number;
+  stopped?: boolean;
   error?: string;
 }> {
+  // 历史同步是「先全部收集、最后一次性写入」，因此停止后不会留下半成品记录
+  const signal = beginSync("history");
+  const stoppedResult = { added: 0, skipped: 0, stopped: true };
+
   try {
     const settings = await getSettings();
     const days = settings.historyDays ?? 30;
     const startTime = Date.now() - days * 24 * 60 * 60 * 1000;
 
-    // 从 browser.history 获取历史记录
+    // 从 browser.history 获取历史记录（该 API 无法中途取消，返回后再检查）
     const historyItems = await browser.history.search({
       text: "",
       startTime,
       maxResults: 5000,
     });
+
+    if (signal.aborted) return stoppedResult;
 
     // 过滤无效 URL
     const validItems = historyItems.filter(
@@ -88,6 +96,7 @@ export async function syncHistoryBookmarks(): Promise<{
     const BATCH_SIZE = 200;
     const existingUrls = new Set<string>();
     for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
+      if (signal.aborted) return stoppedResult;
       const batch = allUrls.slice(i, i + BATCH_SIZE);
       const existing = await db.bookmarks.where("url").anyOf(batch).toArray();
       for (const r of existing) {
@@ -101,6 +110,8 @@ export async function syncHistoryBookmarks(): Promise<{
     if (newItems.length === 0) {
       return { added: 0, skipped: validItems.length };
     }
+
+    if (signal.aborted) return stoppedResult;
 
     // 转换并写入 DB
     const records = newItems.map(historyItemToRecord);
@@ -118,5 +129,7 @@ export async function syncHistoryBookmarks(): Promise<{
     const message = error instanceof Error ? error.message : String(error);
     console.error("[history] syncHistoryBookmarks 失败:", error);
     return { added: 0, skipped: 0, error: message };
+  } finally {
+    endSync("history", signal);
   }
 }

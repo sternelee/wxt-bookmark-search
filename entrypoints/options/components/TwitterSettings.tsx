@@ -25,6 +25,7 @@ export default function TwitterSettings() {
     type: "success" | "error" | "info";
   } | null>(null);
   const [isSyncing, setIsSyncing] = createSignal(false);
+  const [isStopping, setIsStopping] = createSignal(false);
   const [isExtracting, setIsExtracting] = createSignal(false);
 
   // 初始化
@@ -101,7 +102,9 @@ export default function TwitterSettings() {
         type: "SYNC_TWITTER_BOOKMARKS",
       });
 
-      if (result.success) {
+      if (result.stopped) {
+        setStatus({ message: t("common.syncStopped"), type: "info" });
+      } else if (result.success) {
         setStatus({
           message: t("options.twitter.syncSuccess", { total: result.total }),
           type: "success",
@@ -117,7 +120,18 @@ export default function TwitterSettings() {
       });
     } finally {
       setIsSyncing(false);
+      // 同步已结束（含被用户停止）：复位停止态，避免下次运行时「停止」按钮仍处于禁用态
+      setIsStopping(false);
     }
+  };
+
+  /** 请求后台停止正在进行的 X 书签同步 */
+  const handleStop = () => {
+    setIsStopping(true);
+    // 复位交给 handleSync 的 finally：停止态应持续到同步真正结束
+    browser.runtime
+      .sendMessage({ type: "STOP_SOURCE_SYNC", source: "twitter" })
+      .catch(() => {});
   };
 
   return (
@@ -178,6 +192,13 @@ export default function TwitterSettings() {
           </Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing()}>
             {isSyncing() ? t("common.syncing") : t("options.twitter.syncBookmarks")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleStop}
+            disabled={!isSyncing() || isStopping()}
+          >
+            {isStopping() ? t("common.stopping") : t("common.stop")}
           </Button>
         </div>
 

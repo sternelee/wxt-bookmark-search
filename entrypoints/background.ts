@@ -79,6 +79,7 @@ import {
   enqueueBookmarksForReindex,
 } from "../src/indexer";
 import { syncHistoryBookmarks } from "../src/history";
+import { isSyncRunning, isSyncSource, stopSync } from "../src/sync-control";
 import { t } from "../src/i18n";
 import {
   fullGistSync,
@@ -1987,6 +1988,8 @@ export default defineBackground(() => {
       await handleDailyDigest();
     }
     if (alarm.name === "githubSync") {
+      // 手动同步进行中则跳过，避免 beginSync 打断用户主动发起的同步
+      if (isSyncRunning("github")) return;
       console.log("[FlowSearch] Running scheduled GitHub Stars sync...");
       try {
         const settings = await getSettings();
@@ -2000,6 +2003,8 @@ export default defineBackground(() => {
       }
     }
     if (alarm.name === "twitterSync") {
+      // 手动同步进行中则跳过，避免 beginSync 打断用户主动发起的同步
+      if (isSyncRunning("twitter")) return;
       console.log("[FlowSearch] Running scheduled Twitter sync...");
       try {
         const settings = await getSettings();
@@ -2013,6 +2018,8 @@ export default defineBackground(() => {
       }
     }
     if (alarm.name === "historySync") {
+      // 手动同步进行中则跳过，避免 beginSync 打断用户主动发起的同步
+      if (isSyncRunning("history")) return;
       console.log("[FlowSearch] Running scheduled history sync...");
       try {
         const settings = await getSettings();
@@ -2097,6 +2104,13 @@ export default defineBackground(() => {
           case "SYNC_HISTORY": {
             const histResult = await syncHistoryBookmarks();
             return { success: true, ...histResult };
+          }
+          case "STOP_SOURCE_SYNC": {
+            // 停止 GitHub Stars / Twitter 书签 / 浏览器历史 中正在跑的同步
+            if (!isSyncSource(message.source)) {
+              return { success: false, error: "Unknown sync source" };
+            }
+            return { success: true, stopped: stopSync(message.source) };
           }
           case "GET_CACHE_STATS": {
             return { success: true, ...getCacheStats() };

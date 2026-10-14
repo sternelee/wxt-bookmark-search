@@ -235,6 +235,9 @@ const MAX_BATCH_CHUNK = 32;
 
 /**
  * 批量 embedding — 根据 backend 分派
+ *
+ * 传入 signal 时支持中途取消（远程后端会在分块边界与 HTTP 请求上生效）：
+ * 取消会抛出 AbortError，调用方应结合 signal.aborted 判断是「用户停止」而非真实失败。
  */
 export async function batchEmbedTexts(
   texts: string[],
@@ -242,6 +245,7 @@ export async function batchEmbedTexts(
   model: string = DEFAULT_MODEL,
   baseURL: string = DEFAULT_BASE_URL,
   backend: EmbedBackend = "remote",
+  signal?: AbortSignal,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
@@ -262,6 +266,10 @@ export async function batchEmbedTexts(
   });
 
   if (uncachedTexts.length === 0) return results;
+
+  if (signal?.aborted) {
+    throw new DOMException("Embedding aborted", "AbortError");
+  }
 
   console.log(
     `[embedding] Cache hit: ${texts.length - uncachedTexts.length}/${texts.length} (backend=${backend})`,
@@ -287,6 +295,11 @@ export async function batchEmbedTexts(
     chunkStart < truncated.length;
     chunkStart += MAX_BATCH_CHUNK
   ) {
+    // 分块边界检查取消：已完成的分块已写入缓存，下次重跑可直接命中
+    if (signal?.aborted) {
+      throw new DOMException("Embedding aborted", "AbortError");
+    }
+
     const chunkTexts = truncated.slice(
       chunkStart,
       chunkStart + MAX_BATCH_CHUNK,
@@ -310,6 +323,7 @@ export async function batchEmbedTexts(
         model,
         input: chunkTexts,
       }),
+      signal,
     });
 
     if (!response.ok) {
