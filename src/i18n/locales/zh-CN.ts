@@ -542,6 +542,11 @@ export default {
       suggestedCategory: "建议分类",
     },
     nav: {
+      groupCore: "基础",
+      groupAI: "索引与 AI",
+      groupSources: "数据来源",
+      groupSync: "同步",
+      groupData: "数据维护",
       pages: "功能页面",
       pageBoard: "书签墙",
       pageGraph: "标签云",

@@ -491,6 +491,11 @@ export default {
       suggestedCategory: "제안",
     },
     nav: {
+      groupCore: "기본",
+      groupAI: "인덱스 및 AI",
+      groupSources: "데이터 소스",
+      groupSync: "동기화",
+      groupData: "데이터 관리",
       pages: "기능 페이지",
       pageBoard: "북마크 월",
       pageGraph: "태그 클라우드",

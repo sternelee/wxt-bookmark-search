@@ -497,6 +497,11 @@ export default {
       suggestedCategory: "提案",
     },
     nav: {
+      groupCore: "基本",
+      groupAI: "インデックスと AI",
+      groupSources: "データソース",
+      groupSync: "同期",
+      groupData: "データ管理",
       pages: "機能ページ",
       pageBoard: "ブックマークウォール",
       pageGraph: "タグクラウド",

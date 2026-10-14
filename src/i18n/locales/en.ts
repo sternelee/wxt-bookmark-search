@@ -559,6 +559,11 @@ export default {
       suggestedCategory: "Suggested",
     },
     nav: {
+      groupCore: "Basics",
+      groupAI: "Index & AI",
+      groupSources: "Sources",
+      groupSync: "Sync",
+      groupData: "Data",
       pages: "Feature Pages",
       pageBoard: "Bookmark Wall",
       pageGraph: "Tag Cloud",
