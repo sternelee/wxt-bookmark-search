@@ -5,10 +5,10 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
+import { InputField } from "../../../src/components/form/InputField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
-import { Select } from "../../../src/components/ui/select";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
+import { SelectField } from "../../../src/components/form/SelectField";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 import { CloudSyncError } from "../../../src/cloud-sync/types";
@@ -146,10 +146,8 @@ export default function CloudSyncSettings() {
     });
   };
 
-  const handleProviderChange = async (
-    e: Event & { currentTarget: HTMLSelectElement },
-  ) => {
-    setProvider(e.currentTarget.value as ProviderValue);
+  const handleProviderChange = async (value: string) => {
+    setProvider(value as ProviderValue);
     await persistConfig();
     setStatus(null);
   };
@@ -559,7 +557,7 @@ export default function CloudSyncSettings() {
           {t("options.cloudSync.description")}
         </p>
 
-        <Select
+        <SelectField
           label={t("options.cloudSync.providerLabel")}
           options={providerOptions()}
           value={provider()}
@@ -570,32 +568,32 @@ export default function CloudSyncSettings() {
         <Show when={!!provider()}>
           {/* WebDAV URL + Username */}
           <Show when={provider() === "webdav"}>
-            <Input
+            <InputField
               label={t("options.cloudSync.webdavUrlLabel")}
               type="url"
               placeholder={t("options.cloudSync.webdavUrlPlaceholder")}
               value={webdavUrl()}
-              onInput={(e) => setWebdavUrl(e.currentTarget.value)}
+              onChange={(value) => setWebdavUrl(value)}
               onBlur={handleWebdavUrlBlur}
               hint={t("options.cloudSync.webdavUrlHint")}
             />
-            <Input
+            <InputField
               label={t("options.cloudSync.webdavUsernameLabel")}
               type="text"
               placeholder={t("options.cloudSync.webdavUsernamePlaceholder")}
               value={webdavUsername()}
-              onInput={(e) => setWebdavUsername(e.currentTarget.value)}
+              onChange={(value) => setWebdavUsername(value)}
               onBlur={handleTokenBlur}
             />
           </Show>
 
           <div class="relative">
-            <Input
+            <InputField
               label={tokenLabel()}
               type={showToken() ? "text" : "password"}
               placeholder={t("options.cloudSync.tokenPlaceholder")}
               value={token()}
-              onInput={(e) => setToken(e.currentTarget.value)}
+              onChange={(value) => setToken(value)}
               onBlur={handleTokenBlur}
               hint={tokenHint()}
             />
@@ -610,14 +608,14 @@ export default function CloudSyncSettings() {
             </button>
           </div>
 
-          <Input
+          <InputField
             label={t("options.cloudSync.intervalLabel")}
             type="number"
             min="1"
             max="720"
             value={interval()}
-            onInput={(e) =>
-              setIntervalH(Number(e.currentTarget.value) || 24)
+            onChange={(value) =>
+              setIntervalH(Number(value) || 24)
             }
             onBlur={handleIntervalBlur}
             hint={t("options.cloudSync.intervalHint")}
@@ -805,13 +803,7 @@ export default function CloudSyncSettings() {
           </Show>
         </Show>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-2"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} class="mt-2" />
 
         <Show when={remoteModifiedAt() || lastSync() || deviceId()}>
           <div class="mt-4 text-xs text-muted-foreground space-y-1">

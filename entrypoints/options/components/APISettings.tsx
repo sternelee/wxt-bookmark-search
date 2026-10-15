@@ -5,10 +5,10 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
-import { Checkbox } from "../../../src/components/ui/checkbox";
+import { InputField } from "../../../src/components/form/InputField";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { testApiKey } from "../../../src/embedding";
 import { testLlmModel } from "../../../src/llm";
@@ -350,12 +350,12 @@ export default function APISettings() {
         </div>
 
         <Show when={embedBackend() === "remote"}>
-          <Input
+          <InputField
             label="API Key"
             type="password"
             placeholder="sk-..."
             value={apiKey()}
-            onInput={(e) => setApiKey(e.currentTarget.value)}
+            onChange={(value) => setApiKey(value)}
             hint={t("options.api.apiKeyHint")}
           />
         </Show>
@@ -372,28 +372,28 @@ export default function APISettings() {
           <Show when={showAdvanced()}>
             <div class="mt-3 space-y-4 pl-2 border-l-2 border-gray-200">
               <Show when={embedBackend() === "remote"}>
-                <Input
+                <InputField
                   label="Base URL"
                   placeholder="https://api.siliconflow.cn/v1"
                   value={baseURL()}
-                  onInput={(e) => setBaseURL(e.currentTarget.value)}
+                  onChange={(value) => setBaseURL(value)}
                   hint={t("options.api.baseURLHint")}
                 />
 
-                <Input
+                <InputField
                   label={t("options.api.embeddingModel")}
                   placeholder="BAAI/bge-m3"
                   value={embeddingModel()}
-                  onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
+                  onChange={(value) => setEmbeddingModel(value)}
                   hint={t("options.api.embeddingModelHint")}
                 />
               </Show>
 
-              <Input
+              <InputField
                 label={t("options.api.llmModel")}
                 placeholder="deepseek-ai/DeepSeek-V3"
                 value={llmModel()}
-                onInput={(e) => setLLMModel(e.currentTarget.value)}
+                onChange={(value) => setLLMModel(value)}
                 hint={t("options.api.llmModelHint")}
               />
             </div>
@@ -427,7 +427,7 @@ export default function APISettings() {
                 <p class="text-xs text-muted-foreground -mt-2">
                   {t("options.api.perServiceEmbedHint")}
                 </p>
-                <Input
+                <InputField
                   label={t("options.api.perServiceApiKey")}
                   type="password"
                   placeholder={
@@ -438,22 +438,22 @@ export default function APISettings() {
                       : ""
                   }
                   value={embedApiKey()}
-                  onInput={(e) => setEmbedApiKey(e.currentTarget.value)}
+                  onChange={(value) => setEmbedApiKey(value)}
                 />
-                <Input
+                <InputField
                   label={t("options.api.perServiceBaseURL")}
                   placeholder={
                     baseURL() ||
                     "https://api.openai.com/v1"
                   }
                   value={embedBaseURL()}
-                  onInput={(e) => setEmbedBaseURL(e.currentTarget.value)}
+                  onChange={(value) => setEmbedBaseURL(value)}
                 />
-                <Input
+                <InputField
                   label={t("options.api.perServiceModel")}
                   placeholder="BAAI/bge-m3"
                   value={embeddingModel()}
-                  onInput={(e) => setEmbeddingModel(e.currentTarget.value)}
+                  onChange={(value) => setEmbeddingModel(value)}
                 />
               </div>
               </Show>
@@ -466,7 +466,7 @@ export default function APISettings() {
                 <p class="text-xs text-muted-foreground -mt-2">
                   {t("options.api.perServiceLLMHint")}
                 </p>
-                <Input
+                <InputField
                   label={t("options.api.perServiceApiKey")}
                   type="password"
                   placeholder={
@@ -477,32 +477,32 @@ export default function APISettings() {
                       : ""
                   }
                   value={llmApiKey()}
-                  onInput={(e) => setLLMApiKey(e.currentTarget.value)}
+                  onChange={(value) => setLLMApiKey(value)}
                 />
-                <Input
+                <InputField
                   label={t("options.api.perServiceBaseURL")}
                   placeholder={
                     baseURL() ||
                     "https://api.openai.com/v1"
                   }
                   value={llmBaseURL()}
-                  onInput={(e) => setLLMBaseURL(e.currentTarget.value)}
+                  onChange={(value) => setLLMBaseURL(value)}
                 />
-                <Input
+                <InputField
                   label={t("options.api.perServiceModel")}
                   placeholder="deepseek-ai/DeepSeek-V3"
                   value={llmModel()}
-                  onInput={(e) => setLLMModel(e.currentTarget.value)}
+                  onChange={(value) => setLLMModel(value)}
                 />
               </div>
             </div>
           </Show>
         </div>
 
-        <Checkbox
+        <CheckboxField
           label={t("options.api.enableLLM")}
           checked={enableLLMEnrichment()}
-          onChange={(e) => setEnableLLMEnrichment(e.currentTarget.checked)}
+          onChange={(checked) => setEnableLLMEnrichment(checked)}
           hint={t("options.api.enableLLMHint")}
           class="mt-4"
         />
@@ -535,13 +535,7 @@ export default function APISettings() {
           </Button>
         </div>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
   );

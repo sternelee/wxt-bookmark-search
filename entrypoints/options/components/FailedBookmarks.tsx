@@ -2,7 +2,7 @@ import { createSignal, onMount, For, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Badge } from "../../../src/components/ui/badge";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { useI18n } from "../../../src/i18n";
 
 interface FailedItem {
@@ -182,7 +182,7 @@ export default function FailedBookmarks() {
                     </a>
                     <div class="flex items-center gap-1.5 mt-1">
                       <Show when={item.failureStage}>
-                        <Badge variant="destructive" class="text-[10px] px-1.5 py-0">
+                        <Badge variant="error" class="text-[10px] px-1.5 py-0">
                           {stageLabel(item.failureStage!)}
                         </Badge>
                       </Show>
@@ -218,13 +218,7 @@ export default function FailedBookmarks() {
             </For>
           </div>
 
-          <Alert
-            variant={status()?.type}
-            visible={status() !== null}
-            class="mt-4"
-          >
-            {status()?.message}
-          </Alert>
+          <StatusAlert status={status()} />
         </CardContent>
       </Card>
     </Show>

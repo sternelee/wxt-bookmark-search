@@ -20,7 +20,7 @@ function FolderItem(props: {
   onToggleExpand: (id: string) => void;
   onCheck: (id: string, checked: boolean, hasChildren: boolean, children?: Folder[]) => void;
 }) {
-  const hasChildren = () => props.folder.children && props.folder.children.length > 0;
+  const hasChildren = () => (props.folder.children?.length ?? 0) > 0;
   const isExpanded = () => props.expandedIds.has(props.folder.id);
   const isChecked = () => props.selectedIds.includes(props.folder.id);
 
@@ -40,9 +40,8 @@ function FolderItem(props: {
         {/* 复选框 */}
         <Checkbox
           checked={isChecked()}
-          onChange={(e) => {
-            // @ts-ignore
-            props.onCheck(props.folder.id, e.currentTarget.checked, hasChildren(), props.folder.children);
+          onChange={(checked) => {
+            props.onCheck(props.folder.id, checked ?? false, hasChildren(), props.folder.children);
           }}
           class="mr-2"
         />

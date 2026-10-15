@@ -1,7 +1,7 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { db, resetSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -259,13 +259,7 @@ export default function DataManagement() {
           }}
         />
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
 

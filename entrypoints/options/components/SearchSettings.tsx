@@ -1,11 +1,11 @@
 import { createSignal, createEffect } from "solid-js";
 import type { SearchEngine, SearchMode } from "../../../src/types";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
-import { Select } from "../../../src/components/ui/select";
-import { Slider } from "../../../src/components/ui/slider";
-import { Input } from "../../../src/components/ui/input";
+import { SelectField } from "../../../src/components/form/SelectField";
+import { SliderField } from "../../../src/components/form/SliderField";
+import { InputField } from "../../../src/components/form/InputField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { jevSystemOne } from "../../../src/jev";
 import { useI18n } from "../../../src/i18n";
@@ -115,10 +115,10 @@ export default function SearchSettings() {
         <CardTitle>{t("options.search.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Select
+        <SelectField
           label={t("options.search.mode")}
           value={searchMode()}
-          onChange={(e) => setSearchMode(toSearchMode(e.currentTarget.value))}
+          onChange={(value) => setSearchMode(toSearchMode(value))}
           options={[
             { value: "hybrid", label: t("options.search.modeHybrid") },
             { value: "vector", label: t("options.search.modeVector") },
@@ -127,10 +127,10 @@ export default function SearchSettings() {
           hint={t("options.search.modeHint")}
         />
 
-        <Select
+        <SelectField
           label={t("options.search.engine")}
           value={searchEngine()}
-          onChange={(e) => setSearchEngine(toSearchEngine(e.currentTarget.value))}
+          onChange={(value) => setSearchEngine(toSearchEngine(value))}
           options={[
             { value: "orama", label: t("options.search.engineOrama") },
             { value: "jev", label: t("options.search.engineJev") },
@@ -141,22 +141,22 @@ export default function SearchSettings() {
         {searchEngine() === "jev" && (
           <>
             <div class="mt-3">
-              <Input
+              <InputField
                 label={t("options.search.jevApiKey")}
                 type="password"
                 placeholder="ts-..."
                 value={jevApiKey()}
-                onInput={(e) => setJevApiKey(e.currentTarget.value)}
+                onChange={(value) => setJevApiKey(value)}
                 hint={t("options.search.jevApiKeyHint")}
               />
             </div>
             <div class="mt-3">
-              <Input
+              <InputField
                 label={t("options.search.jevBaseURL")}
                 type="text"
                 placeholder="https://api.typesafe.ai/v1/systemone"
                 value={jevBaseURL()}
-                onInput={(e) => setJevBaseURL(e.currentTarget.value)}
+                onChange={(value) => setJevBaseURL(value)}
                 hint={t("options.search.jevBaseURLHint")}
               />
             </div>
@@ -173,25 +173,25 @@ export default function SearchSettings() {
           </>
         )}
 
-        <Slider
+        <SliderField
           label={t("options.search.vectorWeight")}
-          min="0"
-          max="100"
+          min={0}
+          max={100}
           value={vectorWeight()}
-          onInput={(e) => setVectorWeight(Number(e.currentTarget.value))}
-          valueDisplay={`${vectorWeight()}%`}
+          onChange={(value) => setVectorWeight(value)}
+          valueSuffix="%"
           hint={t("options.search.vectorWeightHint")}
           disabled={searchMode() !== "hybrid"}
         />
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.search.resultLimit")}
             type="number"
             placeholder="20"
             value={String(resultLimit())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 5 && v <= 50) setResultLimit(v);
             }}
             hint={t("options.search.resultLimitHint")}
@@ -199,13 +199,13 @@ export default function SearchSettings() {
         </div>
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.search.ragTopK")}
             type="number"
             placeholder="8"
             value={String(ragTopK())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 20) setRagTopK(v);
             }}
             hint={t("options.search.ragTopKHint")}
@@ -214,13 +214,7 @@ export default function SearchSettings() {
 
         <Button onClick={handleApply}>{t("common.apply")}</Button>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
   );

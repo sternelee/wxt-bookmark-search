@@ -5,9 +5,9 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Select } from "../../../src/components/ui/select";
+import { SelectField } from "../../../src/components/form/SelectField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n, type Locale } from "../../../src/i18n";
 
@@ -56,10 +56,10 @@ export default function LanguageSettings() {
         <CardTitle>🌐 {t("options.language.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Select
+        <SelectField
           label={t("options.language.label")}
           value={locale()}
-          onChange={(e) => setLocaleSignal(e.currentTarget.value as Locale)}
+          onChange={(value) => setLocaleSignal(value as Locale)}
           options={LOCALE_OPTIONS}
           hint={t("options.language.hint")}
         />
@@ -68,13 +68,7 @@ export default function LanguageSettings() {
           {t("common.save")}
         </Button>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
   );

@@ -6,9 +6,9 @@ import {
   CardContent,
 } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Checkbox } from "../../../src/components/ui/checkbox";
-import { Input } from "../../../src/components/ui/input";
-import { Alert } from "../../../src/components/ui/alert";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
+import { InputField } from "../../../src/components/form/InputField";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -143,43 +143,43 @@ export default function HealthSettings() {
         <CardTitle>{t("options.health.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Checkbox
+        <CheckboxField
           label={t("options.health.enableLabel")}
           checked={enabled()}
-          onChange={(e) => setEnabled(e.currentTarget.checked)}
+          onChange={(checked) => setEnabled(checked)}
           hint={t("options.health.enableHint")}
         />
 
         <div class="mt-3 grid grid-cols-1 gap-3">
-          <Input
+          <InputField
             label={t("options.health.intervalLabel")}
             type="number"
             placeholder="24"
             value={String(interval())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
             }}
             hint={t("options.health.intervalHint")}
           />
-          <Input
+          <InputField
             label={t("options.health.concurrencyLabel")}
             type="number"
             placeholder="5"
             value={String(concurrency())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 20) setConcurrency(v);
             }}
             hint={t("options.health.concurrencyHint")}
           />
-          <Input
+          <InputField
             label={t("options.health.timeoutLabel")}
             type="number"
             placeholder="8"
             value={String(timeoutSec())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 60) setTimeoutSec(v);
             }}
             hint={t("options.health.timeoutHint")}
@@ -247,13 +247,7 @@ export default function HealthSettings() {
           </div>
         </Show>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
   );

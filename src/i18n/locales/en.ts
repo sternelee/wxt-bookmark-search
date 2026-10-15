@@ -53,6 +53,7 @@ export default {
     close: "Close",
     language: "Language",
     dataManagement: "Data Management",
+    empty: "No data yet",
   },
 
   popup: {
@@ -663,6 +664,8 @@ export default {
     graphNoTaggedBookmarks: "No bookmarks match all selected tags",
     graphNoMoreTags: "No more child tags under this tag combination",
     graphTryOtherTags: "Try a different tag combination",
+    graphFilterTags: "Filter tags…",
+    graphNoMatchingTags: "No tags match this filter",
   },
 
   board: {

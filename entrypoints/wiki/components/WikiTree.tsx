@@ -1,8 +1,12 @@
 import { createSignal, For, Show, onMount } from "solid-js";
 import type { WikiDoc } from "../../../src/types";
+import { Badge } from "../../../src/components/ui/badge";
+import { Button } from "../../../src/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../src/components/ui/card";
+import { Separator } from "../../../src/components/ui/separator";
+import { Skeleton } from "../../../src/components/ui/skeleton";
 import { cn } from "../../../src/lib/utils";
-import { t } from "../../../src/i18n";
+import { useI18n } from "../../../src/i18n";
 
 interface WikiTreeProps {
   repoUrl: string;
@@ -14,13 +18,14 @@ interface TreeNode {
   name: string;
   children: TreeNode[];
   docId?: string;
-  expanded?: boolean;
 }
 
 export function WikiTree(props: WikiTreeProps) {
+  const { t } = useI18n();
   const [docs, setDocs] = createSignal<WikiDoc[]>([]);
   const [selectedDoc, setSelectedDoc] = createSignal<WikiDoc | null>(null);
   const [tree, setTree] = createSignal<TreeNode[]>([]);
+  const [loading, setLoading] = createSignal(true);
 
   onMount(async () => {
     try {
@@ -50,6 +55,8 @@ export function WikiTree(props: WikiTreeProps) {
       }
     } catch (e) {
       console.error("[WikiTree] load docs error:", e);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -94,36 +101,37 @@ export function WikiTree(props: WikiTreeProps) {
     }
   }
 
-  function TreeItem(props: { node: TreeNode; depth: number }) {
-    const [expanded, setExpanded] = createSignal(props.depth < 2);
-    const hasChildren = props.node.children.length > 0;
+  function TreeItem(itemProps: { node: TreeNode; depth: number }) {
+    const [expanded, setExpanded] = createSignal(itemProps.depth < 2);
+    const hasChildren = () => itemProps.node.children.length > 0;
 
     return (
       <div>
-        <div
-          class={cn(
-            "flex items-center gap-1 py-1 px-2 rounded cursor-pointer hover:bg-accent",
-            selectedDoc()?.id === props.node.docId && "bg-accent",
-          )}
-          style={{ "padding-left": `${props.depth * 12 + 8}px` }}
+        <Button
+          variant={selectedDoc()?.id === itemProps.node.docId ? "secondary" : "ghost"}
+          size="sm"
+          class="h-auto w-full justify-start gap-1.5 px-2 py-1 font-normal"
+          style={{ "padding-left": `${itemProps.depth * 12 + 8}px` }}
           onClick={() => {
-            if (hasChildren) setExpanded(!expanded());
-            if (props.node.docId) selectDoc(props.node.docId);
+            if (hasChildren()) setExpanded(!expanded());
+            if (itemProps.node.docId) selectDoc(itemProps.node.docId);
           }}
         >
-          <Show when={hasChildren}>
-            <span class="text-xs text-muted-foreground select-none">
-              {expanded() ? "▼" : "▶"}
-            </span>
-          </Show>
-          <Show when={!hasChildren}>
-            <span class="text-xs text-muted-foreground select-none">◦</span>
-          </Show>
-          <span class="text-sm truncate">{props.node.name}</span>
-        </div>
+          <span class="w-3 shrink-0 select-none text-[10px] text-muted-foreground">
+            {hasChildren() ? (expanded() ? "▼" : "▶") : "◦"}
+          </span>
+          <span
+            class={cn(
+              "min-w-0 flex-1 truncate text-left text-[13px]",
+              itemProps.node.docId && "font-medium",
+            )}
+          >
+            {itemProps.node.name}
+          </span>
+        </Button>
         <Show when={expanded()}>
-          <For each={props.node.children}>
-            {(child) => <TreeItem node={child} depth={props.depth + 1} />}
+          <For each={itemProps.node.children}>
+            {(child) => <TreeItem node={child} depth={itemProps.depth + 1} />}
           </For>
         </Show>
       </div>
@@ -131,23 +139,49 @@ export function WikiTree(props: WikiTreeProps) {
   }
 
   return (
-    <Card class="h-full flex flex-col">
-      <CardHeader class="flex-none">
-        <CardTitle>{t("codeWiki.tab.docs")}</CardTitle>
+    <Card class="flex h-full flex-col">
+      <CardHeader class="flex-none flex-row items-center justify-between gap-3 space-y-0">
+        <CardTitle class="text-base">{t("codeWiki.tab.docs")}</CardTitle>
+        <Show when={docs().length > 0}>
+          <Badge variant="secondary" class="tabular-nums">
+            {docs().length}
+          </Badge>
+        </Show>
       </CardHeader>
-      <CardContent class="flex flex-col gap-3 flex-1 min-h-0 overflow-hidden">
-        <div class="flex-1 overflow-y-auto">
-          <For each={tree()}>
-            {(node) => <TreeItem node={node} depth={0} />}
-          </For>
+      <CardContent class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <Show when={loading()}>
+            <div class="flex flex-col gap-1.5">
+              <For each={[0, 1, 2, 3, 4]}>
+                {(i) => (
+                  <Skeleton
+                    class="h-6 rounded-md"
+                    style={{ width: `${85 - i * 9}%`, "margin-left": `${i * 8}px` }}
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={!loading() && tree().length === 0}>
+            <div class="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+              <p class="select-none text-3xl">📄</p>
+              <p class="max-w-56 text-sm">{t("codeWiki.empty.title")}</p>
+            </div>
+          </Show>
+
+          <For each={tree()}>{(node) => <TreeItem node={node} depth={0} />}</For>
         </div>
+
         <Show when={selectedDoc()}>
           {(doc) => (
-            <div class="border-t pt-3 flex-none overflow-y-auto max-h-[50%]">
-              <div class="font-semibold mb-2">{doc().title}</div>
-              <div class="prose dark:prose-invert prose-sm max-w-none">
-                <div innerHTML={renderMarkdown(doc().content)} />
-              </div>
+            <div class="max-h-[50%] flex-none overflow-y-auto">
+              <Separator class="mb-3" />
+              <div class="mb-2 text-sm font-semibold">{doc().title}</div>
+              <div
+                class="text-[13px] leading-relaxed text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-foreground [&_h2]:mb-1.5 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mb-1 [&_h3]:text-[13px] [&_h3]:font-semibold [&_h3]:text-foreground [&_li]:ml-4 [&_li]:list-disc"
+                innerHTML={renderMarkdown(doc().content)}
+              />
             </div>
           )}
         </Show>

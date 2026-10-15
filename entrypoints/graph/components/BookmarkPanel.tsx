@@ -5,12 +5,34 @@ import { For, Show } from "solid-js";
 import { incrementFreq } from "../../../src/freq";
 import { useI18n } from "../../../src/i18n";
 import type { BookmarkRecord } from "../../../src/types";
+import { Badge } from "../../../src/components/ui/badge";
+import { cn } from "../../../src/lib/utils";
 
-function sourceIcon(source?: string): string {
-  if (source === "github") return "⭐";
-  if (source === "twitter") return "𝕏";
-  if (source === "history") return "🕐";
-  return "🔖";
+/** 来源 → 徽章配色（与 board / popup 保持一致） */
+const SOURCE_META: Record<string, { label: string; class: string }> = {
+  github: { label: "GitHub", class: "border-slate-400/40 bg-slate-400/10 text-slate-600 dark:text-slate-300" },
+  twitter: { label: "X", class: "border-sky-400/40 bg-sky-400/10 text-sky-600 dark:text-sky-300" },
+  history: { label: "History", class: "border-violet-400/40 bg-violet-400/10 text-violet-600 dark:text-violet-300" },
+};
+
+function SourceBadge(props: { source?: string }) {
+  const meta = () => (props.source ? SOURCE_META[props.source] : undefined);
+  return (
+    <Show
+      when={meta()}
+      fallback={
+        <Badge variant="outline" class="shrink-0 text-[10px] font-normal">
+          🔖
+        </Badge>
+      }
+    >
+      {(m) => (
+        <Badge variant="outline" class={cn("shrink-0 text-[10px] font-normal", m().class)}>
+          {m().label}
+        </Badge>
+      )}
+    </Show>
+  );
 }
 
 interface BookmarkPanelProps {
@@ -29,9 +51,9 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
   }
 
   return (
-    <div class="flex flex-col h-full">
+    <div class="flex h-full min-h-0 flex-col">
       {/* 头部 */}
-      <div class="px-4 py-3 border-b border-border shrink-0">
+      <div class="shrink-0 border-b border-border px-4 py-3">
         <Show
           when={props.activeTags.length > 0}
           fallback={
@@ -40,17 +62,19 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
             </div>
           }
         >
-          <div class="flex items-center flex-wrap gap-1.5">
+          <div class="flex flex-wrap items-center gap-1.5">
             <span class="text-sm font-medium">{t("search.graphRelatedBookmarks")}</span>
             <For each={props.activeTags}>
               {(tag, i) => (
                 <>
                   <span class="text-xs text-muted-foreground">{i() === 0 ? ":" : "+"}</span>
-                  <span class="text-sm font-semibold text-primary">{tag}</span>
+                  <Badge variant="secondary" class="text-xs font-semibold">
+                    {tag}
+                  </Badge>
                 </>
               )}
             </For>
-            <span class="ml-auto text-xs text-muted-foreground">
+            <span class="ml-auto text-xs tabular-nums text-muted-foreground">
               {t("search.graphSelectedCount", { count: props.bookmarks.length })}
             </span>
           </div>
@@ -58,11 +82,11 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
       </div>
 
       {/* 列表 */}
-      <div class="flex-1 overflow-y-auto">
+      <div class="min-h-0 flex-1 overflow-y-auto">
         <Show
           when={props.bookmarks.length > 0}
           fallback={
-            <div class="flex items-center justify-center h-40 text-muted-foreground text-sm text-center px-4">
+            <div class="flex h-40 items-center justify-center px-4 text-center text-sm text-muted-foreground">
               <Show
                 when={props.activeTags.length > 0}
                 fallback={t("search.graphStartExploring")}
@@ -76,49 +100,38 @@ export function BookmarkPanel(props: BookmarkPanelProps) {
             {(bm) => (
               <button
                 type="button"
-                class="w-full text-left flex flex-col gap-1 px-4 py-3
-                       hover:bg-muted/60 transition-colors border-b border-border/50 group"
+                class="group flex w-full flex-col gap-1.5 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:bg-muted/60"
                 onClick={() => openBookmark(bm.url)}
               >
                 {/* 标题行 */}
-                <div class="flex items-start gap-2 min-w-0">
-                  <span class="text-base shrink-0 select-none mt-0.5">
-                    {sourceIcon(bm.source)}
-                  </span>
-                  <span class="text-sm font-medium text-foreground group-hover:text-primary truncate flex-1 min-w-0">
+                <div class="flex min-w-0 items-center gap-2">
+                  <SourceBadge source={bm.source} />
+                  <span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground group-hover:text-primary">
                     {bm.title || bm.url}
                   </span>
                 </div>
 
                 {/* URL */}
-                <div class="text-[11px] text-muted-foreground truncate ml-6">
-                  {bm.url}
-                </div>
+                <div class="truncate text-[11px] text-muted-foreground">{bm.url}</div>
 
                 {/* 摘要 */}
                 <Show when={bm.summary}>
-                  <p class="text-xs text-muted-foreground line-clamp-2 ml-6">
-                    {bm.summary}
-                  </p>
+                  <p class="line-clamp-2 text-xs text-muted-foreground">{bm.summary}</p>
                 </Show>
 
                 {/* 标签（高亮匹配） */}
                 <Show when={bm.tags && bm.tags.length > 0}>
-                  <div class="flex flex-wrap gap-1 ml-6 mt-0.5">
+                  <div class="mt-0.5 flex flex-wrap gap-1">
                     <For each={bm.tags?.slice(0, 5)}>
                       {(tag) => {
-                        const normalized = tag.toLowerCase().trim();
-                        const isActive = props.activeTags.includes(normalized);
+                        const isActive = props.activeTags.includes(tag.toLowerCase().trim());
                         return (
-                          <span
-                            class={`text-[10px] px-1.5 py-0.5 rounded-full transition-colors
-                              ${isActive
-                                ? "bg-primary text-primary-foreground font-medium"
-                                : "bg-muted text-muted-foreground"
-                              }`}
+                          <Badge
+                            variant={isActive ? "default" : "secondary"}
+                            class="rounded-full px-1.5 py-0 text-[10px] font-normal"
                           >
                             {tag}
-                          </span>
+                          </Badge>
                         );
                       }}
                     </For>

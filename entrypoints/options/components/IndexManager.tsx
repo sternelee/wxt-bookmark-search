@@ -1,9 +1,9 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Checkbox } from "../../../src/components/ui/checkbox";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
 import { Progress } from "../../../src/components/ui/progress";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getIndexStats, getSettings, saveSettings } from "../../../src/db";
 import { isEmbedConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
@@ -222,10 +222,10 @@ export default function IndexManager() {
 
         {/* 索引行为 */}
         <div class="mb-5 rounded-md border border-border p-3 space-y-3">
-          <Checkbox
+          <CheckboxField
             label={t("options.indexManager.autoIndexLabel")}
             checked={autoIndex()}
-            onChange={(e) => setAutoIndex(e.currentTarget.checked)}
+            onChange={(checked) => setAutoIndex(checked)}
             hint={t("options.indexManager.autoIndexHint")}
           />
           <div>
@@ -276,13 +276,7 @@ export default function IndexManager() {
           </Button>
         </div>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
 
         <Show when={progress()}>
           <div class="mt-5 bg-muted p-3 rounded-lg">

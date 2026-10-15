@@ -53,6 +53,7 @@ export default {
     close: "关闭",
     language: "语言设置",
     dataManagement: "数据管理",
+    empty: "暂无数据",
   },
 
   popup: {
@@ -645,6 +646,8 @@ export default {
     graphNoTaggedBookmarks: "未找到同时包含这些标签的书签",
     graphNoMoreTags: "该标签组合下无更多子标签",
     graphTryOtherTags: "尝试其他标签组合",
+    graphFilterTags: "过滤标签…",
+    graphNoMatchingTags: "没有匹配该关键词的标签",
   },
 
   board: {

@@ -1,23 +1,32 @@
 import { createSignal, For, Show, onMount, onCleanup } from "solid-js";
 import { Button } from "../../src/components/ui/button";
-import { Input } from "../../src/components/ui/input";
 import { Card, CardContent } from "../../src/components/ui/card";
 import { Badge } from "../../src/components/ui/badge";
+import { Alert, AlertDescription } from "../../src/components/ui/alert";
+import { Progress } from "../../src/components/ui/progress";
+import { Skeleton } from "../../src/components/ui/skeleton";
+import { Separator } from "../../src/components/ui/separator";
+import { Toaster } from "../../src/components/ui/sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../src/components/ui/tabs";
+import { TextField, TextFieldInput } from "../../src/components/ui/text-field";
+import { SelectField } from "../../src/components/form/SelectField";
 import { CodeMap } from "./components/CodeMap";
 import { SymbolPanel } from "./components/SymbolPanel";
 import { WikiTree } from "./components/WikiTree";
 import { CodeQA } from "./components/CodeQA";
 import { cn } from "../../src/lib/utils";
-import { t, type I18nKey } from "../../src/i18n";
+import { useI18n, setReactiveLocale, type I18nKey } from "../../src/i18n";
+import type { Locale } from "../../src/i18n";
+import { getSettings } from "../../src/db";
 import type { CodeSymbol, CodeEdge, WikiRepoMeta } from "../../src/types";
 
 type Tab = "map" | "search" | "docs" | "qa";
 
-const TABS: { id: Tab; labelKey: I18nKey }[] = [
-  { id: "map", labelKey: "codeWiki.tab.map" },
-  { id: "search", labelKey: "codeWiki.tab.search" },
-  { id: "docs", labelKey: "codeWiki.tab.docs" },
-  { id: "qa", labelKey: "codeWiki.tab.qa" },
+const TABS: { id: Tab; labelKey: I18nKey; icon: string }[] = [
+  { id: "map", labelKey: "codeWiki.tab.map", icon: "🗺" },
+  { id: "search", labelKey: "codeWiki.tab.search", icon: "🔎" },
+  { id: "docs", labelKey: "codeWiki.tab.docs", icon: "📄" },
+  { id: "qa", labelKey: "codeWiki.tab.qa", icon: "💬" },
 ];
 
 /** 简单判断输入是否为 GitHub URL（用于切换 fetchFromGitHub） */
@@ -31,13 +40,22 @@ function looksLikeGitHub(input: string): boolean {
   );
 }
 
+interface RepoOption {
+  value: string;
+  label: string;
+}
+
 function App() {
+  const { t } = useI18n();
+  const [ready, setReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<Tab>("map");
   const [repos, setRepos] = createSignal<WikiRepoMeta[]>([]);
   const [selectedRepo, setSelectedRepo] = createSignal<string>("");
   const [buildUrl, setBuildUrl] = createSignal("");
   const [buildStatus, setBuildStatus] = createSignal("");
   const [buildOk, setBuildOk] = createSignal<boolean | null>(null);
+  const [building, setBuilding] = createSignal(false);
+  const [syncing, setSyncing] = createSignal(false);
   const [buildProgress, setBuildProgress] = createSignal<{
     current?: number;
     total?: number;
@@ -45,7 +63,23 @@ function App() {
   const [symbols, setSymbols] = createSignal<CodeSymbol[]>([]);
   const [edges, setEdges] = createSignal<CodeEdge[]>([]);
 
+  /** 构建进度百分比 */
+  const progressPct = () => {
+    const p = buildProgress();
+    if (!p?.total) return 0;
+    return Math.min(100, Math.round(((p.current ?? 0) / p.total) * 100));
+  };
+
+  const repoOptions = () =>
+    repos().map((r) => ({
+      value: r.repoUrl,
+      label: `${r.repoUrl} (${r.branch})`,
+    }));
+
   onMount(async () => {
+    const settings = await getSettings();
+    if (settings.language) setReactiveLocale(settings.language as Locale);
+
     try {
       const res = await browser.runtime.sendMessage({ type: "WIKI_LIST_REPOS" });
       if (res?.success && res.repos) {
@@ -57,10 +91,18 @@ function App() {
       }
     } catch (e) {
       console.error("[wiki] initial load error:", e);
+    } finally {
+      setReady(true);
     }
 
     // 监听 background 进度事件
-    const listener = (msg: { type?: string; phase?: string; message?: string; current?: number; total?: number }) => {
+    const listener = (msg: {
+      type?: string;
+      phase?: string;
+      message?: string;
+      current?: number;
+      total?: number;
+    }) => {
       if (msg?.type !== "WIKI_PROGRESS") return;
       setBuildStatus(msg.message || "");
       if (msg.current !== undefined || msg.total !== undefined) {
@@ -93,7 +135,8 @@ function App() {
 
   async function buildGraph() {
     const url = buildUrl().trim();
-    if (!url) return;
+    if (!url || building()) return;
+    setBuilding(true);
     setBuildStatus(t("codeWiki.status.building"));
     setBuildOk(null);
     setBuildProgress(null);
@@ -134,11 +177,14 @@ function App() {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+    } finally {
+      setBuilding(false);
     }
   }
 
   async function syncWiki() {
-    if (!selectedRepo()) return;
+    if (!selectedRepo() || syncing()) return;
+    setSyncing(true);
     setBuildStatus(t("codeWiki.status.syncing"));
     setBuildOk(null);
     try {
@@ -168,112 +214,187 @@ function App() {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+    } finally {
+      setSyncing(false);
     }
   }
 
   return (
     <div class="flex h-screen flex-col bg-background text-foreground">
-      <header class="border-b px-4 py-3 flex items-center gap-3 flex-none">
-        <h1 class="text-lg font-semibold">{t("codeWiki.title")}</h1>
-        <Show when={repos().length > 0}>
-          <select
-            class="text-sm border border-input rounded px-2 py-1 bg-background"
-            value={selectedRepo()}
-            onChange={(e) => selectRepo(e.currentTarget.value)}
-          >
-            <For each={repos()}>
-              {(r) => (
-                <option value={r.repoUrl}>
-                  {r.repoUrl} ({r.branch})
-                </option>
-              )}
-            </For>
-          </select>
-        </Show>
-        <div class="flex-1" />
-        <Input
-          placeholder={t("codeWiki.placeholder.buildUrl")}
-          value={buildUrl()}
-          onInput={(e) => setBuildUrl(e.currentTarget.value)}
-          class="w-80"
-        />
-        <Button onClick={buildGraph} size="sm">
-          {t("codeWiki.action.build")}
-        </Button>
-        <Show when={selectedRepo()}>
-          <Button onClick={syncWiki} variant="outline" size="sm">
-            {t("codeWiki.action.sync")}
-          </Button>
-        </Show>
-      </header>
-      <Show when={buildStatus()}>
-        <div
-          class={cn(
-            "px-4 py-2 text-sm border-b flex items-center gap-3",
-            buildOk() === true
-              ? "text-green-600"
-              : buildOk() === false
-                ? "text-red-600"
-                : "text-muted-foreground",
-          )}
-        >
-          <span class="flex-1 truncate">{buildStatus()}</span>
-          <Show when={buildProgress()?.total && buildProgress()!.total! > 0}>
-            <div class="w-32 h-1.5 bg-muted rounded overflow-hidden">
-              <div
-                class="h-full bg-primary transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    ((buildProgress()?.current ?? 0) / (buildProgress()?.total ?? 1)) * 100,
-                  )}%`,
-                }}
+      {/* 顶栏 */}
+      <header class="flex flex-none flex-col gap-3 border-b border-border px-4 py-3">
+        <div class="flex items-center gap-3">
+          <h1 class="shrink-0 text-lg font-bold tracking-tight">
+            <span class="select-none">📖</span> {t("codeWiki.title")}
+          </h1>
+
+          <Show when={repos().length > 0}>
+            <div class="w-72 shrink-0">
+              <SelectField
+                value={selectedRepo()}
+                onChange={selectRepo}
+                options={repoOptions()}
+                placeholder={t("codeWiki.placeholder.buildUrl")}
+                aria-label={t("codeWiki.title")}
               />
             </div>
+            <Badge variant="secondary" class="shrink-0 tabular-nums">
+              {symbols().length} <span class="opacity-60">·</span> {edges().length}
+            </Badge>
+          </Show>
+
+          <span class="flex-1" />
+
+          <TextField
+            value={buildUrl()}
+            onChange={setBuildUrl}
+            class="w-80 shrink-0"
+            aria-label={t("codeWiki.placeholder.buildUrl")}
+          >
+            <TextFieldInput
+              type="text"
+              placeholder={t("codeWiki.placeholder.buildUrl")}
+              autocomplete="off"
+              spellcheck={false}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.isComposing) buildGraph();
+              }}
+            />
+          </TextField>
+
+          <Button size="sm" class="shrink-0" disabled={building() || !buildUrl().trim()} onClick={buildGraph}>
+            {building() ? t("codeWiki.status.building") : t("codeWiki.action.build")}
+          </Button>
+
+          <Show when={selectedRepo()}>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              disabled={syncing()}
+              onClick={syncWiki}
+            >
+              {syncing() ? t("codeWiki.status.syncing") : t("codeWiki.action.sync")}
+            </Button>
           </Show>
         </div>
-      </Show>
-      <nav class="border-b flex flex-none">
-        <For each={TABS}>
-          {(tab) => (
-            <button
-              class={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:bg-accent",
-                activeTab() === tab.id && "border-primary text-primary",
-              )}
-              onClick={() => setActiveTab(tab.id)}
+
+        {/* 构建状态 */}
+        <Show when={buildStatus()}>
+          <div class="flex items-center gap-3">
+            <Alert
+              variant={buildOk() === true ? "success" : buildOk() === false ? "error" : "info"}
+              class="min-w-0 flex-1 py-2"
             >
-              {t(tab.labelKey)}
-            </button>
-          )}
-        </For>
-      </nav>
-      <main class="flex-1 min-h-0 p-4 overflow-hidden">
-        <Show when={activeTab() === "map"}>
-          <CodeMap
-            symbols={symbols()}
-            edges={edges()}
-            onNodeClick={() => setActiveTab("search")}
-          />
+              <AlertDescription class="truncate">{buildStatus()}</AlertDescription>
+            </Alert>
+            <Show when={buildProgress()?.total}>
+              <div class="flex shrink-0 items-center gap-2">
+                <Progress value={progressPct()} class="w-32" />
+                <span class="w-9 shrink-0 text-right text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {progressPct()}%
+                </span>
+              </div>
+            </Show>
+          </div>
         </Show>
-        <Show when={activeTab() === "search"}>
-          <SymbolPanel repoUrl={selectedRepo()} onSymbolClick={() => {}} />
+      </header>
+
+      {/* 主体 */}
+      <Show
+        when={ready()}
+        fallback={
+          <div class="flex flex-1 flex-col gap-3 p-4">
+            <Skeleton class="h-9 w-64 rounded-lg" />
+            <Skeleton class="h-full w-full rounded-xl" />
+          </div>
+        }
+      >
+        <Show
+          when={repos().length > 0}
+          fallback={
+            <div class="flex flex-1 items-center justify-center p-4">
+              <Card class="w-full max-w-md border-dashed">
+                <CardContent class="flex flex-col items-center gap-3 py-10 text-center">
+                  <p class="select-none text-4xl">🗂</p>
+                  <p class="font-medium">{t("codeWiki.empty.title")}</p>
+                  <p class="text-sm text-muted-foreground">{t("codeWiki.empty.hint")}</p>
+                </CardContent>
+              </Card>
+            </div>
+          }
+        >
+          <Tabs
+            value={activeTab()}
+            onChange={(value) => value && setActiveTab(value as Tab)}
+            class="flex min-h-0 flex-1 flex-col"
+          >
+            <TabsList class="h-auto flex-none justify-start gap-1 rounded-none border-b border-border bg-transparent px-2 pt-1">
+              <For each={TABS}>
+                {(tab) => (
+                  <TabsTrigger
+                    value={tab.id}
+                    class="gap-1.5 rounded-b-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-normal text-muted-foreground data-[selected]:border-primary data-[selected]:bg-transparent data-[selected]:font-medium data-[selected]:text-primary data-[selected]:shadow-none"
+                  >
+                    <span class="select-none">{tab.icon}</span>
+                    {t(tab.labelKey)}
+                  </TabsTrigger>
+                )}
+              </For>
+            </TabsList>
+
+            {/* 面板保持挂载（forceMount）以免切换 tab 丢失搜索/问答状态 */}
+            <div class="relative min-h-0 flex-1 p-4">
+              <TabsContent
+                value="map"
+                forceMount
+                class={cn(
+                  "h-full focus-visible:outline-none",
+                  activeTab() === "map" ? "block" : "hidden",
+                )}
+              >
+                <CodeMap
+                  symbols={symbols()}
+                  edges={edges()}
+                  onNodeClick={() => setActiveTab("search")}
+                />
+              </TabsContent>
+              <TabsContent
+                value="search"
+                forceMount
+                class={cn(
+                  "h-full focus-visible:outline-none",
+                  activeTab() === "search" ? "block" : "hidden",
+                )}
+              >
+                <SymbolPanel repoUrl={selectedRepo()} onSymbolClick={() => {}} />
+              </TabsContent>
+              <TabsContent
+                value="docs"
+                forceMount
+                class={cn(
+                  "h-full focus-visible:outline-none",
+                  activeTab() === "docs" ? "block" : "hidden",
+                )}
+              >
+                <WikiTree repoUrl={selectedRepo()} onDocSelect={() => {}} />
+              </TabsContent>
+              <TabsContent
+                value="qa"
+                forceMount
+                class={cn(
+                  "h-full focus-visible:outline-none",
+                  activeTab() === "qa" ? "block" : "hidden",
+                )}
+              >
+                <CodeQA repoUrl={selectedRepo()} />
+              </TabsContent>
+            </div>
+          </Tabs>
         </Show>
-        <Show when={activeTab() === "docs"}>
-          <WikiTree repoUrl={selectedRepo()} onDocSelect={() => {}} />
-        </Show>
-        <Show when={activeTab() === "qa"}>
-          <CodeQA repoUrl={selectedRepo()} />
-        </Show>
-        <Show when={repos().length === 0}>
-          <Card class="h-full flex items-center justify-center">
-            <CardContent class="text-center text-muted-foreground">
-              <p class="mb-2">{t("codeWiki.empty.title")}</p>
-              <p class="text-sm">{t("codeWiki.empty.hint")}</p>
-            </CardContent>
-          </Card>
-        </Show>
-      </main>
+      </Show>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }

@@ -5,9 +5,9 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
+import { InputField } from "../../../src/components/form/InputField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -277,11 +277,11 @@ export default function GistSyncSettings() {
             </Button>
 
             <div class="flex items-end gap-2">
-              <Input
+              <InputField
                 label={t("options.gist.linkGist")}
                 placeholder={t("options.gist.gistIdPlaceholder")}
                 value={linkGistId()}
-                onInput={(e) => setLinkGistId(e.currentTarget.value)}
+                onChange={(value) => setLinkGistId(value)}
                 hint={t("options.gist.gistIdHint")}
               />
               <Button
@@ -371,13 +371,7 @@ export default function GistSyncSettings() {
           </div>
         </Show>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">

@@ -1,10 +1,14 @@
 import { createSignal, For, Show } from "solid-js";
 import type { CodeSymbol, CodeSearchResult } from "../../../src/types";
-import { Card, CardContent, CardHeader, CardTitle } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
 import { Badge } from "../../../src/components/ui/badge";
+import { Button } from "../../../src/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../../src/components/ui/card";
+import { Separator } from "../../../src/components/ui/separator";
+import { Skeleton } from "../../../src/components/ui/skeleton";
+import { TextField, TextFieldInput } from "../../../src/components/ui/text-field";
 import { cn } from "../../../src/lib/utils";
-import { t } from "../../../src/i18n";
+import { useI18n } from "../../../src/i18n";
+import { kindBadgeClass, KIND_LABEL_KEY } from "./kindStyles";
 
 interface SymbolPanelProps {
   repoUrl: string;
@@ -12,15 +16,23 @@ interface SymbolPanelProps {
 }
 
 export function SymbolPanel(props: SymbolPanelProps) {
+  const { t } = useI18n();
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<CodeSearchResult[]>([]);
   const [selected, setSelected] = createSignal<CodeSymbol | null>(null);
   const [loading, setLoading] = createSignal(false);
+  const [searched, setSearched] = createSignal(false);
+
+  const kindLabel = (kind: string) => {
+    const key = KIND_LABEL_KEY[kind];
+    return key ? t(key) : kind;
+  };
 
   async function search() {
     const q = query().trim();
     if (!q) {
       setResults([]);
+      setSearched(false);
       return;
     }
     setLoading(true);
@@ -40,11 +52,12 @@ export function SymbolPanel(props: SymbolPanelProps) {
       setResults([]);
     } finally {
       setLoading(false);
+      setSearched(true);
     }
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === "Enter") search();
+    if (e.key === "Enter" && !e.isComposing) search();
   }
 
   async function showSymbol(id: string) {
@@ -62,84 +75,120 @@ export function SymbolPanel(props: SymbolPanelProps) {
     }
   }
 
-  const kindColor: Record<string, string> = {
-    function: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    class: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-    interface: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    type: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-    variable: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-    export: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    import: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
-    file: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
-  };
-
-  const kindLabel: Record<string, string> = {
-    function: t("codeWiki.kind.function"),
-    class: t("codeWiki.kind.class"),
-    interface: t("codeWiki.kind.interface"),
-    type: t("codeWiki.kind.type"),
-    variable: t("codeWiki.kind.variable"),
-    export: t("codeWiki.kind.export"),
-    import: t("codeWiki.kind.import"),
-    file: t("codeWiki.kind.file"),
-  };
-
   return (
-    <Card class="h-full flex flex-col">
-      <CardHeader class="flex-none">
-        <CardTitle>{t("codeWiki.tab.search")}</CardTitle>
-      </CardHeader>
-      <CardContent class="flex flex-col gap-3 flex-1 min-h-0 overflow-hidden">
-        <div class="flex gap-2">
-          <Input
-            placeholder={t("codeWiki.placeholder.search")}
-            value={query()}
-            onInput={(e: InputEvent) => setQuery((e.currentTarget as HTMLInputElement).value)}
-            onKeyDown={handleKeyDown}
-            class="flex-1"
-          />
-        </div>
-        <Show when={loading()}>
-          <div class="text-sm text-muted-foreground">
-            {t("codeWiki.status.searching")}
-          </div>
+    <Card class="flex h-full flex-col">
+      <CardHeader class="flex-none flex-row items-center justify-between gap-3 space-y-0">
+        <CardTitle class="text-base">{t("codeWiki.tab.search")}</CardTitle>
+        <Show when={results().length > 0}>
+          <Badge variant="secondary" class="tabular-nums">
+            {results().length}
+          </Badge>
         </Show>
-        <div class="flex-1 overflow-y-auto space-y-1">
-          <For each={results()}>
-            {(sym) => (
-              <div
-                class={cn(
-                  "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent",
-                  selected()?.id === sym.id && "bg-accent",
-                )}
-                onClick={() => showSymbol(sym.id)}
-              >
-                <Badge class={kindColor[sym.kind] ?? kindColor.variable}>
-                  {kindLabel[sym.kind] ?? sym.kind}
-                </Badge>
-                <div class="flex-1 min-w-0">
-                  <div class="font-medium truncate">{sym.name}</div>
-                  <div class="text-xs text-muted-foreground truncate">
-                    {sym.filePath}:{sym.lineStart}
-                  </div>
-                </div>
-              </div>
-            )}
-          </For>
+      </CardHeader>
+      <CardContent class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div class="flex flex-none gap-2">
+          <TextField
+            value={query()}
+            onChange={setQuery}
+            class="min-w-0 flex-1"
+            aria-label={t("codeWiki.placeholder.search")}
+          >
+            <TextFieldInput
+              type="search"
+              placeholder={t("codeWiki.placeholder.search")}
+              autocomplete="off"
+              spellcheck={false}
+              onKeyDown={handleKeyDown}
+            />
+          </TextField>
+          <Button size="sm" class="shrink-0" disabled={loading() || !query().trim()} onClick={search}>
+            {t("codeWiki.action.build")}
+          </Button>
         </div>
+
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <Show when={loading()}>
+            <div class="flex flex-col gap-2">
+              <For each={[0, 1, 2, 3]}>
+                {() => (
+                  <div class="flex items-center gap-2 p-2">
+                    <Skeleton class="h-5 w-16 rounded-full" />
+                    <div class="min-w-0 flex-1">
+                      <Skeleton class="h-3.5 w-2/3 rounded-md" />
+                      <Skeleton class="mt-1.5 h-3 w-1/2 rounded-md" />
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={!loading() && searched() && results().length === 0}>
+            <div class="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+              <p class="select-none text-3xl">🔎</p>
+              <p class="text-sm">{t("board.noResults")}</p>
+            </div>
+          </Show>
+
+          <Show when={!loading() && !searched()}>
+            <div class="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+              <p class="select-none text-3xl">🧩</p>
+              <p class="max-w-56 text-sm">{t("codeWiki.placeholder.search")}</p>
+            </div>
+          </Show>
+
+          <div class="flex flex-col gap-0.5">
+            <For each={results()}>
+              {(sym) => (
+                <Button
+                  variant={selected()?.id === sym.id ? "secondary" : "ghost"}
+                  size="sm"
+                  class="h-auto w-full justify-start gap-2 px-2 py-2 font-normal"
+                  onClick={() => showSymbol(sym.id)}
+                >
+                  <Badge
+                    variant="outline"
+                    class={cn("shrink-0 px-1.5 py-0 text-[10px]", kindBadgeClass(sym.kind))}
+                  >
+                    {kindLabel(sym.kind)}
+                  </Badge>
+                  <span class="min-w-0 flex-1 text-left">
+                    <span class="block truncate text-[13px] font-medium">{sym.name}</span>
+                    <span class="block truncate font-mono text-[11px] text-muted-foreground">
+                      {sym.filePath}:{sym.lineStart}
+                    </span>
+                  </span>
+                </Button>
+              )}
+            </For>
+          </div>
+        </div>
+
         <Show when={selected()}>
           {(sym) => (
-            <div class="border-t pt-3 flex-none">
-              <div class="font-semibold mb-1">{sym().name}</div>
+            <div class="max-h-[45%] flex-none overflow-y-auto">
+              <Separator class="mb-3" />
+              <div class="mb-1.5 flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  class={cn("shrink-0 px-1.5 py-0 text-[10px]", kindBadgeClass(sym().kind))}
+                >
+                  {kindLabel(sym().kind)}
+                </Badge>
+                <span class="min-w-0 flex-1 truncate text-sm font-semibold">{sym().name}</span>
+              </div>
+              <p class="mb-2 font-mono text-[11px] text-muted-foreground">
+                {sym().filePath}:{sym().lineStart}
+              </p>
               <Show when={sym().signature}>
-                <pre class="text-xs bg-muted p-2 rounded whitespace-pre-wrap">
+                <pre class="overflow-x-auto rounded-lg bg-muted p-2.5 font-mono text-[11px] leading-relaxed">
                   {sym().signature}
                 </pre>
               </Show>
               <Show when={sym().jsdoc}>
-                <div class="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
+                <p class="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
                   {sym().jsdoc}
-                </div>
+                </p>
               </Show>
             </div>
           )}

@@ -6,9 +6,9 @@ import {
   CardContent,
 } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Checkbox } from "../../../src/components/ui/checkbox";
-import { Input } from "../../../src/components/ui/input";
-import { Alert } from "../../../src/components/ui/alert";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
+import { InputField } from "../../../src/components/form/InputField";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -61,31 +61,31 @@ export default function DigestSettings() {
         <CardTitle>{t("options.digest.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Checkbox
+        <CheckboxField
           label={t("options.digest.enableLabel")}
           checked={enabled()}
-          onChange={(e) => setEnabled(e.currentTarget.checked)}
+          onChange={(checked) => setEnabled(checked)}
           hint={t("options.digest.enableHint")}
         />
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.digest.hourLabel")}
             type="number"
             placeholder="9"
             value={String(hour())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 0 && v <= 23) setHour(v);
             }}
             hint={t("options.digest.hourHint")}
           />
         </div>
 
-        <Checkbox
+        <CheckboxField
           label={t("options.digest.notifyLabel")}
           checked={notify()}
-          onChange={(e) => setNotify(e.currentTarget.checked)}
+          onChange={(checked) => setNotify(checked)}
           hint={t("options.digest.notifyHint")}
           class="mt-3"
         />
@@ -94,13 +94,7 @@ export default function DigestSettings() {
           {t("common.save")}
         </Button>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
   );

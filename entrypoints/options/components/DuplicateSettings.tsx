@@ -6,7 +6,7 @@ import {
   CardContent,
 } from "../../../src/components/ui/card";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { useI18n } from "../../../src/i18n";
 
 function formatErrorMessage(error: unknown): string {
@@ -164,13 +164,7 @@ export default function DuplicateSettings() {
           </div>
         </Show>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
       </CardContent>
     </Card>
 

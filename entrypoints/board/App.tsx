@@ -7,16 +7,44 @@ import {
   onCleanup,
 } from "solid-js";
 import type { BookmarkRecord, SearchResult } from "../../src/types";
+import type { Locale } from "../../src/i18n";
 import { incrementFreq } from "../../src/freq";
 import { getSettings } from "../../src/db";
 import { useI18n, setReactiveLocale } from "../../src/i18n";
 import DigestPanel from "../../src/components/DigestPanel";
 import ResearchPanel from "../../src/components/ResearchPanel";
+import { Alert, AlertDescription } from "../../src/components/ui/alert";
+import { Badge } from "../../src/components/ui/badge";
+import { Button } from "../../src/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../../src/components/ui/card";
+import { Separator } from "../../src/components/ui/separator";
+import { Skeleton } from "../../src/components/ui/skeleton";
+import { Toaster } from "../../src/components/ui/sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../src/components/ui/select";
+import { TextField, TextFieldInput } from "../../src/components/ui/text-field";
+import { cn } from "../../src/lib/utils";
 
 type SourceFilter = "all" | "bookmark" | "github" | "twitter";
 type SortOrder = "newest" | "oldest";
 /** 右侧面板（同时只开一个） */
 type SidePanel = "none" | "digest" | "research";
+
+interface SourceOption {
+  value: SourceFilter;
+  label: string;
+}
 
 /** 记录排序时间：优先推文发布时间，其次索引时间 */
 function recordTime(r: BookmarkRecord): number {
@@ -294,7 +322,7 @@ function App() {
     return list;
   });
 
-  const sourceOptions = createMemo<{ value: SourceFilter; label: string }[]>(() => [
+  const sourceOptions = createMemo<SourceOption[]>(() => [
     { value: "all", label: t("board.everything") },
     { value: "bookmark", label: t("board.bookmarks") },
     { value: "github", label: t("board.githubRepos") },
@@ -326,6 +354,10 @@ function App() {
     browser.tabs.create({ url: r.url });
   }
 
+  function openPage(page: "/graph.html" | "/options.html") {
+    browser.tabs.create({ url: browser.runtime.getURL(page) });
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     const active = document.activeElement;
     const isTyping =
@@ -347,7 +379,7 @@ function App() {
   onMount(async () => {
     const settings = await getSettings();
     if (settings.language) {
-      setReactiveLocale(settings.language as "zh-CN");
+      setReactiveLocale(settings.language as Locale);
     }
     document.addEventListener("keydown", handleKeydown);
     await loadRecords();
@@ -360,209 +392,255 @@ function App() {
     if (debounceTimer) clearTimeout(debounceTimer);
   });
 
+  /** 侧边栏 / 移动端抽屉共用的来源 + 标签导航 */
+  const SourceNav = (navProps: { onPick?: () => void }) => (
+    <>
+      <nav class="flex flex-col gap-0.5 px-2">
+        <For each={sourceOptions()}>
+          {(opt) => (
+            <Button
+              variant={source() === opt.value ? "secondary" : "ghost"}
+              size="sm"
+              class={cn(
+                "w-full justify-start gap-2.5 px-2.5 font-normal",
+                source() === opt.value && "font-medium text-foreground",
+              )}
+              onClick={() => {
+                selectSource(opt.value);
+                navProps.onPick?.();
+              }}
+            >
+              <span class="w-4 shrink-0 text-center select-none">{SOURCE_ICON[opt.value]}</span>
+              <span class="min-w-0 flex-1 truncate text-left">{opt.label}</span>
+              <Badge variant="outline" class="shrink-0 px-1.5 py-0 text-[10px] tabular-nums">
+                {sourceCounts()[opt.value]}
+              </Badge>
+            </Button>
+          )}
+        </For>
+      </nav>
+
+      <div class="mt-4 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+        {t("board.tags")}
+      </div>
+      <div class="flex-1 px-2 py-1.5">
+        <Show
+          when={topTags().length > 0}
+          fallback={
+            <p class="px-2.5 py-1.5 text-xs text-muted-foreground/60">{t("board.noTags")}</p>
+          }
+        >
+          <div class="flex flex-col gap-0.5">
+            <For each={topTags()}>
+              {(item) => (
+                <Button
+                  variant={activeTag() === item.tag ? "secondary" : "ghost"}
+                  size="sm"
+                  class={cn(
+                    "w-full justify-start gap-2 px-2.5 font-normal",
+                    activeTag() === item.tag && "font-medium text-foreground",
+                  )}
+                  title={item.tag}
+                  onClick={() => {
+                    toggleTag(item.tag);
+                    navProps.onPick?.();
+                  }}
+                >
+                  <span class="shrink-0 opacity-50">#</span>
+                  <span class="min-w-0 flex-1 truncate text-left">{item.tag}</span>
+                  <span class="shrink-0 text-[10px] tabular-nums opacity-60">{item.count}</span>
+                </Button>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </>
+  );
+
   return (
-    <div class="min-h-screen bg-background text-foreground flex">
+    <div class="flex min-h-screen bg-background text-foreground">
       {/* 左侧边栏 */}
-      <aside class="hidden md:flex w-60 shrink-0 flex-col border-r border-border bg-muted/30 sticky top-0 h-screen overflow-y-auto">
-        <div class="px-5 pt-5 pb-3">
+      <aside class="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-muted/30 md:flex">
+        <div class="px-4 pb-3 pt-5">
           <h1 class="text-lg font-bold tracking-tight">🧱 {t("board.title")}</h1>
         </div>
 
-        {/* 来源过滤 */}
-        <nav class="px-3 space-y-0.5">
-          <For each={sourceOptions()}>
-            {(opt) => (
-              <button
-                type="button"
-                class={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  source() === opt.value
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-                onClick={() => selectSource(opt.value)}
-              >
-                <span class="w-5 text-center select-none">{SOURCE_ICON[opt.value]}</span>
-                <span class="flex-1 text-left">{opt.label}</span>
-                <span class="text-xs tabular-nums opacity-70">
-                  {sourceCounts()[opt.value]}
-                </span>
-              </button>
-            )}
-          </For>
-        </nav>
+        {SourceNav({})}
 
-        {/* 热门标签 */}
-        <div class="mt-5 px-5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-          {t("board.tags")}
-        </div>
-        <div class="px-3 pb-4 flex-1">
-          <Show
-            when={topTags().length > 0}
-            fallback={
-              <p class="px-3 py-2 text-xs text-muted-foreground/60">{t("board.noTags")}</p>
-            }
-          >
-            <For each={topTags()}>
-              {(item) => (
-                <button
-                  type="button"
-                  class={`w-full flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm truncate transition-colors ${
-                    activeTag() === item.tag
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                  title={item.tag}
-                  onClick={() => toggleTag(item.tag)}
-                >
-                  <span class="opacity-60">#</span>
-                  <span class="flex-1 text-left truncate">{item.tag}</span>
-                  <span class="text-xs tabular-nums opacity-60">{item.count}</span>
-                </button>
-              )}
-            </For>
-          </Show>
-        </div>
+        <Separator />
 
         {/* 底部导航 */}
-        <div class="border-t border-border px-3 py-3 space-y-0.5">
-          <button
-            type="button"
-            class={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-              sidePanel() === "digest"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
+        <div class="flex flex-col gap-0.5 px-2 py-2">
+          <Button
+            variant={sidePanel() === "digest" ? "secondary" : "ghost"}
+            size="sm"
+            class="w-full justify-start gap-2.5 px-2.5 font-normal"
             onClick={() => togglePanel("digest")}
           >
-            <span class="w-5 text-center">📚</span>
+            <span class="w-4 shrink-0 text-center">📚</span>
             {t("board.openDigest")}
-          </button>
-          <button
-            type="button"
-            class={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-              sidePanel() === "research"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
+          </Button>
+          <Button
+            variant={sidePanel() === "research" ? "secondary" : "ghost"}
+            size="sm"
+            class="w-full justify-start gap-2.5 px-2.5 font-normal"
             onClick={() => togglePanel("research")}
           >
-            <span class="w-5 text-center">🔬</span>
+            <span class="w-4 shrink-0 text-center">🔬</span>
             {t("board.openResearch")}
-          </button>
-          <button
-            type="button"
-            class="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            onClick={() => browser.tabs.create({ url: (browser.runtime.getURL as any)("/graph.html") })}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="w-full justify-start gap-2.5 px-2.5 font-normal"
+            onClick={() => openPage("/graph.html")}
           >
-            <span class="w-5 text-center">🗺</span>
+            <span class="w-4 shrink-0 text-center">🗺</span>
             {t("board.openGraph")}
-          </button>
-          <button
-            type="button"
-            class="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            onClick={() => browser.tabs.create({ url: (browser.runtime.getURL as any)("/options.html") })}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="w-full justify-start gap-2.5 px-2.5 font-normal"
+            onClick={() => openPage("/options.html")}
           >
-            <span class="w-5 text-center">⚙️</span>
+            <span class="w-4 shrink-0 text-center">⚙️</span>
             {t("board.openSettings")}
-          </button>
+          </Button>
         </div>
       </aside>
 
       {/* 主内容区 */}
-      <main class="flex-1 min-w-0">
+      <main class="min-w-0 flex-1">
         {/* 顶栏 */}
-        <header class="sticky top-0 z-10 bg-background/90 backdrop-blur border-b border-border px-5 py-3">
+        <header class="sticky top-0 z-10 border-b border-border bg-background/90 px-5 py-3 backdrop-blur">
           <div class="flex items-center gap-3">
-            <h2 class="text-lg font-semibold truncate hidden lg:block">{currentTitle()}</h2>
-            <div class="flex-1 flex items-center gap-2 min-w-0">
-              <input
-                ref={searchRef}
-                type="search"
-                class="flex-1 min-w-0 bg-muted rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
-                placeholder={t("board.searchPlaceholder")}
+            <h2 class="hidden shrink-0 truncate text-lg font-semibold lg:block">{currentTitle()}</h2>
+
+            <div class="flex min-w-0 flex-1 items-center gap-2">
+              <TextField
                 value={query()}
-                onInput={(e) => handleInput(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.isComposing) handleAsk();
-                }}
-                autocomplete="off"
-                spellcheck={false}
-              />
+                onChange={handleInput}
+                class="min-w-0 flex-1"
+                aria-label={t("board.searchPlaceholder")}
+              >
+                <TextFieldInput
+                  ref={searchRef}
+                  type="search"
+                  placeholder={t("board.searchPlaceholder")}
+                  autocomplete="off"
+                  spellcheck={false}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.isComposing) handleAsk();
+                  }}
+                />
+              </TextField>
+
               <Show when={query().trim().length > 0}>
-                <button
-                  type="button"
-                  class="shrink-0 text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                <Button
+                  variant="outline"
+                  size="icon"
+                  class="size-10 shrink-0"
                   title={t("common.close")}
+                  aria-label={t("common.close")}
                   onClick={clearSearch}
                 >
                   ✕
-                </button>
+                </Button>
               </Show>
-              <button
-                type="button"
-                class="shrink-0 text-xs px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+
+              <Button
+                class="shrink-0"
                 title={t("board.askHint")}
                 disabled={askLoading() || !query().trim()}
                 onClick={handleAsk}
               >
                 {askLoading() ? t("board.asking") : t("board.askButton")}
-              </button>
+              </Button>
+
               <Show when={searchLoading()}>
-                <span class="text-muted-foreground text-lg animate-spin select-none">◌</span>
+                <span class="shrink-0 select-none text-lg text-muted-foreground motion-safe:animate-spin">
+                  ◌
+                </span>
               </Show>
             </div>
-            <span class="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:inline">
+
+            <Badge variant="secondary" class="hidden shrink-0 tabular-nums sm:inline-flex">
               {isSearching()
                 ? t("board.resultsCount", { count: visibleRecords().length })
                 : t("board.itemCount", { count: visibleRecords().length })}
-            </span>
-            <button
-              type="button"
-              class="shrink-0 text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            </Badge>
+
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
               title={t("board.sortToggle")}
-              onClick={() =>
-                setSortOrder((o) => (o === "newest" ? "oldest" : "newest"))
-              }
+              onClick={() => setSortOrder((o) => (o === "newest" ? "oldest" : "newest"))}
             >
-              {sortOrder() === "newest"
-                ? `↓ ${t("board.newest")}`
-                : `↑ ${t("board.oldest")}`}
-            </button>
+              {sortOrder() === "newest" ? `↓ ${t("board.newest")}` : `↑ ${t("board.oldest")}`}
+            </Button>
           </div>
-          <p class="text-xs text-muted-foreground mt-1.5">
-            {t("search.syntaxHint")}：
-            <code class="bg-muted px-1 rounded">{t("search.githubFilter")}</code>{" "}
-            <code class="bg-muted px-1 rounded">{t("search.twitterFilter")}</code>{" "}
-            <code class="bg-muted px-1 rounded">{t("search.folderFilter")}</code>{" "}
-            · {t("board.askHint")}
-          </p>
-          {/* 移动端来源 pills */}
-          <div class="md:hidden flex gap-2 mt-2 overflow-x-auto">
-            <For each={sourceOptions()}>
-              {(opt) => (
-                <button
-                  type="button"
-                  class={`shrink-0 rounded-full border px-3 py-1 text-xs transition-colors ${
-                    source() === opt.value
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  }`}
-                  onClick={() => selectSource(opt.value)}
-                >
-                  {SOURCE_ICON[opt.value]} {opt.label} · {sourceCounts()[opt.value]}
-                </button>
+
+          <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span>{t("search.syntaxHint")}</span>
+            <For
+              each={[
+                t("search.githubFilter"),
+                t("search.twitterFilter"),
+                t("search.folderFilter"),
+              ]}
+            >
+              {(snippet) => (
+                <code class="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">{snippet}</code>
               )}
             </For>
+            <span>· {t("board.askHint")}</span>
           </div>
+
+          {/* 移动端：来源筛选 */}
+          <div class="mt-2 md:hidden">
+            <Select<SourceOption>
+              value={sourceOptions().find((o) => o.value === source()) ?? null}
+              onChange={(option) => option && selectSource(option.value)}
+              options={sourceOptions()}
+              optionValue="value"
+              optionTextValue="label"
+              disallowEmptySelection
+              itemComponent={(itemProps) => (
+                <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
+              )}
+            >
+              <SelectTrigger class="h-9">
+                <SelectValue<SourceOption>>
+                  {(state) => (
+                    <span class="truncate">
+                      {SOURCE_ICON[state.selectedOption()?.value ?? "all"]}{" "}
+                      {state.selectedOption()?.label} ·{" "}
+                      {sourceCounts()[state.selectedOption()?.value ?? "all"]}
+                    </span>
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent />
+            </Select>
+          </div>
+
           <Show when={activeTag()}>
             <div class="mt-2">
-              <button
-                type="button"
-                class="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs"
-                onClick={() => setActiveTag(null)}
-              >
-                #{activeTag()} ✕
-              </button>
+              <Badge variant="secondary" class="gap-1.5 pl-2 pr-1">
+                #{activeTag()}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="size-4 rounded-full p-0"
+                  aria-label={t("common.close")}
+                  onClick={() => setActiveTag(null)}
+                >
+                  ✕
+                </Button>
+              </Badge>
             </div>
           </Show>
         </header>
@@ -570,79 +648,107 @@ function App() {
         {/* RAG 问答结果 */}
         <Show when={askAnswer() || askError() || askLoading()}>
           <div class="px-5 pt-4">
-            <div class="rounded-xl border border-border bg-accent/30 p-4 relative">
-              <button
-                type="button"
-                class="absolute top-2 right-2 text-muted-foreground hover:text-foreground text-xs px-1"
-                title={t("common.close")}
-                onClick={closeAsk}
-              >
-                ✕
-              </button>
-              <Show when={askLoading()}>
-                <p class="text-sm text-muted-foreground">💬 {t("board.asking")}</p>
-              </Show>
-              <Show when={askError()}>
-                <p class="text-sm text-destructive">{askError()}</p>
-              </Show>
-              <Show when={askAnswer()}>
-                <div class="text-sm leading-relaxed whitespace-pre-wrap pr-6">
-                  {askAnswer()}
-                </div>
-                <Show when={askCitations().length > 0}>
-                  <div class="mt-3 pt-3 border-t border-border">
-                    <div class="text-xs font-semibold text-muted-foreground mb-2">
+            <Card class="border-primary/30 bg-accent/40">
+              <CardContent class="relative p-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="absolute right-2 top-2 size-6"
+                  title={t("common.close")}
+                  aria-label={t("common.close")}
+                  onClick={closeAsk}
+                >
+                  ✕
+                </Button>
+                <Show when={askLoading()}>
+                  <p class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span class="select-none motion-safe:animate-spin">◌</span>
+                    {t("board.asking")}
+                  </p>
+                </Show>
+                <Show when={askError()}>
+                  <Alert variant="destructive">
+                    <AlertDescription>{askError()}</AlertDescription>
+                  </Alert>
+                </Show>
+                <Show when={askAnswer()}>
+                  <div class="whitespace-pre-wrap pr-6 text-sm leading-relaxed">{askAnswer()}</div>
+                  <Show when={askCitations().length > 0}>
+                    <Separator class="my-3" />
+                    <div class="mb-2 text-xs font-semibold text-muted-foreground">
                       {t("board.answerSources")}
                     </div>
-                    <For each={askCitations()}>
-                      {(cite, i) => (
-                        <div class="text-xs mb-1">
-                          <a
-                            href={cite.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            class="text-primary hover:underline"
-                          >
-                            [{i() + 1}] {cite.title}
-                          </a>
-                        </div>
-                      )}
-                    </For>
-                  </div>
+                    <ol class="flex flex-col gap-1">
+                      <For each={askCitations()}>
+                        {(cite, i) => (
+                          <li class="text-xs">
+                            <a
+                              href={cite.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              class="text-primary hover:underline"
+                            >
+                              [{i() + 1}] {cite.title}
+                            </a>
+                          </li>
+                        )}
+                      </For>
+                    </ol>
+                  </Show>
                 </Show>
-              </Show>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </Show>
 
         {/* 卡片墙 */}
         <div class="p-5">
           <Show when={searchError()}>
-            <div class="rounded-lg border border-destructive/50 bg-destructive/10 text-destructive px-4 py-3 mb-4 text-sm">
-              {searchError()}
-            </div>
+            <Alert variant="destructive" class="mb-4">
+              <AlertDescription>{searchError()}</AlertDescription>
+            </Alert>
           </Show>
+
           <Show
             when={!loading()}
             fallback={
-              <div class="py-24 text-center text-muted-foreground">
-                <span class="inline-block animate-spin text-2xl">◌</span>
-                <p class="mt-2 text-sm">{t("board.loading")}</p>
+              <div class="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4 [&>*]:mb-4">
+                <For each={[0, 1, 2, 3, 4, 5]}>
+                  {(i) => (
+                    <Card class="break-inside-avoid">
+                      <CardContent class="p-4">
+                        <Skeleton class="h-4 w-3/4 rounded-md" />
+                        <Skeleton class="mt-3 h-3 w-full rounded-md" />
+                        <Skeleton class="mt-2 h-3 w-5/6 rounded-md" />
+                        <Skeleton class={cn("mt-2 h-3 rounded-md", i % 2 ? "w-2/3" : "w-4/5")} />
+                        <div class="mt-4 flex gap-2">
+                          <Skeleton class="h-4 w-14 rounded-full" />
+                          <Skeleton class="h-4 w-10 rounded-full" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </For>
               </div>
             }
           >
             <Show
               when={visibleRecords().length > 0 || searchLoading()}
               fallback={
-                <div class="py-24 text-center text-muted-foreground">
-                  <p class="text-3xl">{isSearching() ? "🔎" : "🗃"}</p>
-                  <p class="mt-2 text-sm">
+                <div class="flex flex-col items-center gap-3 py-24 text-center text-muted-foreground">
+                  <p class="select-none text-4xl">{isSearching() ? "🔎" : "🗃"}</p>
+                  <p class="max-w-sm text-sm">
                     {isSearching() ? t("board.noResults") : t("board.empty")}
                   </p>
+                  <Show when={isSearching()}>
+                    <Button variant="outline" size="sm" onClick={clearSearch}>
+                      {t("common.close")}
+                    </Button>
+                  </Show>
                 </div>
               }
             >
-              <div class="columns-1 sm:columns-2 lg:columns-3 2xl:columns-4 gap-4 [&>*]:mb-4">
+              <div class="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4 [&>*]:mb-4">
                 <For each={visibleRecords()}>
                   {(r) => <BoardCard record={r} onOpen={() => openRecord(r)} />}
                 </For>
@@ -659,6 +765,8 @@ function App() {
       <Show when={sidePanel() === "research"}>
         <ResearchPanel onClose={() => setSidePanel("none")} />
       </Show>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }
@@ -667,22 +775,24 @@ function App() {
 function BoardCard(props: { record: BookmarkRecord; onOpen: () => void }) {
   const source = () => props.record.source ?? "bookmark";
   return (
-    <article
-      class="break-inside-avoid rounded-xl border border-border bg-card text-card-foreground p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary/40"
+    <Card
+      class="break-inside-avoid cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
       onClick={props.onOpen}
     >
-      <Show
-        when={source() === "twitter"}
-        fallback={
-          <Show when={source() === "github"} fallback={<BookmarkBody record={props.record} />}>
-            <GithubBody record={props.record} />
-          </Show>
-        }
-      >
-        <TwitterBody record={props.record} />
-      </Show>
-      <TagRow tags={props.record.tags} />
-    </article>
+      <CardContent class="p-4">
+        <Show
+          when={source() === "twitter"}
+          fallback={
+            <Show when={source() === "github"} fallback={<BookmarkBody record={props.record} />}>
+              <GithubBody record={props.record} />
+            </Show>
+          }
+        >
+          <TwitterBody record={props.record} />
+        </Show>
+        <TagRow tags={props.record.tags} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -692,30 +802,32 @@ function BookmarkBody(props: { record: BookmarkRecord }) {
   const r = props.record;
   return (
     <>
-      <header class="flex items-start gap-2.5">
+      <CardHeader class="flex-row items-start gap-2.5 space-y-0 p-0">
         <img
           src={faviconUrl(r.url)}
           alt=""
-          class="w-5 h-5 mt-0.5 rounded shrink-0"
+          class="mt-0.5 size-5 shrink-0 rounded"
           loading="lazy"
           onError={(e) => (e.currentTarget.style.display = "none")}
         />
-        <h3 class="font-semibold leading-snug line-clamp-2 flex-1">{r.title || r.url}</h3>
-      </header>
+        <CardTitle class="line-clamp-2 flex-1 text-base leading-snug">{r.title || r.url}</CardTitle>
+      </CardHeader>
       <Show when={r.quickSummary}>
-        <p class="mt-2 text-sm font-medium leading-relaxed line-clamp-2">{r.quickSummary}</p>
+        <p class="mt-2 line-clamp-2 text-sm font-medium leading-relaxed">{r.quickSummary}</p>
       </Show>
       <Show when={r.summary}>
-        <p class="mt-1.5 text-sm text-muted-foreground leading-relaxed line-clamp-4">{r.summary}</p>
+        <p class="mt-1.5 line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+          {r.summary}
+        </p>
       </Show>
-      <footer class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <CardFooter class="mt-3 flex items-center gap-2 p-0 text-xs text-muted-foreground">
         <span class="truncate">{domainOf(r.url)}</span>
         <Show when={r.readingTime}>
           <span class="shrink-0">· {t("board.readingTime", { minutes: r.readingTime ?? 0 })}</span>
         </Show>
         <span class="flex-1" />
         <span class="shrink-0">{formatDate(recordTime(r))}</span>
-      </footer>
+      </CardFooter>
     </>
   );
 }
@@ -726,37 +838,39 @@ function GithubBody(props: { record: BookmarkRecord }) {
   const r = props.record;
   return (
     <>
-      <header class="flex items-start gap-2.5">
-        <span class="text-lg leading-none mt-0.5 select-none">🐙</span>
-        <h3 class="font-semibold leading-snug line-clamp-2 flex-1 font-mono text-[15px]">
+      <CardHeader class="flex-row items-start gap-2.5 space-y-0 p-0">
+        <span class="mt-0.5 shrink-0 select-none text-lg leading-none">🐙</span>
+        <CardTitle class="line-clamp-2 flex-1 font-mono text-[15px] leading-snug">
           {r.title || r.url}
-        </h3>
-      </header>
+        </CardTitle>
+      </CardHeader>
       <Show when={r.quickSummary}>
-        <p class="mt-2 text-sm font-medium leading-relaxed line-clamp-2">{r.quickSummary}</p>
+        <p class="mt-2 line-clamp-2 text-sm font-medium leading-relaxed">{r.quickSummary}</p>
       </Show>
       <Show when={r.summary}>
-        <p class="mt-1.5 text-sm text-muted-foreground leading-relaxed line-clamp-5">{r.summary}</p>
+        <p class="mt-1.5 line-clamp-5 text-sm leading-relaxed text-muted-foreground">
+          {r.summary}
+        </p>
       </Show>
       <Show when={(r.technologies ?? []).length > 0}>
         <div class="mt-2.5 flex flex-wrap gap-1.5">
           <For each={(r.technologies ?? []).slice(0, 6)}>
             {(tech) => (
-              <span class="rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium">
+              <Badge variant="secondary" class="px-2 py-0 text-[11px] font-medium">
                 {tech}
-              </span>
+              </Badge>
             )}
           </For>
         </div>
       </Show>
-      <footer class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <CardFooter class="mt-3 flex items-center gap-2 p-0 text-xs text-muted-foreground">
         <span>github.com</span>
         <Show when={r.readingTime}>
           <span class="shrink-0">· {t("board.readingTime", { minutes: r.readingTime ?? 0 })}</span>
         </Show>
         <span class="flex-1" />
         <span class="shrink-0">{formatDate(recordTime(r))}</span>
-      </footer>
+      </CardFooter>
     </>
   );
 }
@@ -767,11 +881,11 @@ function TwitterBody(props: { record: BookmarkRecord }) {
   const eng = () => r.engagement ?? {};
   return (
     <>
-      <header class="flex items-center gap-2.5">
+      <CardHeader class="flex-row items-center gap-2.5 space-y-0 p-0">
         <Show
           when={r.authorProfileImageUrl}
           fallback={
-            <span class="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm select-none shrink-0">
+            <span class="flex size-8 shrink-0 select-none items-center justify-center rounded-full bg-muted text-sm">
               𝕏
             </span>
           }
@@ -779,26 +893,26 @@ function TwitterBody(props: { record: BookmarkRecord }) {
           <img
             src={r.authorProfileImageUrl}
             alt={r.authorName ?? ""}
-            class="w-8 h-8 rounded-full shrink-0"
+            class="size-8 shrink-0 rounded-full"
             loading="lazy"
             onError={(e) => (e.currentTarget.style.display = "none")}
           />
         </Show>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-semibold truncate">{r.authorName || r.authorHandle || r.title}</p>
+          <p class="truncate text-sm font-semibold">{r.authorName || r.authorHandle || r.title}</p>
           <Show when={r.authorHandle}>
-            <p class="text-xs text-muted-foreground truncate">@{r.authorHandle}</p>
+            <p class="truncate text-xs text-muted-foreground">@{r.authorHandle}</p>
           </Show>
         </div>
-        <span class="text-xs text-muted-foreground shrink-0">{formatDate(recordTime(r))}</span>
-      </header>
+        <span class="shrink-0 text-xs text-muted-foreground">{formatDate(recordTime(r))}</span>
+      </CardHeader>
       <Show when={r.quickSummary || r.summary}>
-        <p class="mt-2.5 text-sm leading-relaxed whitespace-pre-line line-clamp-6">
+        <p class="mt-2.5 line-clamp-6 whitespace-pre-line text-sm leading-relaxed">
           {r.quickSummary || r.summary}
         </p>
       </Show>
       <Show when={r.quotedTweetText}>
-        <blockquote class="mt-2 border-l-2 border-border pl-3 text-xs text-muted-foreground line-clamp-3">
+        <blockquote class="mt-2 line-clamp-3 border-l-2 border-border pl-3 text-xs text-muted-foreground">
           {r.quotedTweetText}
         </blockquote>
       </Show>
@@ -806,19 +920,19 @@ function TwitterBody(props: { record: BookmarkRecord }) {
         <img
           src={r.media![0]}
           alt=""
-          class="mt-3 w-full rounded-lg border border-border object-cover max-h-72"
+          class="mt-3 max-h-72 w-full rounded-lg border border-border object-cover"
           loading="lazy"
           onError={(e) => (e.currentTarget.style.display = "none")}
         />
       </Show>
-      <footer class="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+      <CardFooter class="mt-3 flex items-center gap-4 p-0 text-xs text-muted-foreground">
         <span title="replies">💬 {formatCount(eng().replyCount)}</span>
         <span title="reposts">🔁 {formatCount(eng().repostCount)}</span>
         <span title="likes">❤️ {formatCount(eng().likeCount)}</span>
         <Show when={eng().viewCount}>
           <span title="views">👁 {formatCount(eng().viewCount)}</span>
         </Show>
-      </footer>
+      </CardFooter>
     </>
   );
 }
@@ -830,9 +944,9 @@ function TagRow(props: { tags?: string[] }) {
       <div class="mt-3 flex flex-wrap gap-1.5">
         <For each={(props.tags ?? []).slice(0, 5)}>
           {(tag) => (
-            <span class="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+            <Badge variant="outline" class="rounded-full px-2 py-0 text-[11px] font-normal">
               #{tag}
-            </span>
+            </Badge>
           )}
         </For>
       </div>

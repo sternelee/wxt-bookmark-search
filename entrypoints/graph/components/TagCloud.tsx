@@ -5,6 +5,8 @@
 import { For, Show } from "solid-js";
 import { useI18n } from "../../../src/i18n";
 import type { TagNode } from "../../../src/tag-cloud";
+import { Skeleton } from "../../../src/components/ui/skeleton";
+import { cn } from "../../../src/lib/utils";
 
 /** 标签按主题着色映射 */
 const TAG_COLORS: Record<string, string> = {
@@ -58,6 +60,7 @@ interface TagCloudProps {
   activeTags: string[];
   onTagClick: (tag: string) => void;
   isLoading?: boolean;
+  hasFilter?: boolean;
 }
 
 export function TagCloud(props: TagCloudProps) {
@@ -84,46 +87,69 @@ export function TagCloud(props: TagCloudProps) {
   };
 
   return (
-    <div class="relative w-full h-full flex items-center justify-center p-4 overflow-hidden">
+    <div class="relative flex h-full w-full items-center justify-center overflow-hidden p-6">
+      {/* 加载骨架：用一排脉冲胶囊模拟标签云的形状 */}
       <Show when={props.isLoading}>
-        <div class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <span class="text-2xl animate-spin select-none text-muted-foreground">◌</span>
+        <div class="absolute inset-0 z-10 flex flex-wrap content-center items-center justify-center gap-3 bg-background/70 backdrop-blur-[1px]">
+          <For each={[72, 96, 60, 120, 84, 64, 104, 76]}>
+            {(w, i) => (
+              <Skeleton
+                class="h-8 rounded-full"
+                style={{ width: `${w}px`, "animation-delay": `${i() * 90}ms` }}
+              />
+            )}
+          </For>
         </div>
       </Show>
 
-      <div class="tag-cloud flex flex-wrap gap-3 items-center justify-center min-h-[280px]">
+      <div class="flex min-h-[280px] flex-wrap items-center justify-center gap-2.5">
         <For each={props.nodes}>
-          {(node) => (
-            <button
-              type="button"
-              class="tag-item transition-all duration-300 ease-out cursor-pointer
-                     rounded-full px-3 py-1.5 hover:scale-110 hover:shadow-lg
-                     select-none border"
-              style={{
-                "font-size": fontSize(node.weight),
-                "font-weight": fontWeight(node.weight),
-                color: getTagColor(node.tag),
-                "border-color": getTagColor(node.tag) + "40",
-                opacity: opacity(node.tag),
-                "letter-spacing": node.weight > 0.5 ? "0.02em" : "normal",
-                background: getTagColor(node.tag) + "15",
-              }}
-              title={t("search.graphTagCount", { count: node.count })}
-              onClick={() => props.onTagClick(node.tag)}
-            >
-              {node.tag}
-            </button>
-          )}
+          {(node) => {
+            const color = getTagColor(node.tag);
+            const isActive = () => props.activeTags.includes(node.tag);
+            return (
+              <button
+                type="button"
+                class={cn(
+                  "tag-item cursor-pointer select-none rounded-full border px-3 py-1.5",
+                  "transition-all duration-300 ease-out hover:scale-110 hover:shadow-lg",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  isActive() && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                )}
+                style={{
+                  "font-size": fontSize(node.weight),
+                  "font-weight": fontWeight(node.weight),
+                  color,
+                  "border-color": `${color}59`,
+                  opacity: opacity(node.tag),
+                  "letter-spacing": node.weight > 0.5 ? "0.02em" : "normal",
+                  background: `${color}1f`,
+                }}
+                title={t("search.graphTagCount", { count: node.count })}
+                onClick={() => props.onTagClick(node.tag)}
+              >
+                {node.tag}
+              </button>
+            );
+          }}
         </For>
       </div>
 
       {/* 空状态 */}
       <Show when={!props.isLoading && props.nodes.length === 0}>
         <div class="absolute inset-0 flex items-center justify-center">
-          <p class="text-sm text-muted-foreground text-center px-8">
-            {t("search.graphNoMoreTags")}
-            <br />
-            <span class="text-xs mt-1 block">{t("search.graphTryOtherTags")}</span>
+          <p class="max-w-xs text-center text-sm text-muted-foreground">
+            <Show
+              when={props.hasFilter}
+              fallback={
+                <>
+                  {t("search.graphNoMoreTags")}
+                  <span class="mt-1 block text-xs">{t("search.graphTryOtherTags")}</span>
+                </>
+              }
+            >
+              {t("search.graphNoMatchingTags")}
+            </Show>
           </p>
         </div>
       </Show>

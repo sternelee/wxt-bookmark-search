@@ -5,10 +5,10 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
-import { Checkbox } from "../../../src/components/ui/checkbox";
+import { InputField } from "../../../src/components/form/InputField";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -106,31 +106,31 @@ export default function GitHubSettings() {
         <CardTitle>{t("options.github.title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <Input
+        <InputField
           label="GitHub Personal Access Token (PAT)"
           type="password"
           placeholder="ghp_..."
           value={githubToken()}
-          onInput={(e) => setGithubToken(e.currentTarget.value)}
+          onChange={(value) => setGithubToken(value)}
           hint={t("options.github.tokenHint")}
         />
 
-        <Checkbox
+        <CheckboxField
           label={t("options.github.autoSyncLabel")}
           checked={autoSync()}
-          onChange={(e) => setAutoSync(e.currentTarget.checked)}
+          onChange={(checked) => setAutoSync(checked)}
           hint={t("options.github.autoSyncHint")}
           class="mt-4"
         />
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.github.intervalLabel")}
             type="number"
             placeholder="24"
             value={String(interval())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
             }}
             hint={t("options.github.intervalHint")}
@@ -155,13 +155,7 @@ export default function GitHubSettings() {
           </Button>
         </div>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">

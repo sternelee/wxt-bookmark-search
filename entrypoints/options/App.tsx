@@ -5,6 +5,10 @@ import { getSettings } from "../../src/db";
 import { useI18n, setReactiveLocale } from "../../src/i18n";
 import type { I18nKey } from "../../src/i18n";
 import { cn } from "../../src/lib/utils";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../src/components/ui/tabs";
+import { Separator } from "../../src/components/ui/separator";
+import { Skeleton } from "../../src/components/ui/skeleton";
+import { Toaster } from "../../src/components/ui/sonner";
 import APISettings from "./components/APISettings";
 import GitHubSettings from "./components/GitHubSettings";
 import TwitterSettings from "./components/TwitterSettings";
@@ -81,6 +85,13 @@ const TAB_GROUPS: OptionsTabGroup[] = [
 
 const ALL_TABS: OptionsTab[] = TAB_GROUPS.flatMap((group) => group.tabs);
 
+/** 功能页面入口（board / graph / wiki） */
+const FEATURE_PAGES = [
+  { page: "/board.html", titleKey: "options.nav.pageBoard" },
+  { page: "/graph.html", titleKey: "options.nav.pageGraph" },
+  { page: "/wiki.html", titleKey: "options.nav.pageWiki" },
+] as const satisfies readonly { page: string; titleKey: I18nKey }[];
+
 /** 从 location.hash（#section-xxx，兼容裸 #xxx）解析出 tab id，非法或缺失时返回 null */
 function readTabFromHash(): string | null {
   const id = window.location.hash.replace(/^#(?:section-)?/, "");
@@ -91,13 +102,6 @@ function App() {
   const { t } = useI18n();
   const [isLoaded, setIsLoaded] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<string>(ALL_TABS[0].id);
-
-  // 功能页面入口（board / graph / wiki）
-  const featurePages = [
-    { page: "/board.html", titleKey: "options.nav.pageBoard" },
-    { page: "/graph.html", titleKey: "options.nav.pageGraph" },
-    { page: "/wiki.html", titleKey: "options.nav.pageWiki" },
-  ] as const;
 
   /** 切换 tab 并同步 URL hash（用 replaceState 避免页面滚动跳动） */
   const selectTab = (id: string) => {
@@ -129,86 +133,114 @@ function App() {
   onCleanup(() => window.removeEventListener("hashchange", syncTabFromHash));
 
   return (
-    <div class="w-full">
-      <header class="flex items-center gap-3 mb-6">
-        <h1 class="text-3xl font-extrabold tracking-tight">
-          <span class="bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent">
-            🤖 Flow Search
+    <div class="w-full pb-16">
+      <header class="mb-7 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary to-pink-500 text-xl shadow-sm">
+            🤖
           </span>
-          <span class="text-foreground"> {t("options.pageTitle")}</span>
-        </h1>
-      </header>
+          <div class="leading-tight">
+            <h1 class="text-2xl font-extrabold tracking-tight">
+              Flow Search
+              <span class="ml-2 text-base font-medium text-muted-foreground">
+                {t("options.pageTitle")}
+              </span>
+            </h1>
+          </div>
+        </div>
 
-      <Show when={isLoaded()}>
-        {/* 分组 tab 导航 + 功能页面入口 */}
-        <nav class="mb-6 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-          <For each={TAB_GROUPS}>
-            {(group) => (
-              <div class="flex items-start gap-3">
-                <span class="hidden sm:block shrink-0 w-20 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t(group.labelKey)}
-                </span>
-                <div class="flex flex-wrap gap-1.5" role="tablist">
-                  <For each={group.tabs}>
-                    {(tab) => {
-                      const isActive = () => activeTab() === tab.id;
-                      return (
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive()}
-                          class={cn(
-                            "text-xs px-2.5 py-1.5 rounded-md border transition-colors",
-                            isActive()
-                              ? "bg-primary text-primary-foreground border-primary shadow-sm font-medium"
-                              : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground",
-                          )}
-                          onClick={() => selectTab(tab.id)}
-                        >
-                          {t(tab.titleKey)}
-                        </button>
-                      );
-                    }}
-                  </For>
-                </div>
-              </div>
+        <nav class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs font-medium text-muted-foreground">
+            {t("options.nav.pages")}
+          </span>
+          <For each={FEATURE_PAGES}>
+            {(page) => (
+              <button
+                type="button"
+                class="rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  browser.tabs.create({ url: browser.runtime.getURL(page.page) }).catch(() => {});
+                }}
+              >
+                {t(page.titleKey)}
+              </button>
             )}
           </For>
+        </nav>
+      </header>
 
-          <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-            <span class="text-xs font-medium text-muted-foreground">
-              {t("options.nav.pages")}:
-            </span>
-            <For each={featurePages}>
-              {(page) => (
-                <button
-                  type="button"
-                  class="text-xs px-2 py-1 rounded-md border border-border bg-background hover:bg-muted transition-colors text-blue-600 hover:text-blue-800"
-                  onClick={() => {
-                    const url = (browser.runtime.getURL as (p: string) => string)(page.page);
-                    browser.tabs.create({ url }).catch(() => {});
-                  }}
+      <Show
+        when={isLoaded()}
+        fallback={
+          <div class="flex flex-col gap-6 lg:flex-row lg:gap-8">
+            <Skeleton class="h-72 w-full rounded-xl lg:w-60" />
+            <Skeleton class="h-96 flex-1 rounded-xl" />
+          </div>
+        }
+      >
+        {/* 面板全部保持挂载（forceMount + hidden），切换 tab 不会丢弃未保存的表单输入 */}
+        <Tabs
+          value={activeTab()}
+          onChange={selectTab}
+          orientation="vertical"
+          class="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-8"
+        >
+          <aside class="w-full shrink-0 lg:sticky lg:top-6 lg:w-60">
+            <TabsList class="flex h-auto w-full flex-wrap items-stretch justify-start gap-0.5 rounded-xl border border-border bg-card p-1.5 shadow-sm lg:flex-col lg:flex-nowrap">
+              <For each={TAB_GROUPS}>
+                {(group, groupIndex) => (
+                  <>
+                    <Show when={groupIndex() > 0}>
+                      <Separator class="my-1 hidden lg:block" />
+                    </Show>
+                    <div
+                      aria-hidden="true"
+                      class="hidden px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground lg:block"
+                    >
+                      {t(group.labelKey)}
+                    </div>
+                    <For each={group.tabs}>
+                      {(tab) => (
+                        <TabsTrigger
+                          value={tab.id}
+                          class={cn(
+                            "w-auto shrink-0 justify-start whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-normal text-muted-foreground",
+                            // 竖向侧栏里允许换行：窄栏容不下「☁️ 云端同步（Google Drive / Dropbox / WebDAV）」这类长标题
+                            "lg:w-full lg:min-w-0 lg:shrink lg:items-start lg:whitespace-normal lg:text-left lg:leading-snug lg:break-words",
+                            "hover:bg-muted hover:text-foreground",
+                            "data-[selected]:bg-primary data-[selected]:font-medium data-[selected]:text-primary-foreground data-[selected]:shadow-sm",
+                          )}
+                        >
+                          {t(tab.titleKey)}
+                        </TabsTrigger>
+                      )}
+                    </For>
+                  </>
+                )}
+              </For>
+            </TabsList>
+          </aside>
+
+          <div class="min-w-0 flex-1">
+            <For each={ALL_TABS}>
+              {(tab) => (
+                <TabsContent
+                  value={tab.id}
+                  forceMount
+                  class={cn(
+                    "mt-0 focus-visible:outline-none",
+                    activeTab() === tab.id ? "block" : "hidden",
+                  )}
                 >
-                  {t(page.titleKey)}
-                </button>
+                  <Dynamic component={tab.Panel} />
+                </TabsContent>
               )}
             </For>
           </div>
-        </nav>
-
-        {/* 当前 tab 的内容面板 —— 全部保持挂载，仅切换可见性，避免切换 tab 时丢失未保存的表单输入 */}
-        <For each={ALL_TABS}>
-          {(tab) => (
-            <div
-              id={`section-${tab.id}`}
-              role="tabpanel"
-              class={activeTab() === tab.id ? "block" : "hidden"}
-            >
-              <Dynamic component={tab.Panel} />
-            </div>
-          )}
-        </For>
+        </Tabs>
       </Show>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }

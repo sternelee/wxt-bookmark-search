@@ -8,6 +8,18 @@ import {
 import type { BookmarkRecord } from "../../src/types";
 import type { TagNode } from "../../src/tag-cloud";
 import { useI18n } from "../../src/i18n";
+import { Badge } from "../../src/components/ui/badge";
+import { Button } from "../../src/components/ui/button";
+import { Separator } from "../../src/components/ui/separator";
+import { Toaster } from "../../src/components/ui/sonner";
+import { TextField, TextFieldInput } from "../../src/components/ui/text-field";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "../../src/components/ui/breadcrumb";
 import { TagCloud } from "./components/TagCloud";
 import { BookmarkPanel } from "./components/BookmarkPanel";
 
@@ -16,6 +28,7 @@ function App() {
   // 所有已索引书签（从 background 获取）
   const [allRecords, setAllRecords] = createSignal<BookmarkRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [filter, setFilter] = createSignal("");
 
   // 钻取路径（面包屑）
   const [tagPath, setTagPath] = createSignal<string[]>([]);
@@ -25,6 +38,13 @@ function App() {
     const path = tagPath();
     if (path.length === 0) return buildRootTagCloud(allRecords());
     return drillDown(path, allRecords());
+  });
+
+  /** 按过滤词收窄标签云（只影响展示，不影响钻取状态） */
+  const visibleNodes = createMemo<TagNode[]>(() => {
+    const q = filter().trim().toLowerCase();
+    if (!q) return cloudNodes();
+    return cloudNodes().filter((n) => n.tag.toLowerCase().includes(q));
   });
 
   // 实时关联书签（左侧标签点击时右侧即时更新）
@@ -64,6 +84,7 @@ function App() {
       // 新增标签 → 钻入
       setTagPath([...path, tag]);
     }
+    setFilter("");
   }
 
   // 面包屑点击：回退到指定层级
@@ -74,81 +95,113 @@ function App() {
   // 重置到根
   function handleReset() {
     setTagPath([]);
+    setFilter("");
+  }
+
+  function openPage(page: "/board.html" | "/options.html") {
+    browser.tabs.create({ url: browser.runtime.getURL(page) });
   }
 
   // 初始化
   onMount(loadRecords);
 
   return (
-    <div class="flex h-screen bg-background text-foreground overflow-hidden">
-
+    <div class="flex h-screen overflow-hidden bg-background text-foreground">
       {/* === 左侧：标签云 === */}
-      <div class="flex flex-col w-1/2 border-r border-border min-h-0">
-
-        {/* 面包屑导航 */}
-        <div class="flex items-center gap-1 px-4 py-2.5 border-b border-border text-sm min-h-[44px] shrink-0 overflow-x-auto">
-          {/* 根节点 */}
-          <button
-            type="button"
-            class={`shrink-0 hover:text-primary transition-colors rounded px-2 py-0.5 ${
-              tagPath().length === 0
-                ? "font-semibold text-foreground bg-muted"
-                : "text-muted-foreground"
-            }`}
-            onClick={handleReset}
-          >
-            {t("search.graphAll")}
-          </button>
-
-          <For each={tagPath()}>
-            {(tag, i) => (
-              <>
-                <span class="text-muted-foreground shrink-0 select-none">›</span>
-                <button
-                  type="button"
-                  class={`shrink-0 hover:text-primary transition-colors rounded px-2 py-0.5 ${
-                    i() === tagPath().length - 1
-                      ? "font-semibold text-foreground bg-muted"
-                      : "text-muted-foreground"
-                  }`}
-                  onClick={() => handleBreadcrumb(i())}
-                  title={t("search.graphBackToLevel", { tag })}
+      <div class="flex min-h-0 w-1/2 flex-col border-r border-border">
+        {/* 顶栏：面包屑 + 过滤 + 入口 */}
+        <div class="flex flex-none items-center gap-2 border-b border-border px-4 py-2.5">
+          <Breadcrumb class="min-w-0 flex-1">
+            <BreadcrumbList class="flex-nowrap">
+              <BreadcrumbItem class="shrink-0">
+                <BreadcrumbLink
+                  class={
+                    tagPath().length === 0
+                      ? "cursor-default font-semibold text-foreground"
+                      : undefined
+                  }
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleReset();
+                  }}
                 >
-                  {tag}
-                </button>
-              </>
-            )}
-          </For>
+                  {t("search.graphAll")}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <For each={tagPath()}>
+                {(tag, i) => (
+                  <>
+                    <BreadcrumbSeparator class="shrink-0" />
+                    <BreadcrumbItem class="shrink-0">
+                      <BreadcrumbLink
+                        class={
+                          i() === tagPath().length - 1
+                            ? "cursor-default font-semibold text-foreground"
+                            : undefined
+                        }
+                        title={t("search.graphBackToLevel", { tag })}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleBreadcrumb(i());
+                        }}
+                      >
+                        {tag}
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                  </>
+                )}
+              </For>
+            </BreadcrumbList>
+          </Breadcrumb>
 
           <Show when={tagPath().length > 0}>
-            <span class="ml-auto shrink-0 text-xs text-muted-foreground pr-2">
-              {t("search.graphSelectedCount", {
-                count: relatedBookmarks().length,
-              })}
-            </span>
+            <Badge variant="secondary" class="shrink-0 tabular-nums">
+              {t("search.graphSelectedCount", { count: relatedBookmarks().length })}
+            </Badge>
           </Show>
+
+          <Separator orientation="vertical" class="h-6 shrink-0" />
+
+          <TextField
+            value={filter()}
+            onChange={setFilter}
+            class="w-40 shrink-0"
+            aria-label={t("search.graphFilterTags")}
+          >
+            <TextFieldInput
+              type="search"
+              placeholder={t("search.graphFilterTags")}
+              autocomplete="off"
+              spellcheck={false}
+            />
+          </TextField>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            class="shrink-0"
+            onClick={() => openPage("/board.html")}
+          >
+            {t("board.title")}
+          </Button>
         </div>
 
         {/* 标签云主体 */}
-        <div class="flex-1 min-h-0 relative">
+        <div class="relative min-h-0 flex-1">
           <div class="absolute inset-0 transition-opacity duration-300">
             <TagCloud
-              nodes={cloudNodes()}
+              nodes={visibleNodes()}
               activeTags={tagPath()}
               onTagClick={handleTagClick}
               isLoading={loading()}
+              hasFilter={filter().trim().length > 0}
             />
           </div>
         </div>
 
         {/* 底部提示 + 统计 */}
-        <div class="px-4 py-2 border-t border-border text-xs text-muted-foreground shrink-0 flex justify-between">
-          <Show
-            when={tagPath().length === 0}
-            fallback={
-              <span>{t("search.graphRefineHint")}</span>
-            }
-          >
+        <div class="flex flex-none items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          <Show when={tagPath().length === 0} fallback={<span>{t("search.graphRefineHint")}</span>}>
             <span>
               {loading()
                 ? t("search.graphLoading")
@@ -160,17 +213,16 @@ function App() {
                   : t("search.graphTagStats", { count: stats().totalTags })}
             </span>
           </Show>
-          <span class="text-primary opacity-70">{t("search.graphSizeHint")}</span>
+          <span class="opacity-70">{t("search.graphSizeHint")}</span>
         </div>
       </div>
 
       {/* === 右侧：关联书签 === */}
-      <div class="flex flex-col w-1/2 min-h-0">
-        <BookmarkPanel
-          bookmarks={relatedBookmarks()}
-          activeTags={tagPath()}
-        />
+      <div class="flex min-h-0 w-1/2 flex-col">
+        <BookmarkPanel bookmarks={relatedBookmarks()} activeTags={tagPath()} />
       </div>
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }

@@ -5,10 +5,10 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
-import { Checkbox } from "../../../src/components/ui/checkbox";
+import { InputField } from "../../../src/components/form/InputField";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { isEmbedConfigured } from "../../../src/service-config";
 import { useI18n } from "../../../src/i18n";
@@ -144,41 +144,41 @@ export default function TwitterSettings() {
           {t("options.twitter.description")}
         </p>
 
-        <Checkbox
+        <CheckboxField
           label={t("options.twitter.enableSync")}
           checked={syncEnabled()}
-          onChange={(e) => setSyncEnabled(e.currentTarget.checked)}
+          onChange={(checked) => setSyncEnabled(checked)}
           hint={t("options.twitter.autoSyncHint")}
         />
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.twitter.intervalLabel")}
             type="number"
             placeholder="24"
             value={String(interval())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
             }}
             hint={t("options.twitter.intervalHint")}
           />
         </div>
 
-        <Input
+        <InputField
           label={t("options.twitter.csrfToken")}
           placeholder={t("options.twitter.csrfPlaceholder")}
           value={ct0()}
-          onInput={(e) => setCt0(e.currentTarget.value)}
+          onChange={(value) => setCt0(value)}
           hint={t("options.twitter.csrfHint")}
         />
 
-        <Input
+        <InputField
           label={t("options.twitter.authToken")}
           type="password"
           placeholder={t("options.twitter.authPlaceholder")}
           value={authToken()}
-          onInput={(e) => setAuthToken(e.currentTarget.value)}
+          onChange={(value) => setAuthToken(value)}
         />
 
         <div class="flex gap-3 flex-wrap mt-4">
@@ -202,13 +202,7 @@ export default function TwitterSettings() {
           </Button>
         </div>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">

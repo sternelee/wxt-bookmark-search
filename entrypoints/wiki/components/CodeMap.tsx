@@ -1,7 +1,10 @@
-import { createSignal, For, Show, onMount } from "solid-js";
+import { createSignal, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import type { CodeSymbol, CodeEdge } from "../../../src/types";
+import { Badge } from "../../../src/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../src/components/ui/card";
-import { t } from "../../../src/i18n";
+import { cn } from "../../../src/lib/utils";
+import { useI18n } from "../../../src/i18n";
+import { kindBadgeClass, kindNodeColor, KIND_LABEL_KEY } from "./kindStyles";
 
 interface CodeMapProps {
   symbols: CodeSymbol[];
@@ -26,19 +29,53 @@ interface Link {
 }
 
 export function CodeMap(props: CodeMapProps) {
+  const { t } = useI18n();
   const [nodes, setNodes] = createSignal<Node[]>([]);
   const [links, setLinks] = createSignal<Link[]>([]);
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [width, setWidth] = createSignal(800);
   const [height, setHeight] = createSignal(500);
 
+  let svgEl: SVGSVGElement | undefined;
+
+  /** 统计当前图谱里出现的种类（用于图例） */
+  const presentKinds = () => {
+    const kinds = new Set<string>();
+    for (const n of nodes()) kinds.add(n.kind);
+    return [...kinds].sort();
+  };
+
+  const kindLabel = (kind: string) => {
+    const key = KIND_LABEL_KEY[kind];
+    return key ? t(key) : kind;
+  };
+
   onMount(() => {
-    const el = document.getElementById("code-map-svg");
-    if (el) {
+    const measure = () => {
+      const el = svgEl?.parentElement;
+      if (!el) return;
       const rect = el.getBoundingClientRect();
-      setWidth(Math.max(rect.width, 400));
-      setHeight(Math.max(rect.height, 300));
+      if (rect.width > 0) setWidth(Math.max(rect.width, 400));
+      if (rect.height > 0) setHeight(Math.max(rect.height, 300));
+    };
+    measure();
+
+    // 面板初始为 hidden（forceMount），尺寸为 0，需要等其可见后再量一次
+    const target = svgEl?.parentElement;
+    let observer: ResizeObserver | undefined;
+    if (target && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(measure);
+      observer.observe(target);
     }
+    onCleanup(() => observer?.disconnect());
+  });
+
+  // 符号/边是异步加载的，必须在它们变化时重建布局（原实现只在 mount 时建一次 → 空图）
+  createEffect(() => {
+    props.symbols;
+    props.edges;
+    width();
+    height();
     buildGraph();
   });
 
@@ -101,74 +138,94 @@ export function CodeMap(props: CodeMapProps) {
     return m;
   };
 
-  const colorForKind = (kind: string) => {
-    const map: Record<string, string> = {
-      function: "#3b82f6",
-      class: "#a855f7",
-      interface: "#22c55e",
-      type: "#f59e0b",
-      variable: "#6b7280",
-      export: "#ef4444",
-      import: "#8b5cf6",
-    };
-    return map[kind] ?? "#6b7280";
-  };
-
   return (
-    <Card class="h-full flex flex-col">
-      <CardHeader class="flex-none">
-        <CardTitle>{t("codeWiki.tab.map")}</CardTitle>
-      </CardHeader>
-      <CardContent class="flex-1 min-h-0 p-0">
-        <svg id="code-map-svg" width="100%" height="100%" viewBox={`0 0 ${width()} ${height()}`}>
-          <For each={links()}>
-            {(link) => {
-              const src = nodeById().get(link.source);
-              const tgt = nodeById().get(link.target);
-              if (!src || !tgt) return null;
-              return (
-                <line
-                  x1={src.x}
-                  y1={src.y}
-                  x2={tgt.x}
-                  y2={tgt.y}
-                  stroke="#94a3b8"
-                  stroke-width={1.5}
-                  stroke-opacity={0.6}
-                />
-              );
-            }}
-          </For>
-          <For each={nodes()}>
-            {(node) => (
-              <g
-                onClick={() => {
-                  setSelectedId(node.id);
-                  props.onNodeClick(node.id);
-                }}
-                class="cursor-pointer"
+    <Card class="flex h-full flex-col">
+      <CardHeader class="flex-none flex-row items-center justify-between gap-3 space-y-0">
+        <CardTitle class="text-base">{t("codeWiki.tab.map")}</CardTitle>
+        <div class="flex flex-wrap items-center justify-end gap-1.5">
+          <Badge variant="secondary" class="tabular-nums">
+            {nodes().length} · {links().length}
+          </Badge>
+          <For each={presentKinds()}>
+            {(kind) => (
+              <Badge
+                variant="outline"
+                class={cn("px-1.5 py-0 text-[10px]", kindBadgeClass(kind))}
               >
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.r}
-                  fill={colorForKind(node.kind)}
-                  stroke={selectedId() === node.id ? "#fff" : "transparent"}
-                  stroke-width={2}
-                />
-                <text
-                  x={node.x}
-                  y={node.y + node.r + 12}
-                  text-anchor="middle"
-                  font-size="10"
-                  fill="currentColor"
-                >
-                  {node.label}
-                </text>
-              </g>
+                {kindLabel(kind)}
+              </Badge>
             )}
           </For>
-        </svg>
+        </div>
+      </CardHeader>
+      <CardContent class="relative min-h-0 flex-1 p-0">
+        <Show
+          when={nodes().length > 0}
+          fallback={
+            <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+              <p class="select-none text-3xl">🕸</p>
+              <p class="max-w-64 text-sm">{t("codeWiki.empty.title")}</p>
+            </div>
+          }
+        >
+          <svg
+            ref={svgEl}
+            id="code-map-svg"
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${width()} ${height()}`}
+            class="text-foreground"
+          >
+            <For each={links()}>
+              {(link) => {
+                const src = nodeById().get(link.source);
+                const tgt = nodeById().get(link.target);
+                if (!src || !tgt) return null;
+                return (
+                  <line
+                    x1={src.x}
+                    y1={src.y}
+                    x2={tgt.x}
+                    y2={tgt.y}
+                    stroke="currentColor"
+                    stroke-width={1.5}
+                    stroke-opacity={0.25}
+                  />
+                );
+              }}
+            </For>
+            <For each={nodes()}>
+              {(node) => (
+                <g
+                  onClick={() => {
+                    setSelectedId(node.id);
+                    props.onNodeClick(node.id);
+                  }}
+                  class="cursor-pointer"
+                >
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.r}
+                    fill={kindNodeColor(node.kind)}
+                    stroke={selectedId() === node.id ? "currentColor" : "transparent"}
+                    stroke-width={2}
+                  />
+                  <text
+                    x={node.x}
+                    y={node.y + node.r + 12}
+                    text-anchor="middle"
+                    font-size="10"
+                    fill="currentColor"
+                    opacity={selectedId() === node.id ? 1 : 0.75}
+                  >
+                    {node.label}
+                  </text>
+                </g>
+              )}
+            </For>
+          </svg>
+        </Show>
       </CardContent>
     </Card>
   );

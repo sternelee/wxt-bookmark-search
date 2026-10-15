@@ -53,6 +53,7 @@ export default {
     close: "닫기",
     language: "언어 설정",
     dataManagement: "데이터 관리",
+    empty: "데이터 없음",
   },
 
   popup: {
@@ -594,6 +595,8 @@ export default {
     graphNoTaggedBookmarks: "선택한 태그를 모두 포함한 북마크가 없습니다",
     graphNoMoreTags: "이 태그 조합에는 더 이상 하위 태그가 없습니다",
     graphTryOtherTags: "다른 태그 조합을 시도해 보세요",
+    graphFilterTags: "태그 필터…",
+    graphNoMatchingTags: "이 키워드와 일치하는 태그가 없습니다",
   },
 
   board: {

@@ -14,50 +14,75 @@ interface RecentListProps {
   }>;
 }
 
+const SOURCE_BADGE: Record<string, { label: string; class: string }> = {
+  github: { label: "GitHub", class: "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-300" },
+  twitter: { label: "X", class: "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300" },
+  history: { label: "History", class: "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300" },
+};
+
 export default function RecentList(props: RecentListProps) {
   const { t } = useI18n();
+
   return (
-    <div class="mb-5">
-      <h2 class="text-xs uppercase tracking-wide text-muted-foreground mb-2.5 font-medium">
+    <section class="flex flex-col gap-2">
+      <h2 class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {t("popup.recentlyVisited")}
       </h2>
-      <div class="flex flex-col gap-2">
-        <For each={props.items}>
-          {(item) => (
-            <a
-              href={item.url}
-              target="_blank"
-              class="block"
-            >
-              <Card class="hover:bg-accent hover:border-primary transition-all hover:-translate-y-0.5">
-                <CardContent class="p-2.5">
-                  <div class="text-[13px] font-semibold truncate mb-1">
-                    {item.title || item.url}
-                  </div>
-                  <Show when={item.summary}>
-                    <HtmlRenderer
-                      html={item.summary!}
-                      source={item.source || "bookmark"}
-                      class="mb-2"
-                    />
-                  </Show>
-                  <Show when={item.tags && item.tags.length > 0}>
-                    <div class="flex gap-1.5">
-                      <For each={item.tags?.slice(0, 2)}>
-                        {(tag) => (
-                          <Badge variant="secondary" class="text-[10px]">
-                            #{tag}
+
+      <Show
+        when={props.items.length > 0}
+        fallback={
+          <Card class="border-dashed">
+            <CardContent class="p-3 text-center text-[11px] text-muted-foreground">
+              {t("common.empty")}
+            </CardContent>
+          </Card>
+        }
+      >
+        <div class="flex flex-col gap-2">
+          <For each={props.items}>
+            {(item) => {
+              const source = () => (item.source ? SOURCE_BADGE[item.source] : undefined);
+              return (
+                <a href={item.url} target="_blank" rel="noreferrer" class="block">
+                  <Card class="transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-accent">
+                    <CardContent class="p-2.5">
+                      <div class="mb-1 flex items-start justify-between gap-2">
+                        <span class="truncate text-[13px] font-semibold">
+                          {item.title || item.url}
+                        </span>
+                        <Show when={source()}>
+                          <Badge variant="outline" class={"shrink-0 px-1.5 py-0 text-[9px] " + source()!.class}>
+                            {source()!.label}
                           </Badge>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                </CardContent>
-              </Card>
-            </a>
-          )}
-        </For>
-      </div>
-    </div>
+                        </Show>
+                      </div>
+                      <Show when={item.summary}>
+                        <HtmlRenderer
+                          html={item.summary!}
+                          source={item.source || "bookmark"}
+                          class="mb-1.5"
+                        />
+                      </Show>
+                      <Show when={item.tags && item.tags.length > 0}>
+                        <div class="flex flex-wrap gap-1">
+                          <For each={item.tags?.slice(0, 3)}>
+                            {(tag) => (
+                              <Badge variant="secondary" class="px-1.5 py-0 text-[9px]">
+                                #{tag}
+                              </Badge>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </CardContent>
+                  </Card>
+                </a>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+    </section>
   );
 }

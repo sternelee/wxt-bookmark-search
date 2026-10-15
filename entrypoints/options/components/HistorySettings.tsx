@@ -5,10 +5,10 @@ import {
   CardTitle,
   CardContent,
 } from "../../../src/components/ui/card";
-import { Input } from "../../../src/components/ui/input";
-import { Checkbox } from "../../../src/components/ui/checkbox";
+import { InputField } from "../../../src/components/form/InputField";
+import { CheckboxField } from "../../../src/components/form/CheckboxField";
 import { Button } from "../../../src/components/ui/button";
-import { Alert } from "../../../src/components/ui/alert";
+import { StatusAlert } from "../../../src/components/form/StatusAlert";
 import { getSettings, saveSettings } from "../../../src/db";
 import { useI18n } from "../../../src/i18n";
 
@@ -103,32 +103,32 @@ export default function HistorySettings() {
           {t("options.history.description")}
         </p>
 
-        <Checkbox
+        <CheckboxField
           label={t("options.history.enableSync")}
           checked={syncEnabled()}
-          onChange={(e) => setSyncEnabled(e.currentTarget.checked)}
+          onChange={(checked) => setSyncEnabled(checked)}
         />
 
-        <Input
+        <InputField
           label={t("options.history.syncDays")}
           type="number"
           placeholder="30"
           value={String(historyDays())}
-          onInput={(e) => {
-            const v = parseInt(e.currentTarget.value, 10);
+          onChange={(value) => {
+            const v = parseInt(value, 10);
             if (!isNaN(v) && v >= 1 && v <= 365) setHistoryDays(v);
           }}
           hint={t("options.history.syncDaysHint")}
         />
 
         <div class="mt-3">
-          <Input
+          <InputField
             label={t("options.history.intervalLabel")}
             type="number"
             placeholder="24"
             value={String(interval())}
-            onInput={(e) => {
-              const v = parseInt(e.currentTarget.value, 10);
+            onChange={(value) => {
+              const v = parseInt(value, 10);
               if (!isNaN(v) && v >= 1 && v <= 720) setInterval(v);
             }}
             hint={t("options.history.intervalHint")}
@@ -149,13 +149,7 @@ export default function HistorySettings() {
           </Button>
         </div>
 
-        <Alert
-          variant={status()?.type}
-          visible={status() !== null}
-          class="mt-4"
-        >
-          {status()?.message}
-        </Alert>
+        <StatusAlert status={status()} />
 
         {lastSync() && (
           <p class="text-xs text-muted-foreground mt-3">

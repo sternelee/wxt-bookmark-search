@@ -53,6 +53,7 @@ export default {
     close: "閉じる",
     language: "言語設定",
     dataManagement: "データ管理",
+    empty: "データがありません",
   },
 
   popup: {
@@ -601,6 +602,8 @@ export default {
     graphNoTaggedBookmarks: "これらのタグをすべて含むブックマークはありません",
     graphNoMoreTags: "このタグの組み合わせにこれ以上の子タグはありません",
     graphTryOtherTags: "別のタグの組み合わせを試してください",
+    graphFilterTags: "タグを絞り込む…",
+    graphNoMatchingTags: "このキーワードに一致するタグはありません",
   },
 
   board: {
