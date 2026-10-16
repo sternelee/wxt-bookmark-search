@@ -513,6 +513,8 @@ export default {
       keep: "保留此项",
       removeOthers: "删除其他",
       resolveSuccess: "✓ 重复项已处理",
+      resolveResult: "✓ 已删除 {{count}} 条重复书签",
+      resolvePartial: "已删除 {{removed}} 条，{{failed}} 条失败（详见控制台）",
       confirmResolveTitle: "⚠️ 确认保留",
       confirmResolveBody: "本组内其他所有书签将被永久删除。此操作不可撤销。",
       urlLabel: "URL",

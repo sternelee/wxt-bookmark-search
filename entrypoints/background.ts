@@ -2329,14 +2329,22 @@ export default defineBackground(() => {
             return { success: true, duplicates };
           }
           case "RESOLVE_DUPLICATES": {
-            await resolveDuplicates(
+            const result = await resolveDuplicates(
               message.keepId,
               message.deleteIds,
               async (id: string) => {
                 await browser.bookmarks.remove(id);
               },
             );
-            return { success: true };
+            console.info(
+              `[dedup] resolve keep=${message.keepId} delete=${message.deleteIds.length} ` +
+                `removedFromBrowser=${result.removed.length} ` +
+                `alreadyGone=${result.alreadyGone.length} ` +
+                `failed=${result.failed.length} ` +
+                `deletedFromDb=${result.deletedFromDb.length}`,
+              result.failed.length > 0 ? result.failed : "",
+            );
+            return { success: true, ...result };
           }
           case "GET_CATEGORY_SUGGESTIONS": {
             const suggestions = await getCategorySuggestions(

@@ -99,10 +99,22 @@ export default function DuplicateSettings() {
       });
       if (response.success) {
         setDuplicates((prev) => prev.filter((_, i) => i !== groupIndex));
-        setStatus({
-          message: t("options.duplicates.resolveSuccess"),
-          type: "success",
-        });
+        const deleted: number = response.deletedFromDb?.length ?? 0;
+        const failed: number = response.failed?.length ?? 0;
+        setStatus(
+          failed > 0
+            ? {
+                message: t("options.duplicates.resolvePartial", {
+                  removed: deleted,
+                  failed,
+                }),
+                type: "error",
+              }
+            : {
+                message: t("options.duplicates.resolveResult", { count: deleted }),
+                type: "success",
+              },
+        );
       } else {
         setStatus({
           message: response.error || t("common.unknownError"),

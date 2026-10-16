@@ -529,6 +529,8 @@ export default {
       keep: "Keep",
       removeOthers: "Remove Others",
       resolveSuccess: "✓ Duplicates resolved",
+      resolveResult: "✓ Removed {{count}} duplicate bookmark(s)",
+      resolvePartial: "Removed {{removed}}, {{failed}} failed (see console)",
       confirmResolveTitle: "⚠️ Confirm Keep",
       confirmResolveBody:
         "All other bookmarks in this group will be permanently deleted. This action cannot be undone.",

@@ -81,35 +81,65 @@ export async function findDuplicates(
   return groups;
 }
 
-/** 解析重复组：保留一个，删除其余 */
+/** 重复组解析结果，供调用方判断是否真的删掉了东西 */
+export interface DuplicateResolveResult {
+  /** 已从浏览器书签树中成功移除的 ID */
+  removed: string[];
+  /** 浏览器中已不存在（或本就不是浏览器书签）的 ID */
+  alreadyGone: string[];
+  /** 移除失败（权限等）的 ID 与原因 */
+  failed: { id: string; reason: string }[];
+  /** 确实从 DB 中删除的记录 ID */
+  deletedFromDb: string[];
+}
+
+/** 书签已不存在，或该 ID 本就不是浏览器书签（合成 ID），都属预期 */
+function isExpectedRemovalError(msg: string): boolean {
+  return (
+    msg.includes("not found") ||
+    msg.includes("Can't find") ||
+    msg.toLowerCase().includes("invalid")
+  );
+}
+
+/** 解析重复组：保留一个，删除其余；返回每一步的实际结果 */
 export async function resolveDuplicates(
   keepId: string,
   deleteIds: string[],
   removeBookmark: (id: string) => Promise<void>,
-): Promise<void> {
+): Promise<DuplicateResolveResult> {
+  const result: DuplicateResolveResult = {
+    removed: [],
+    alreadyGone: [],
+    failed: [],
+    deletedFromDb: [],
+  };
+
   // 从浏览器书签中删除
   for (const id of deleteIds) {
     try {
       await removeBookmark(id);
+      result.removed.push(id);
     } catch (err) {
-      // 预期内：书签已被其他进程删除 → 静默忽略
-      // 非预期：权限/网络问题 → warn 但继续
       const msg = err instanceof Error ? err.message : String(err);
-      // 已经消失 / 不是浏览器书签（合成 ID）都属预期，无需告警
-      if (
-        msg.includes("not found") ||
-        msg.includes("Can't find") ||
-        msg.toLowerCase().includes("invalid")
-      ) {
+      if (isExpectedRemovalError(msg)) {
+        result.alreadyGone.push(id);
         console.debug("[dedup] Bookmark already removed:", id);
       } else {
+        // 非预期（权限 / 只读文件夹等）：记录下来，不再静默成功
+        result.failed.push({ id, reason: msg });
         console.warn("[dedup] Failed to remove bookmark", id, ":", msg);
       }
     }
   }
 
-  // 从 DB 中删除
+  // 从 DB 中删除，然后回读确认真的删掉了
   await db.bookmarks.bulkDelete(deleteIds);
+  const stillThere = (await db.bookmarks.bulkGet(deleteIds))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r))
+    .map((r) => r.id);
+  const stillThereSet = new Set(stillThere);
+  result.deletedFromDb = deleteIds.filter((id) => !stillThereSet.has(id));
 
   // 从搜索引擎中移除
   const { removeFromSearchEngine, flushSaveSearchEngine } =
@@ -122,4 +152,6 @@ export async function resolveDuplicates(
     }
   }
   await flushSaveSearchEngine();
+
+  return result;
 }

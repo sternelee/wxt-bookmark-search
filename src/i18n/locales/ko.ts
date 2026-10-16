@@ -462,6 +462,8 @@ export default {
       keep: "유지",
       removeOthers: "나머지 삭제",
       resolveSuccess: "✓ 중복이 해결되었습니다",
+      resolveResult: "✓ 중복 {{count}}개를 삭제했습니다",
+      resolvePartial: "{{removed}}개 삭제, {{failed}}개 실패(콘솔 확인)",
       confirmResolveTitle: "⚠️ 유지 확인",
       confirmResolveBody: "이 그룹의 다른 모든 북마크가 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
       urlLabel: "URL",

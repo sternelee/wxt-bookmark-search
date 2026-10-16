@@ -468,6 +468,8 @@ export default {
       keep: "保持",
       removeOthers: "他を削除",
       resolveSuccess: "✓ 重複を解決しました",
+      resolveResult: "✓ 重複 {{count}} 件を削除しました",
+      resolvePartial: "{{removed}} 件削除、{{failed}} 件失敗（コンソール参照）",
       confirmResolveTitle: "⚠️ 保持を確認",
       confirmResolveBody: "このグループ内の他のすべてのブックマークは完全に削除されます。この操作は元に戻せません。",
       urlLabel: "URL",
