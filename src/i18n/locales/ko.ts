@@ -612,6 +612,7 @@ export default {
     openDigest: "일일 다이제스트",
     openResearch: "리서치 에이전트",
     searchPlaceholder: "AI 시맨틱 검색… ( / 포커스, Enter 질문 )",
+    searchResultsTitle: "검색 결과",
     searchFailed: "검색 실패",
     resultsCount: "{{count}}개 결과",
     noResults: "일치하는 항목이 없습니다 — 다른 키워드를 시도하세요",

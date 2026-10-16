@@ -663,6 +663,7 @@ export default {
     openDigest: "每日日报",
     openResearch: "研究助手",
     searchPlaceholder: "AI 语义搜索书签… ( / 聚焦，Enter 问 AI )",
+    searchResultsTitle: "搜索结果",
     searchFailed: "搜索失败",
     resultsCount: "{{count}} 条结果",
     noResults: "未找到相关内容，换个关键词试试",

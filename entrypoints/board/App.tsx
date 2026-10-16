@@ -330,7 +330,7 @@ function App() {
   ]);
 
   const currentTitle = createMemo(() => {
-    if (isSearching()) return `🔍 ${query().trim()}`;
+    if (isSearching()) return t("board.searchResultsTitle");
     const opt = sourceOptions().find((o) => o.value === source());
     return activeTag() ? `#${activeTag()}` : (opt?.label ?? "");
   });

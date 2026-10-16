@@ -681,6 +681,7 @@ export default {
     openDigest: "Daily Digest",
     openResearch: "Research Agent",
     searchPlaceholder: "AI semantic search… ( / to focus, Enter to ask )",
+    searchResultsTitle: "Search results",
     searchFailed: "Search failed",
     resultsCount: "{{count}} results",
     noResults: "No matches — try different keywords",

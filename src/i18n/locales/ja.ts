@@ -619,6 +619,7 @@ export default {
     openDigest: "日次ダイジェスト",
     openResearch: "リサーチエージェント",
     searchPlaceholder: "AI セマンティック検索… ( / でフォーカス、Enter で質問 )",
+    searchResultsTitle: "検索結果",
     searchFailed: "検索に失敗しました",
     resultsCount: "{{count}} 件の結果",
     noResults: "一致するものがありません — 別のキーワードを試してください",
