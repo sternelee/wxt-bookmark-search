@@ -64,10 +64,13 @@ export async function findDuplicates(
 
     for (const id of ids) {
       const record = recordMap.get(id);
-      if (record) {
-        bookmarks.push(record);
-        folderPaths.push(folderPathMap.get(record.id) ?? []);
-      }
+      // 只保留浏览器书签树里真实存在的记录。GitHub / Twitter / 历史 的合成 ID
+      // （gh-… / tw-… / hi-…）不是合法的 browser bookmark id，对它们调用
+      // browser.bookmarks.remove 会抛 "Bookmark id is invalid."（见 resolveDuplicates）。
+      // folderPathMap 由浏览器书签树构建，因此能精确区分真实书签与其它来源。
+      if (!record || !folderPathMap.has(record.id)) continue;
+      bookmarks.push(record);
+      folderPaths.push(folderPathMap.get(record.id) ?? []);
     }
 
     if (bookmarks.length >= 2) {
@@ -92,7 +95,12 @@ export async function resolveDuplicates(
       // 预期内：书签已被其他进程删除 → 静默忽略
       // 非预期：权限/网络问题 → warn 但继续
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("not found") || msg.includes("Can't find")) {
+      // 已经消失 / 不是浏览器书签（合成 ID）都属预期，无需告警
+      if (
+        msg.includes("not found") ||
+        msg.includes("Can't find") ||
+        msg.toLowerCase().includes("invalid")
+      ) {
         console.debug("[dedup] Bookmark already removed:", id);
       } else {
         console.warn("[dedup] Failed to remove bookmark", id, ":", msg);
