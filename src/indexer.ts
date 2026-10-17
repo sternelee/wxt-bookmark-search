@@ -2258,6 +2258,9 @@ export async function initIndexer(): Promise<void> {
   browser.bookmarks.onRemoved.addListener(async (id) => {
     const { deleteBookmark } = await import("./db");
     await deleteBookmark(id);
+    // 清理持久化索引队列中的残留任务，否则 processQueue 会从过期任务
+    // 为已删除的书签重建 DB 记录（“删了又重新出现”的复活路径之一）
+    await db.indexQueue.delete(id).catch(() => {});
     await removeFromSearchEngine(id).catch(() => {});
     await flushSaveSearchEngine();
   });

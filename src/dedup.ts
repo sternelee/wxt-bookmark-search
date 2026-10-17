@@ -89,17 +89,8 @@ export interface DuplicateResolveResult {
   alreadyGone: string[];
   /** 移除失败（权限等）的 ID 与原因 */
   failed: { id: string; reason: string }[];
-  /** 确实从 DB 中删除的记录 ID */
+  /** 确实从 DB 中删除的记录 ID（仅含确认已从浏览器移除的） */
   deletedFromDb: string[];
-}
-
-/** 书签已不存在，或该 ID 本就不是浏览器书签（合成 ID），都属预期 */
-function isExpectedRemovalError(msg: string): boolean {
-  return (
-    msg.includes("not found") ||
-    msg.includes("Can't find") ||
-    msg.toLowerCase().includes("invalid")
-  );
 }
 
 /** 解析重复组：保留一个，删除其余；返回每一步的实际结果 */
@@ -107,6 +98,7 @@ export async function resolveDuplicates(
   keepId: string,
   deleteIds: string[],
   removeBookmark: (id: string) => Promise<void>,
+  bookmarkExists: (id: string) => Promise<boolean>,
 ): Promise<DuplicateResolveResult> {
   const result: DuplicateResolveResult = {
     removed: [],
@@ -115,43 +107,65 @@ export async function resolveDuplicates(
     deletedFromDb: [],
   };
 
-  // 从浏览器书签中删除
+  // 从浏览器书签中删除。remove() 不抛错不代表真的删了（受管书签、只读文件夹、
+  // 浏览器同步恢复等场景会静默保留），报错 "not found" 也不代表不在（错误文案
+  // 各浏览器不一），因此每一步都回读确认真实状态，分类完全以回读结果为准。
   for (const id of deleteIds) {
+    let removeError: string | null = null;
     try {
       await removeBookmark(id);
-      result.removed.push(id);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (isExpectedRemovalError(msg)) {
-        result.alreadyGone.push(id);
-        console.debug("[dedup] Bookmark already removed:", id);
-      } else {
-        // 非预期（权限 / 只读文件夹等）：记录下来，不再静默成功
-        result.failed.push({ id, reason: msg });
-        console.warn("[dedup] Failed to remove bookmark", id, ":", msg);
+      removeError = err instanceof Error ? err.message : String(err);
+    }
+
+    let exists = true;
+    try {
+      exists = await bookmarkExists(id);
+    } catch (err) {
+      // 回读本身失败：按仍存在处理，宁可保留也不误报成功
+      console.warn("[dedup] bookmarkExists check failed for", id, err);
+    }
+
+    if (exists) {
+      const reason =
+        removeError ??
+        "browser.bookmarks.remove returned ok but bookmark still exists";
+      result.failed.push({ id, reason });
+      console.warn("[dedup] Failed to remove bookmark", id, ":", reason);
+    } else if (removeError) {
+      result.alreadyGone.push(id);
+      console.debug("[dedup] Bookmark already removed:", id);
+    } else {
+      result.removed.push(id);
+    }
+  }
+
+  // 只清理确认已从浏览器移除的记录。删除失败的记录保留在 DB：重新扫描时如实
+  // 显示，而不是“悄悄删 DB → SW 重启全量索引时又把浏览器里的书签索引进来”
+  // 造成“删了又重新出现”的假象。
+  const confirmedIds = [...result.removed, ...result.alreadyGone];
+  if (confirmedIds.length > 0) {
+    await db.bookmarks.bulkDelete(confirmedIds);
+    // 清理索引队列中的残留任务，否则 processQueue 会从过期任务重建 DB 记录
+    await db.indexQueue.bulkDelete(confirmedIds).catch(() => {});
+    const stillThereSet = new Set(
+      (await db.bookmarks.bulkGet(confirmedIds))
+        .filter((r): r is NonNullable<typeof r> => Boolean(r))
+        .map((r) => r.id),
+    );
+    result.deletedFromDb = confirmedIds.filter((id) => !stillThereSet.has(id));
+
+    const { removeFromSearchEngine, flushSaveSearchEngine } =
+      await import("./search-engine");
+    for (const id of confirmedIds) {
+      try {
+        await removeFromSearchEngine(id);
+      } catch (err) {
+        console.warn("[dedup] Failed to remove from search engine:", id, err);
       }
     }
+    await flushSaveSearchEngine();
   }
-
-  // 从 DB 中删除，然后回读确认真的删掉了
-  await db.bookmarks.bulkDelete(deleteIds);
-  const stillThere = (await db.bookmarks.bulkGet(deleteIds))
-    .filter((r): r is NonNullable<typeof r> => Boolean(r))
-    .map((r) => r.id);
-  const stillThereSet = new Set(stillThere);
-  result.deletedFromDb = deleteIds.filter((id) => !stillThereSet.has(id));
-
-  // 从搜索引擎中移除
-  const { removeFromSearchEngine, flushSaveSearchEngine } =
-    await import("./search-engine");
-  for (const id of deleteIds) {
-    try {
-      await removeFromSearchEngine(id);
-    } catch (err) {
-      console.warn("[dedup] Failed to remove from search engine:", id, err);
-    }
-  }
-  await flushSaveSearchEngine();
 
   return result;
 }

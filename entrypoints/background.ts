@@ -1453,9 +1453,36 @@ export default defineBackground(() => {
         children?: RemovedNode[];
       };
 
+      // removeInfo 只给 parentId，不含祖先路径。墓碑 key 含完整文件夹路径
+      // （与 gist-sync collectUrls 导出格式一致），必须沿父链向上还原真实路径，
+      // 否则任何位于具名文件夹（含“书签栏”）内的书签，删除后都会被同步复活。
+      const resolveFolderPath = async (
+        parentId?: string,
+      ): Promise<string[]> => {
+        const path: string[] = [];
+        const seen = new Set<string>();
+        let current = parentId;
+        while (current && !seen.has(current)) {
+          seen.add(current);
+          try {
+            const [node] = await browser.bookmarks.get(current);
+            if (!node) break;
+            if (node.title) path.unshift(node.title);
+            current = node.parentId;
+          } catch {
+            break;
+          }
+        }
+        return path;
+      };
+
+      const basePath = await resolveFolderPath(
+        (removeInfo as { parentId?: string }).parentId,
+      );
+
       const collectRemovedBookmarks = (
         node: RemovedNode,
-        folderPath: string[] = [],
+        folderPath: string[] = basePath,
       ): Array<{ url: string; title: string; folderPath: string[] }> => {
         if (node.url) {
           return [
@@ -2332,8 +2359,14 @@ export default defineBackground(() => {
             const result = await resolveDuplicates(
               message.keepId,
               message.deleteIds,
+              (id: string) => browser.bookmarks.remove(id),
               async (id: string) => {
-                await browser.bookmarks.remove(id);
+                try {
+                  await browser.bookmarks.get(id);
+                  return true;
+                } catch {
+                  return false;
+                }
               },
             );
             console.info(
