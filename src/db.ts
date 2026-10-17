@@ -54,6 +54,13 @@ export interface DailyDigest {
   connections: { description: string; sourceA: string; sourceB: string; relation: string }[];
   bookmarks: { title: string; url: string; quickSummary: string; contentType: string }[];
 }
+/** 通用 KV 记录（持久化大块数据，如序列化后的 Orama 索引） */
+export interface KVRecord {
+  key: string;
+  value: unknown;
+  updatedAt: number;
+}
+
 class BookmarkDB extends Dexie {
    bookmarks!: Table<BookmarkRecord, string>;
    indexQueue!: Table<IndexQueueRecord, string>;
@@ -64,6 +71,7 @@ class BookmarkDB extends Dexie {
   codeEdges!: Table<CodeEdge, string>;
   wikiDocs!: Table<WikiDoc, string>;
   codeEmbeddings!: Table<CodeEmbedding, string>;
+  kvStore!: Table<KVRecord, string>;
   constructor() {
     super("FlowSearch");
     // v1: original schema (Dexie 3 installs stored IDB version as-is)
@@ -158,6 +166,20 @@ class BookmarkDB extends Dexie {
       codeEdges: "id, from, to, kind, repoUrl",
       wikiDocs: "id, title, repoUrl, updatedAt, kind",
       codeEmbeddings: "id, repoUrl",
+    });
+    // v10: add generic KV store for large payloads (Orama serialized indexes
+    // moved off storage.local, whose 10MB quota forced a 900KB skip-guard)
+    this.version(10).stores({
+      bookmarks: "id, url, status, indexedAt, *tags, source",
+      indexQueue: "bookmarkId, url, enqueuedAt",
+      concepts: "id, name, category, frequency, lastSeen",
+      conceptRelations: "++id, sourceId, targetId, relationType",
+      dailyDigests: "date",
+      codeSymbols: "id, name, kind, filePath, repoUrl, branch",
+      codeEdges: "id, from, to, kind, repoUrl",
+      wikiDocs: "id, title, repoUrl, updatedAt, kind",
+      codeEmbeddings: "id, repoUrl",
+      kvStore: "key",
     });
   }
 }
@@ -268,6 +290,22 @@ export async function clearAll(): Promise<void> {
     await db.bookmarks.clear();
     await db.indexQueue.clear();
   });
+}
+
+/** 写入通用 KV 存储（IndexedDB 结构化克隆，适合大数据块，无 storage.local 配额限制） */
+export async function kvSet(key: string, value: unknown): Promise<void> {
+  await db.kvStore.put({ key, value, updatedAt: Date.now() });
+}
+
+/** 读取通用 KV 存储 */
+export async function kvGet<T>(key: string): Promise<T | undefined> {
+  const record = await db.kvStore.get(key);
+  return record?.value as T | undefined;
+}
+
+/** 删除通用 KV 存储项（不存在的 key 静默成功） */
+export async function kvDelete(key: string): Promise<void> {
+  await db.kvStore.delete(key);
 }
 
 /** 获取所有失败的书签 */

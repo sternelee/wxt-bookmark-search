@@ -291,16 +291,52 @@ async function buildKeywordSuggestions(
   }));
 }
 
+/** 持久化的 Orama 索引条目（kvStore 值：序列化索引 + 向量空间指纹） */
+interface StoredOramaIndex {
+  raw: RawData;
+  space: string;
+}
+
 /**
- * 丢弃内存与 storage 中的书签 Orama 索引（用于重建）。
+ * 读取持久化的 Orama 索引：优先 IndexedDB（kvStore），兼容旧的 storage.local
+ * 存储并迁移。指纹是否匹配由加载方校验，这里原样搬运。
+ */
+async function loadStoredOramaIndex(
+  storageKey: string,
+  spaceKey: string,
+): Promise<StoredOramaIndex | undefined> {
+  const { kvGet, kvSet } = await import("../src/db");
+  const stored = await kvGet<StoredOramaIndex>(storageKey);
+  if (stored) return stored;
+  const legacy = await browser.storage.local.get([storageKey, spaceKey]);
+  const legacyRaw = legacy[storageKey] as RawData | undefined;
+  if (!legacyRaw) return undefined;
+  const migrated: StoredOramaIndex = {
+    raw: legacyRaw,
+    space: (legacy[spaceKey] as string) ?? "",
+  };
+  await kvSet(storageKey, migrated);
+  await browser.storage.local.remove([storageKey, spaceKey]);
+  return migrated;
+}
+
+/** 删除持久化的 Orama 索引（新旧两处都清，兼容升级期用户） */
+async function removeStoredOramaIndex(
+  storageKey: string,
+  spaceKey: string,
+): Promise<void> {
+  const { kvDelete } = await import("../src/db");
+  await kvDelete(storageKey).catch(() => {});
+  await browser.storage.local.remove([storageKey, spaceKey]);
+}
+
+/**
+ * 丢弃内存与持久化的书签 Orama 索引（用于重建）。
  * 传 dim 时用新维度重建空引擎（切换 embedding 后端后必须调用）。
  */
 async function clearBookmarkIndexStorage(dim?: number): Promise<void> {
   await resetSearchEngine(dim);
-  await browser.storage.local.remove([
-    ORAMA_INDEX_STORAGE_KEY,
-    ORAMA_INDEX_SPACE_KEY,
-  ]);
+  await removeStoredOramaIndex(ORAMA_INDEX_STORAGE_KEY, ORAMA_INDEX_SPACE_KEY);
 }
 
 async function resetIndexedData(): Promise<void> {
@@ -653,22 +689,17 @@ export default defineBackground(() => {
   });
 
   // 注册 Orama 索引持久化回调（必须在 initSearchAndPopulate 之前）
+  // 索引存 IndexedDB（kvStore）：storage.local 有 10MB 配额，序列化后的向量
+  // 索引轻易超限，旧的 900KB 守卫会导致每次 SW 重启都全量重建
   registerSaveFn(async () => {
     const raw = saveSearchEngine();
     if (!raw) return;
-    const json = JSON.stringify(raw);
-    if (json.length > 900 * 1024) {
-      console.warn("[FlowSearch] Orama index too large, skipping save");
-      return;
-    }
     // 空间指纹与索引一起落盘：加载时据此判断旧索引是否仍可用。
     // 每次现算而非缓存 —— 云同步导入等路径可能在 SW 运行期改变设置，
     // 缓存值会给新索引写入过期的指纹，导致下次启动误判不匹配
     const space = embeddingSpaceId(await getSettings());
-    await browser.storage.local.set({
-      [ORAMA_INDEX_STORAGE_KEY]: JSON.parse(json),
-      [ORAMA_INDEX_SPACE_KEY]: space,
-    });
+    const { kvSet } = await import("../src/db");
+    await kvSet(ORAMA_INDEX_STORAGE_KEY, { raw, space });
   });
 
   // 初始化搜索引擎 (Orama)
@@ -798,10 +829,10 @@ export default defineBackground(() => {
           );
 
           const code = await import("../src/embed-code/index");
-          await browser.storage.local.remove([
+          await removeStoredOramaIndex(
             code.ORAMA_CODE_INDEX_STORAGE_KEY,
             code.ORAMA_CODE_INDEX_SPACE_KEY,
-          ]);
+          );
 
           // 重嵌入期间用户可能又改了设置：空间已变则丢弃本次结果，
           // 交给新一轮守卫处理，避免旧空间指纹覆盖新指纹
@@ -857,7 +888,7 @@ export default defineBackground(() => {
     return ensureEmbeddingSpace();
   }
 
-  /** 初始化搜索引擎（Orama），优先从 storage.local 恢复 */
+  /** 初始化搜索引擎（Orama），优先从持久化索引恢复 */
   async function initSearchAndPopulate(): Promise<void> {
     try {
       await ensureEmbeddingSpace();
@@ -871,16 +902,16 @@ export default defineBackground(() => {
         await initSearchEngine(dim);
       }
 
-      // 尝试从 storage.local 恢复（仅当向量空间指纹一致）
-      const stored = await browser.storage.local.get([
+      // 尝试从持久化索引恢复（仅当向量空间指纹一致）
+      const storedIndex = await loadStoredOramaIndex(
         ORAMA_INDEX_STORAGE_KEY,
         ORAMA_INDEX_SPACE_KEY,
-      ]);
-      if (stored[ORAMA_INDEX_STORAGE_KEY]) {
-        if (stored[ORAMA_INDEX_SPACE_KEY] === space) {
+      );
+      if (storedIndex) {
+        if (storedIndex.space === space) {
           try {
-            loadSearchEngine(stored[ORAMA_INDEX_STORAGE_KEY] as RawData, dim);
-            console.log("[FlowSearch] Orama index restored from storage");
+            loadSearchEngine(storedIndex.raw, dim);
+            console.log("[FlowSearch] Orama index restored from IndexedDB");
             return;
           } catch {
             console.warn(
@@ -946,27 +977,22 @@ export default defineBackground(() => {
         if (raw) {
           // 现算指纹（同书签 saveFn）：运行期设置可能已被云同步导入改变
           const codeSpace = embeddingSpaceId(await getSettings());
-          await browser.storage.local.set({
-            [ORAMA_CODE_INDEX_STORAGE_KEY]: raw,
-            [ORAMA_CODE_INDEX_SPACE_KEY]: codeSpace,
-          });
+          const { kvSet } = await import("../src/db");
+          await kvSet(ORAMA_CODE_INDEX_STORAGE_KEY, { raw, space: codeSpace });
         }
       });
 
-      // 尝试从 storage.local 恢复（仅当向量空间指纹一致）
-      const stored = await browser.storage.local.get([
+      // 尝试从持久化索引恢复（仅当向量空间指纹一致）
+      const storedCodeIndex = await loadStoredOramaIndex(
         ORAMA_CODE_INDEX_STORAGE_KEY,
         ORAMA_CODE_INDEX_SPACE_KEY,
-      ]);
-      if (stored[ORAMA_CODE_INDEX_STORAGE_KEY]) {
-        if (stored[ORAMA_CODE_INDEX_SPACE_KEY] === space) {
+      );
+      if (storedCodeIndex) {
+        if (storedCodeIndex.space === space) {
           try {
-            loadCodeSearchEngine(
-              stored[ORAMA_CODE_INDEX_STORAGE_KEY] as RawData,
-              dim,
-            );
+            loadCodeSearchEngine(storedCodeIndex.raw, dim);
             console.log(
-              "[FlowSearch] Code wiki Orama index restored from storage",
+              "[FlowSearch] Code wiki Orama index restored from IndexedDB",
             );
             return;
           } catch {
