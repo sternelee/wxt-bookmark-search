@@ -23,6 +23,14 @@ export const REMOTE_VECTOR_DIM = 1024;
 /** 本地引擎在向量空间指纹中的模型标签（与 embedding-local 的 LOCAL_MODEL_NAME 一致） */
 export const LOCAL_SPACE_MODEL = "ternlight/mini";
 
+/**
+ * Orama 向量搜索的相似度阈值。Orama 默认 DEFAULT_SIMILARITY=0.8，对两个
+ * 后端都过高：本地 ternlight/mini 的相关对实测仅 0.6-0.73，远程 BGE-M3 也
+ * 常见 0.5-0.75 —— 默认阈值会把相关结果全部过滤掉（表现为向量/混合搜索
+ * 返回空）。0.3 只剪除近似正交的内容，其余交给打分排序 + limit。
+ */
+export const VECTOR_SIMILARITY_THRESHOLD = 0.3;
+
 /** 后端对应的向量维度（供只有 backend 信息、拿不到 Settings 的调用方使用） */
 export function getDimForBackend(backend: "local" | "remote"): number {
   return backend === "local" ? LOCAL_VECTOR_DIM : REMOTE_VECTOR_DIM;

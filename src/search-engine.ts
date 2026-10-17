@@ -10,7 +10,7 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
-import { REMOTE_VECTOR_DIM } from "./embedding-space";
+import { REMOTE_VECTOR_DIM, VECTOR_SIMILARITY_THRESHOLD } from "./embedding-space";
 import type { BookmarkRecord } from "./types";
 import { getFreqCache } from "./freq";
 
@@ -327,6 +327,7 @@ export async function searchHybrid(
     term: query,
     mode: "hybrid",
     vector: { value: queryEmbedding, property: "embedding" },
+    similarity: VECTOR_SIMILARITY_THRESHOLD,
     limit,
     properties: ["url", "title", "summary", "tags"],
     hybridWeights: { text: textWeight, vector: vectorWeight },
@@ -361,6 +362,7 @@ export async function searchVector(
   const results = await search(engine, {
     mode: "vector",
     vector: { value: queryEmbedding, property: "embedding" },
+    similarity: VECTOR_SIMILARITY_THRESHOLD,
     limit,
     ...(Object.keys(where).length > 0 ? ({ where } as any) : {}),
   });

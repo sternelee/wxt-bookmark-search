@@ -11,7 +11,7 @@ import {
   search,
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
-import { REMOTE_VECTOR_DIM } from "../embedding-space";
+import { REMOTE_VECTOR_DIM, VECTOR_SIMILARITY_THRESHOLD } from "../embedding-space";
 import type { CodeSearchResult, CodeChunk } from "../types";
 
 /**
@@ -248,6 +248,7 @@ export async function searchCodeHybrid(
     term: query,
     mode: "hybrid",
     vector: { value: queryEmbedding, property: "embedding" },
+    similarity: VECTOR_SIMILARITY_THRESHOLD,
     limit,
     properties: ["content", "symbolName", "filePath"],
     hybridWeights: { text: textWeight, vector: vectorWeight },
@@ -279,6 +280,7 @@ export async function searchCodeVector(
   const results = await search(codeEngine, {
     mode: "vector",
     vector: { value: queryEmbedding, property: "embedding" },
+    similarity: VECTOR_SIMILARITY_THRESHOLD,
     limit,
     ...(Object.keys(where).length > 0 ? ({ where } as any) : {}),
   });
