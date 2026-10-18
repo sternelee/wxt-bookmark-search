@@ -48,6 +48,7 @@ import {
   flushSaveSearchEngine,
   registerSaveFn,
   resetSearchEngine,
+  SEARCH_TOKENIZER_VERSION,
   isSearchEngineReady,
   getSearchEngineDim,
   ORAMA_INDEX_STORAGE_KEY,
@@ -295,6 +296,8 @@ async function buildKeywordSuggestions(
 interface StoredOramaIndex {
   raw: RawData;
   space: string;
+  /** 分词器版本（可选；缺失视为 0）。版本不匹配时旧索引缺少 CJK token，必须重建 */
+  tokenizer?: number;
 }
 
 /**
@@ -699,7 +702,11 @@ export default defineBackground(() => {
     // 缓存值会给新索引写入过期的指纹，导致下次启动误判不匹配
     const space = embeddingSpaceId(await getSettings());
     const { kvSet } = await import("../src/db");
-    await kvSet(ORAMA_INDEX_STORAGE_KEY, { raw, space });
+    await kvSet(ORAMA_INDEX_STORAGE_KEY, {
+      raw,
+      space,
+      tokenizer: SEARCH_TOKENIZER_VERSION,
+    });
   });
 
   // 初始化搜索引擎 (Orama)
@@ -908,7 +915,10 @@ export default defineBackground(() => {
         ORAMA_INDEX_SPACE_KEY,
       );
       if (storedIndex) {
-        if (storedIndex.space === space) {
+        if (
+          storedIndex.space === space &&
+          storedIndex.tokenizer === SEARCH_TOKENIZER_VERSION
+        ) {
           try {
             loadSearchEngine(storedIndex.raw, dim);
             console.log("[FlowSearch] Orama index restored from IndexedDB");
@@ -919,8 +929,9 @@ export default defineBackground(() => {
             );
           }
         } else {
+          // 向量空间或分词器版本不匹配（旧索引无 CJK token）→ 重建
           console.warn(
-            "[FlowSearch] Stored Orama index belongs to another embedding space, rebuilding...",
+            "[FlowSearch] Stored Orama index outdated (space/tokenizer), rebuilding...",
           );
         }
       }

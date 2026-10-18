@@ -11,6 +11,7 @@ import {
 } from "@orama/orama";
 import type { AnyOrama, RawData } from "@orama/orama";
 import { REMOTE_VECTOR_DIM, VECTOR_SIMILARITY_THRESHOLD } from "./embedding-space";
+import { createCjkTokenizer } from "./tokenizer";
 import type { BookmarkRecord } from "./types";
 import { getFreqCache } from "./freq";
 
@@ -73,6 +74,21 @@ type BookmarkDocument = {
 let engine: AnyOrama | null = null;
 /** 当前引擎的向量维度（决定 schema 与查询向量长度） */
 let currentDim: number = REMOTE_VECTOR_DIM;
+
+/**
+ * 分词器版本：旧持久化索引不含 CJK token，版本不匹配时必须重建而非加载。
+ * 递增此版本会触发所有客户端在下次启动时重建搜索索引。
+ */
+export const SEARCH_TOKENIZER_VERSION = 1;
+
+/** 创建引擎实例（统一接入 CJK 分词器，init 与 load 共用） */
+function createEngine(): AnyOrama {
+  return create({
+    schema: buildBookmarkSchema(currentDim) as any,
+    id: "flowsearch",
+    components: { tokenizer: createCjkTokenizer() },
+  });
+}
 export const ORAMA_INDEX_STORAGE_KEY = "orama_index";
 /** 与 ORAMA_INDEX_STORAGE_KEY 配套的向量空间指纹 — 不匹配时必须重建而非加载 */
 export const ORAMA_INDEX_SPACE_KEY = "orama_index_space";
@@ -85,10 +101,7 @@ export function getSearchEngineDim(): number {
 /** 初始化搜索引擎（dim 省略时沿用上一次的维度） */
 export async function initSearchEngine(dim?: number): Promise<void> {
   if (dim && dim > 0) currentDim = dim;
-  engine = create({
-    schema: buildBookmarkSchema(currentDim) as any,
-    id: "flowsearch",
-  });
+  engine = createEngine();
 }
 
 /** 从序列化数据恢复搜索引擎（expectedDim 必须与当前引擎一致，否则抛错） */
@@ -99,7 +112,7 @@ export function loadSearchEngine(raw: RawData, expectedDim?: number): void {
     );
   }
   if (!engine) {
-    engine = create({ schema: buildBookmarkSchema(currentDim) as any, id: "flowsearch" });
+    engine = createEngine();
   }
   load(engine, raw);
 }
