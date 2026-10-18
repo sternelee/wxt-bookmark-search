@@ -125,6 +125,32 @@ export function getMatchQuality(
 }
 
 /**
+ * DB 兜底排序：对已索引记录做关键词质量过滤（score>=2：单词出现 / 多词全命中），
+ * 按质量降序、同分按标题字典序。用于 Orama 索引缺失
+ * （embedding 失败 / 向量空间不匹配 / 未重建）时的回退搜索。
+ */
+export function rankRecordsByKeyword<
+  T extends { title: string; url: string; summary?: string; tags?: string[] },
+>(query: string, records: T[]): T[] {
+  if (!query.trim()) return [];
+  const scored: Array<{ record: T; score: number }> = [];
+  for (const record of records) {
+    const quality = getMatchQuality(
+      query,
+      record.title,
+      record.url,
+      record.summary,
+      record.tags,
+    );
+    if (quality.score >= 2) scored.push({ record, score: quality.score });
+  }
+  scored.sort(
+    (a, b) => b.score - a.score || a.record.title.localeCompare(b.record.title),
+  );
+  return scored.map((s) => s.record);
+}
+
+/**
  * Standard Levenshtein edit distance between two strings.
  * Returns the minimum number of single-character edits needed to
  * transform `a` into `b`.

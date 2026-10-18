@@ -5,7 +5,11 @@ import {
   getRecentBookmarks,
   getFreqCache,
 } from "../src/freq";
-import { rerankBookmarks, getMatchQuality } from "../src/search";
+import {
+  rerankBookmarks,
+  getMatchQuality,
+  rankRecordsByKeyword,
+} from "../src/search";
 import {
   highlightBookmark,
   highlightBookmarkPlain,
@@ -245,6 +249,32 @@ function toSuggestionRecord(result: SearchResult): BookmarkRecord {
   };
 }
 
+/**
+ * IndexedDB 关键词兜底搜索：扫描已索引记录做子串质量匹配。
+ * 覆盖两类 Orama 索引之外的记录：embedding 失败 / 向量空间不匹配导致未入索引的，
+ * 以及 GitHub/Twitter/历史等非浏览器书签来源（原生 bookmarks.search 找不到）。
+ */
+async function searchDbByKeyword(
+  query: string,
+  options: {
+    limit: number;
+    allowedUrls: Set<string> | null;
+    sourceFilter: SearchResult["source"] | null;
+  },
+): Promise<SearchResult[]> {
+  const { getAllIndexedRecords } = await import("../src/db");
+  let records = await getAllIndexedRecords();
+  if (options.allowedUrls) {
+    records = records.filter((r) => options.allowedUrls!.has(r.url));
+  }
+  if (options.sourceFilter) {
+    records = records.filter((r) => r.source === options.sourceFilter);
+  }
+  return rankRecordsByKeyword(query, records)
+    .slice(0, options.limit)
+    .map(toSearchResult);
+}
+
 async function buildKeywordSearchResults(
   query: string,
   bookmarks: BrowserSearchBookmark[],
@@ -263,9 +293,12 @@ async function buildKeywordSearchResults(
       options.allowedUrls!.has(record.url),
     );
   }
+  // DB 子串兜底：Orama 索引缺失的记录（embedding 失败/空间不匹配）也能被找到
+  const dbResults = await searchDbByKeyword(query, options);
   return dedupeSearchResults(
     [
       ...indexedResults.map(toSearchResult),
+      ...dbResults,
       ...buildBrowserSearchResults(query, bookmarks),
     ],
     options.limit,
@@ -627,6 +660,19 @@ async function performFullSearch(rawInput: string): Promise<SearchResult[]> {
     // 如果 scope 过滤了，手动过滤 Orama 结果
     if (allowedUrls) {
       results = results.filter((r) => allowedUrls!.has(r.url));
+    }
+
+    // Orama 零命中（索引为空 / 向量空间不匹配 / 尚未重建）时回退关键词搜索，
+    // 保证“精确标题关键词”在任何索引状态下都能找到记录
+    if (results.length === 0) {
+      console.warn(
+        "[FlowSearch] Orama search returned no hits, falling back to keyword search",
+      );
+      return buildKeywordSearchResults(query, valid, {
+        limit: resultLimit,
+        allowedUrls,
+        sourceFilter,
+      });
     }
 
     // jev 评审重排：按相关概率降序，失败时保留 Orama 顺序兜底
@@ -1910,6 +1956,18 @@ export default defineBackground(() => {
             console.warn("[FlowSearch] jev rerank failed, keep orama order:", err);
             results = results.slice(0, 9);
           }
+        }
+
+        // Orama 零命中时回退关键词建议（索引为空/未重建时仍能找到书签）
+        if (results.length === 0) {
+          suggest(
+            await buildKeywordSuggestions(query, valid, {
+              limit: 9,
+              allowedUrls,
+              sourceFilter,
+            }),
+          );
+          return;
         }
 
         suggest(
