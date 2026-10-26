@@ -423,6 +423,17 @@ function extractFromMarkdown(
 }
 
 /**
+ * 把任意 reject 值转成可读消息（非 Error 的结构化对象不再变成 [object Object]）
+ */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
+}
+
+/**
  * 剥离 Markdown 开头的 YAML frontmatter（如 markdown.new 返回的 `---\ntitle: ...\n---`）。
  * 返回正文与 frontmatter 中的 title（如有）。
  */
@@ -442,6 +453,7 @@ function stripYamlFrontmatter(
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
+import { convertHtmlToMarkdown } from "./html-to-markdown";
 import { fetchAllStarredRepos, fetchRepoReadme } from "./github";
 
 /** enrichment 任务 — 后台慢慢丰富化 GitHub README */
@@ -1132,6 +1144,50 @@ async function fetchWithCloudflareReader(
 }
 
 /**
+ * 通过本地 WASM 转换器（@xberg-io/html-to-markdown-wasm）提取页面 markdown。
+ * 完全在设备端运行，无第三方请求；复用策略 2 已抓取的原始 HTML，不重复请求。
+ * 适用场景：Readability 失效的非文章页（文档站/参考页/仪表盘），
+ * Rust 核心引擎 + preprocessing 去样板，对畸形 HTML 鲁棒。
+ */
+async function extractWithLocalWasm(
+  htmlPromise: Promise<string | null>,
+): Promise<ReaderOutcome> {
+  const html = await htmlPromise;
+  if (html === null) {
+    return { content: null, error: "本地请求页面失败" };
+  }
+
+  try {
+    const { markdown, title: metaTitle, description } =
+      await convertHtmlToMarkdown(html);
+    // 转换器总会输出 YAML frontmatter（title/description），需先剥离：
+    // 否则空正文页面会因为 frontmatter 非空而绕过空结果守卫。
+    const { body, title: frontTitle } = stripYamlFrontmatter(markdown);
+    if (!body.trim()) {
+      return { content: null, error: "WASM 转换结果为空" };
+    }
+    const { title, summary } = extractFromMarkdown(
+      body,
+      frontTitle || metaTitle || "",
+    );
+    console.log(`[indexer] wasm reader: success (${body.length} chars)`);
+    return {
+      content: {
+        markdown: body,
+        title,
+        summary: summary || description || "",
+      },
+    };
+  } catch (e) {
+    console.warn(`[indexer] wasm reader: conversion failed:`, e);
+    return {
+      content: null,
+      error: `WASM 转换失败: ${errorMessage(e)}`,
+    };
+  }
+}
+
+/**
  * 核心内容提取策略器
  */
 export async function fetchPageContent(
@@ -1201,8 +1257,9 @@ export async function fetchPageContent(
       }
     }
 
-    // 策略 2、3 并行执行：本地 Fetch + 用户选择的第三方 reader（markdown.new / Jina）
-    const localPromise = (async () => {
+    // 策略 2、3 并行执行：本地 Fetch + 用户选择的 reader（markdown.new / Jina / 自建 / 本地 WASM）
+    // 原始 HTML 只抓一次，由 Readability 路径与本地 WASM 转换路径共享
+    const htmlPromise = (async (): Promise<string | null> => {
       try {
         console.log(`[indexer] Strategy 2: Attempting local fetch for ${url}`);
         const response = await fetch(url, {
@@ -1212,58 +1269,70 @@ export async function fetchPageContent(
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           },
         });
-
-        if (response.ok) {
-          const html = await response.text();
-          const { document } = parseHTML(html);
-
-          const metaDescription =
-            document
-              .querySelector('meta[name="description"]')
-              ?.getAttribute("content") ||
-            document
-              .querySelector('meta[property="og:description"]')
-              ?.getAttribute("content");
-
-          const reader = new Readability(document as unknown as Document);
-          const article = reader.parse();
-
-          if (article && article.content) {
-            const turndown = new TurndownService({
-              headingStyle: "atx",
-              codeBlockStyle: "fenced",
-            });
-            const { document: contentDoc } = parseHTML(article.content);
-            const markdown = `# ${article.title}\n\n${turndown.turndown(contentDoc.body as unknown as HTMLElement)}`;
-
-            const content = {
-              markdown,
-              title: article.title ?? undefined,
-              summary: article.excerpt || metaDescription || "",
-            };
-
-            const textLen = article.textContent?.length ?? 0;
-            const isHighQuality = textLen > 150;
-            console.log(
-              `[indexer] Strategy 2: Local extraction ${isHighQuality ? "high quality" : "short"} (${textLen} chars)`,
-            );
-            return { content, isHighQuality };
-          }
-        }
+        return response.ok ? await response.text() : null;
       } catch (e) {
         console.debug(`[indexer] Strategy 2: Local fetch failed:`, e);
+        return null;
+      }
+    })();
+
+    const localPromise = (async () => {
+      try {
+        const html = await htmlPromise;
+        if (html === null) return null;
+
+        const { document } = parseHTML(html);
+
+        const metaDescription =
+          document
+            .querySelector('meta[name="description"]')
+            ?.getAttribute("content") ||
+          document
+            .querySelector('meta[property="og:description"]')
+            ?.getAttribute("content");
+
+        const reader = new Readability(document as unknown as Document);
+        const article = reader.parse();
+
+        if (article && article.content) {
+          const turndown = new TurndownService({
+            headingStyle: "atx",
+            codeBlockStyle: "fenced",
+          });
+          const { document: contentDoc } = parseHTML(article.content);
+          const markdown = `# ${article.title}\n\n${turndown.turndown(contentDoc.body as unknown as HTMLElement)}`;
+
+          const content = {
+            markdown,
+            title: article.title ?? undefined,
+            summary: article.excerpt || metaDescription || "",
+          };
+
+          const textLen = article.textContent?.length ?? 0;
+          const isHighQuality = textLen > 150;
+          console.log(
+            `[indexer] Strategy 2: Local extraction ${isHighQuality ? "high quality" : "short"} (${textLen} chars)`,
+          );
+          return { content, isHighQuality };
+        }
+      } catch (e) {
+        console.debug(`[indexer] Strategy 2: Local extraction failed:`, e);
       }
       return null;
     })();
 
     // 仅调用设置中选择的 reader 后端，各后端互不兜底
     // （本地+该后端均失败时，页面大概率已无法访问，回退另一服务无意义）
-    const readerPromise =
+    // wasm 后端是 CPU 密集型本机转换，不提前启动：等本地结果确定不足时才执行，
+    // 避免 Readability 已高质量时白跑一次 4.5MB wasm 初始化 + 转换。
+    const remoteReaderPromise =
       settings.readerBackend === "jina"
         ? fetchWithJinaReader(url)
         : settings.readerBackend === "cloudflare"
           ? fetchWithCloudflareReader(url, settings)
-          : fetchWithMarkdownNew(url);
+          : settings.readerBackend === "wasm"
+            ? null
+            : fetchWithMarkdownNew(url);
 
     // 先等本地结果；高质量则直接返回
     const localResult = await localPromise;
@@ -1271,7 +1340,9 @@ export async function fetchPageContent(
       return { content: localResult.content };
     }
 
-    // 本地不足或失败时，使用所选的第三方 reader
+    // 本地不足或失败时，使用所选的 reader（wasm 后端亦为本地，复用已抓取的 HTML，此处才启动）
+    const readerPromise =
+      remoteReaderPromise ?? extractWithLocalWasm(htmlPromise);
     const readerOutcome = await readerPromise;
     if (readerOutcome.content) {
       return { content: readerOutcome.content };

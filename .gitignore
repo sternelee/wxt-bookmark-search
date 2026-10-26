@@ -29,5 +29,7 @@ chrome-mv3
 
 # @ternlight/mini wasm — copied to public/ by wxt build hook (wxt.config.ts)
 public/tern_engine_bg.wasm
+# @xberg-io/html-to-markdown-wasm — same build hook
+public/html_to_markdown_wasm_bg.wasm
 .pi
 .pi-subagents

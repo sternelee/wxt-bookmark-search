@@ -13,7 +13,27 @@ import { getSettings, saveSettings } from "../../../src/db";
 import { testApiKey } from "../../../src/embedding";
 import { testLlmModel } from "../../../src/llm";
 import { isEmbedConfigChanged } from "../../../src/service-config";
+import type { ReaderBackend } from "../../../src/types";
+import type { I18nKey } from "../../../src/i18n";
 import { useI18n } from "../../../src/i18n";
+
+/** readerBackend 选项表：新增后端只需改这一处 + i18n 键 */
+const READER_BACKEND_OPTIONS: ReadonlyArray<{
+  value: ReaderBackend;
+  labelKey: I18nKey;
+}> = [
+  { value: "markdown", labelKey: "options.api.readerBackendMarkdown" },
+  { value: "jina", labelKey: "options.api.readerBackendJina" },
+  { value: "cloudflare", labelKey: "options.api.readerBackendCloudflare" },
+  { value: "wasm", labelKey: "options.api.readerBackendWasm" },
+];
+
+/** 校验并归一化存储中的 readerBackend，未知值降级为 markdown */
+function normalizeReaderBackend(value: unknown): ReaderBackend {
+  return READER_BACKEND_OPTIONS.some((option) => option.value === value)
+    ? (value as ReaderBackend)
+    : "markdown";
+}
 
 export default function APISettings() {
   const { t } = useI18n();
@@ -24,7 +44,7 @@ export default function APISettings() {
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [embedBackend, setEmbedBackend] = createSignal<"local" | "remote">("remote");
-  const [readerBackend, setReaderBackend] = createSignal<"markdown" | "jina" | "cloudflare">("markdown");
+  const [readerBackend, setReaderBackend] = createSignal<ReaderBackend>("markdown");
   const [cloudflareReaderUrl, setCloudflareReaderUrl] = createSignal("");
   const [cloudflareReaderToken, setCloudflareReaderToken] = createSignal("");
   const [localEngineInfo, setLocalEngineInfo] = createSignal("");
@@ -56,13 +76,7 @@ export default function APISettings() {
       provider === "disabled" ? "disabled" : "remote",
     );
     setEmbedBackend(settings.embedBackend === "local" ? "local" : "remote");
-    setReaderBackend(
-      settings.readerBackend === "jina"
-        ? "jina"
-        : settings.readerBackend === "cloudflare"
-          ? "cloudflare"
-          : "markdown",
-    );
+    setReaderBackend(normalizeReaderBackend(settings.readerBackend));
     setCloudflareReaderUrl(settings.cloudflareReaderUrl || "");
     setCloudflareReaderToken(settings.cloudflareReaderToken || "");
     // Per-service override 初始化
@@ -316,12 +330,12 @@ export default function APISettings() {
             class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={readerBackend()}
             onChange={(e) =>
-              setReaderBackend(e.currentTarget.value as "markdown" | "jina" | "cloudflare")
+              setReaderBackend(normalizeReaderBackend(e.currentTarget.value))
             }
           >
-            <option value="markdown">{t("options.api.readerBackendMarkdown")}</option>
-            <option value="jina">{t("options.api.readerBackendJina")}</option>
-            <option value="cloudflare">{t("options.api.readerBackendCloudflare")}</option>
+            {READER_BACKEND_OPTIONS.map((option) => (
+              <option value={option.value}>{t(option.labelKey)}</option>
+            ))}
           </select>
           {readerBackend() === "cloudflare" && (
             <div class="mt-3 space-y-2">

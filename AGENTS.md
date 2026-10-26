@@ -222,7 +222,7 @@ pnpm compile   # Must pass
 - **Omnibox XML escaping** — always use `escapeXml()` from `highlight.ts` before inserting strings into suggestion descriptions. Only valid tags: `<match>`, `<dim>`, `<url>`
 - **Message passing** — return `true` from `onMessage` listener to keep channel open for async responses
 - **Firefox MV3** uses `background.scripts` instead of `service_worker`; WXT handles manifest generation per target
-- **Content extraction order:** Active Tab (fastest) → Local Readability (`@mozilla/readability`) → Jina Reader (`https://r.jina.ai/*`) network fallback
+- **Content extraction order:** Active Tab (fastest) → Local Readability (`@mozilla/readability`) → the reader backend selected by `settings.readerBackend`: `markdown.new` (default) / Jina Reader (`https://r.jina.ai/*`) / self-hosted Cloudflare Worker / local WASM (`@xberg-io/html-to-markdown-wasm`, fully offline). Backends do not fall back to each other — if the selected one also fails, the page is likely unreachable.
 
 ---
 

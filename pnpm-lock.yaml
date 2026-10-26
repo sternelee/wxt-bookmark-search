@@ -20,6 +20,9 @@ importers:
       '@ternlight/mini':
         specifier: ^0.1.1
         version: 0.1.1
+      '@xberg-io/html-to-markdown-wasm':
+        specifier: ^3.18.6
+        version: 3.18.6
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -780,6 +783,10 @@ packages:
 
   '@wxt-dev/storage@1.2.8':
     resolution: {integrity: sha512-GWCFKgF5+d7eslOxUDFC70ypA9njupmJb1nQM8uZoX0J3sWT2BO5xJLzb1sYahWAfID9p2BMtnUBN1lkWxPsbQ==}
+
+  '@xberg-io/html-to-markdown-wasm@3.18.6':
+    resolution: {integrity: sha512-BBCiCaJTrR1db0P6w/tu1ZiEnLMvlkH9tWQzKj8pGqWtqwoEpC5FVeG57tX2bREg1rwv9NyThXT4M6t7MSQveQ==}
+    engines: {node: '>= 22'}
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
@@ -3184,6 +3191,8 @@ snapshots:
       '@wxt-dev/browser': 0.1.38
       async-mutex: 0.5.0
       dequal: 2.0.3
+
+  '@xberg-io/html-to-markdown-wasm@3.18.6': {}
 
   acorn@8.16.0: {}
 

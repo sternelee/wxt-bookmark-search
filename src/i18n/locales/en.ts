@@ -106,12 +106,13 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "Self-hosted Cloudflare Markdown",
+      readerBackendWasm: "Local WASM conversion (zero third-party requests)",
       cloudflareReaderUrlPlaceholder: "Service URL, e.g. https://markdown-reader.leeapp.dev",
       cloudflareReaderTokenPlaceholder: "Access token (required if AUTH_TOKEN is set server-side)",
       cloudflareReaderHint:
         "Deployed from workers/markdown-reader (Workers AI toMarkdown) on your own Cloudflare account — no shared third-party rate limits. See that directory's README.",
       readerBackendHint:
-        "Third-party service used when local extraction fails. If this service also cannot fetch the page, the page is likely no longer accessible — there is no automatic fallback to the other service.",
+        "Extraction service used when local extraction fails; choosing Local WASM keeps everything offline (Rust-core engine converts on your device, no third-party requests or rate limits). If the selected service also cannot fetch the page, it is likely no longer accessible — there is no automatic fallback to another service.",
       advanced: "Advanced Settings",
       apiKeyRequired: "Please enter API Key",
       saved: "✓ Settings saved",

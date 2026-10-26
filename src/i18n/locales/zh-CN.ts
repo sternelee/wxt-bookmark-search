@@ -103,12 +103,13 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "自建 Cloudflare Markdown 服务",
+      readerBackendWasm: "本地 WASM 转换（零第三方请求）",
       cloudflareReaderUrlPlaceholder: "服务地址，如 https://markdown-reader.leeapp.dev",
       cloudflareReaderTokenPlaceholder: "访问令牌（服务端设置了 AUTH_TOKEN 时必填）",
       cloudflareReaderHint:
         "部署在 workers/markdown-reader（Workers AI toMarkdown），使用你自己的 Cloudflare 账号，无第三方限流。见该目录 README。",
       readerBackendHint:
-        "本地提取失败时使用的第三方提取服务。若该服务也无法获取，说明页面大概率已无法访问，不会自动回退另一服务。",
+        "本地提取失败时使用的提取服务；选择「本地 WASM」则完全离线（Rust 核心引擎在本机转换，无第三方请求与限流）。若所选服务也无法获取，说明页面大概率已无法访问，不会自动回退另一服务。",
       advanced: "高级设置",
       apiKeyRequired: "请输入 API Key",
       saved: "✓ 设置已保存",

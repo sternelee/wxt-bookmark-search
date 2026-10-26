@@ -105,12 +105,13 @@ export default {
       readerBackendMarkdown: "markdown.new (Cloudflare AI)",
       readerBackendJina: "Jina Reader",
       readerBackendCloudflare: "自前 Cloudflare Markdown サービス",
+      readerBackendWasm: "ローカル WASM 変換（サードパーティリクエストなし）",
       cloudflareReaderUrlPlaceholder: "サービス URL（例: https://markdown-reader.leeapp.dev）",
       cloudflareReaderTokenPlaceholder: "アクセストークン（サーバー側で AUTH_TOKEN を設定した場合に必須）",
       cloudflareReaderHint:
         "workers/markdown-reader（Workers AI toMarkdown）として自分の Cloudflare アカウントにデプロイ — サードパーティの共有レート制限はありません。詳細は同梱の README を参照。",
       readerBackendHint:
-        "ローカル抽出が失敗した場合に使用するサードパーティサービス。このサービスでも取得できない場合は、ページへのアクセスができない可能性が高いため、他のサービスへの自動フォールバックは行いません。",
+        "ローカル抽出が失敗した場合に使用する抽出サービス。「ローカル WASM」を選択すると完全オフライン（Rust コアエンジンが端末内で変換、サードパーティリクエスト・レート制限なし）。このサービスでも取得できない場合は、ページへのアクセスができない可能性が高いため、他のサービスへの自動フォールバックは行いません。",
       advanced: "詳細設定",
       apiKeyRequired: "API キーを入力してください",
       saved: "✓ 設定を保存しました",
