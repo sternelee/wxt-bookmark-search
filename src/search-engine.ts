@@ -98,6 +98,31 @@ export function getSearchEngineDim(): number {
   return currentDim;
 }
 
+/** 启动期就绪回调：索引队列可先于 Orama 恢复完成产生新向量 */
+let waitForSearchEngineReady: (() => Promise<void>) | null = null;
+
+/** 注册搜索引擎启动就绪回调（由 background 注入，避免 src 依赖浏览器入口） */
+export function registerSearchEngineReadyFn(fn: () => Promise<void>): void {
+  waitForSearchEngineReady = fn;
+}
+
+/** 新文档写入前等待启动初始化完成；populate 自身不经过此门，避免自等待 */
+async function awaitSearchEngineReady(): Promise<void> {
+  await waitForSearchEngineReady?.();
+}
+
+/** 写入前校验维度，防止先删旧文档后被 Orama 拒绝造成索引数据丢失 */
+function assertVectorDimensions(records: BookmarkRecord[]): void {
+  for (const record of records) {
+    const vectorDim = record.embedding?.length ?? 0;
+    if (vectorDim > 0 && vectorDim !== currentDim) {
+      throw new Error(
+        `Search engine vector dimension mismatch: engine=${currentDim}, record=${record.id}, vector=${vectorDim}`,
+      );
+    }
+  }
+}
+
 /** 初始化搜索引擎（dim 省略时沿用上一次的维度） */
 export async function initSearchEngine(dim?: number): Promise<void> {
   if (dim && dim > 0) currentDim = dim;
@@ -208,8 +233,10 @@ export async function populateSearchEngine(
 export async function upsertSearchEngine(
   record: BookmarkRecord,
 ): Promise<void> {
+  await awaitSearchEngineReady();
   if (!engine) return;
   if (record.status !== "indexed" || !record.embedding?.length) return;
+  assertVectorDimensions([record]);
   try {
     await removeMultiple(engine, [record.id]);
   } catch {
@@ -222,11 +249,14 @@ export async function upsertSearchEngine(
 export async function upsertSearchEngineBatch(
   records: BookmarkRecord[],
 ): Promise<void> {
+  await awaitSearchEngineReady();
   if (!engine) return;
-  const validDocs = records
-    .filter((r) => r.status === "indexed" && r.embedding?.length)
-    .map(recordToDoc);
-  if (validDocs.length === 0) return;
+  const validRecords = records.filter(
+    (r) => r.status === "indexed" && r.embedding?.length,
+  );
+  if (validRecords.length === 0) return;
+  assertVectorDimensions(validRecords);
+  const validDocs = validRecords.map(recordToDoc);
   // 先批量删除旧记录
   const ids = validDocs.map((d) => d.id);
   try {

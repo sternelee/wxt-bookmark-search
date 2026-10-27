@@ -51,6 +51,7 @@ import {
   removeFromSearchEngine,
   flushSaveSearchEngine,
   registerSaveFn,
+  registerSearchEngineReadyFn,
   resetSearchEngine,
   SEARCH_TOKENIZER_VERSION,
   isSearchEngineReady,
@@ -755,8 +756,10 @@ export default defineBackground(() => {
     });
   });
 
-  // 初始化搜索引擎 (Orama)
-  initSearchAndPopulate();
+  // 初始化搜索引擎 (Orama)。新文档写入会等待此 Promise，避免启动期
+  // 本地 384 维向量写进尚未切换的旧 1024 维引擎（upsert 先于 init 完成）。
+  const searchEngineReady = initSearchAndPopulate();
+  registerSearchEngineReadyFn(() => searchEngineReady);
 
   // 初始化代码 Wiki 搜索引擎 (Orama) — 独立实例
   initCodeSearchAndPopulate();

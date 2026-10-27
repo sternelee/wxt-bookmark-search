@@ -74,7 +74,7 @@ export async function ensureHtmlToMarkdown(): Promise<void> {
     initPending = true;
     initPromise = (async () => {
       try {
-        await wasmInit(fetch(resolveWasmUrl()));
+        await wasmInit({ module_or_path: fetch(resolveWasmUrl()) });
         initPending = false;
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
