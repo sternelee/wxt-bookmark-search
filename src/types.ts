@@ -97,8 +97,14 @@ export type SearchMode = "keyword" | "vector" | "hybrid";
 /**
  * 页面内容提取后端（readerBackend 的取值域）。
  * 单一定义源：Settings 字段、设置页选项表、索引器分发链均引用此类型。
+ * "wasm" = 本地 WASM 转换（默认，完全离线，零第三方请求）；"jina" = Jina Reader（第三方共享限流）。
  */
-export type ReaderBackend = "markdown" | "jina" | "cloudflare" | "wasm";
+export type ReaderBackend = "jina" | "wasm";
+
+/** 归一化 reader 后端值：合法值原样返回，旧值（markdown/cloudflare）与未知值回落 wasm（单一定义源） */
+export function normalizeReaderBackend(value: unknown): ReaderBackend {
+  return value === "jina" || value === "wasm" ? value : "wasm";
+}
 
 /** 结果排序引擎 */
 export type SearchEngine = "orama" | "jev";
@@ -180,17 +186,10 @@ export interface Settings {
 
   /**
    * 页面内容提取后端：
-   * - "markdown" = markdown.new (Cloudflare AI，第三方共享限流)
+   * - "wasm" = 本地 WASM 转换 (@xberg-io/html-to-markdown-wasm，默认，完全离线，零第三方请求)
    * - "jina" = Jina Reader (第三方共享限流)
-   * - "cloudflare" = 自建 Cloudflare Markdown 服务 (workers/markdown-reader，无共享限流)
-   * - "wasm" = 本地 WASM 转换 (@xberg-io/html-to-markdown-wasm，完全离线，零第三方请求)
    */
   readerBackend?: ReaderBackend;
-
-  /** 自建 Cloudflare Markdown 服务（readerBackend = "cloudflare"）的部署地址 */
-  cloudflareReaderUrl?: string;
-  /** 自建服务的访问令牌（服务端设置了 AUTH_TOKEN 时必填） */
-  cloudflareReaderToken?: string;
 
   // Per-service overrides (optional) — 为 LLM 和 Embedding 分别配置不同服务
   /** Embedding 服务的独立 API Key（覆盖 openaiApiKey） */

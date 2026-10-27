@@ -13,6 +13,7 @@ import type {
   WikiDoc,
   CodeEmbedding,
 } from "./types";
+import { normalizeReaderBackend } from "./types";
 
 const SETTINGS_KEY = "settings";
 
@@ -441,10 +442,7 @@ const defaultSettings: Settings = {
   embeddingModel: "text-embedding-3-small", // 默认 embedding 模型
   llmModel: "gpt-4o-mini", // 默认 LLM 模型
   embedBackend: "remote", // 默认远程 API；用户可在设置中切换为 local (on-device)
-  readerBackend: "markdown", // 默认 markdown.new；可选 jina / cloudflare（自建 Worker，无共享限流）/ wasm（本地转换，零第三方请求）
-  // 自建 Cloudflare Markdown 服务（workers/markdown-reader）
-  cloudflareReaderUrl: undefined,
-  cloudflareReaderToken: undefined,
+  readerBackend: "wasm", // 默认本地 WASM 转换（完全离线）；可选 jina
   // Per-service overrides: undefined = fall back to shared openaiApiKey/baseURL
   embedApiKey: undefined,
   embedBaseURL: undefined,
@@ -487,10 +485,34 @@ const defaultSettings: Settings = {
   cloudSyncFileId: undefined,
 };
 
+/** 确保旧凭据清理只落盘一次（进程内标记，写回幂等） */
+let legacySettingsPersisted = false;
+
 /** 获取设置 */
 export async function getSettings(): Promise<Settings> {
   const result = await browser.storage.local.get(SETTINGS_KEY);
-  return { ...defaultSettings, ...(result[SETTINGS_KEY] as Settings) };
+  const settings = { ...defaultSettings, ...(result[SETTINGS_KEY] as Settings) };
+  // 读取时迁移：已移除的 reader 后端（markdown.new / 自建 Cloudflare）旧值及未知值
+  // 经共享归一化函数回落到本地 WASM（单一定义源 src/types.ts），
+  // 同时清除已移除的自建服务配置字段。检测到旧值时立即写回，确保旧凭据从 storage 中真正清除
+  const legacyBackend = settings.readerBackend as string | undefined;
+  const stale = settings as Record<string, unknown>;
+  const hasStaleFields =
+    "cloudflareReaderUrl" in stale || "cloudflareReaderToken" in stale;
+  const normalizedBackend = normalizeReaderBackend(legacyBackend);
+  const backendChanged = legacyBackend !== normalizedBackend;
+  if (backendChanged || hasStaleFields) {
+    if (backendChanged) {
+      settings.readerBackend = normalizedBackend;
+    }
+    delete stale.cloudflareReaderUrl;
+    delete stale.cloudflareReaderToken;
+    if (!legacySettingsPersisted) {
+      legacySettingsPersisted = true;
+      browser.storage.local.set({ [SETTINGS_KEY]: settings }).catch(() => {});
+    }
+  }
+  return settings;
 }
 
 /** 保存设置 */

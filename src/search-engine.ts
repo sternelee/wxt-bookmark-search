@@ -106,21 +106,27 @@ export function registerSearchEngineReadyFn(fn: () => Promise<void>): void {
   waitForSearchEngineReady = fn;
 }
 
-/** 新文档写入前等待启动初始化完成；populate 自身不经过此门，避免自等待 */
-async function awaitSearchEngineReady(): Promise<void> {
+/** 写入前等待启动初始化完成；populate 自身不经过此门，避免自等待（外部调用方需显式 await） */
+export async function awaitSearchEngineReady(): Promise<void> {
   await waitForSearchEngineReady?.();
 }
 
-/** 写入前校验维度，防止先删旧文档后被 Orama 拒绝造成索引数据丢失 */
-function assertVectorDimensions(records: BookmarkRecord[]): void {
-  for (const record of records) {
-    const vectorDim = record.embedding?.length ?? 0;
-    if (vectorDim > 0 && vectorDim !== currentDim) {
-      throw new Error(
-        `Search engine vector dimension mismatch: engine=${currentDim}, record=${record.id}, vector=${vectorDim}`,
-      );
-    }
+/** 按当前引擎维度拆分记录；异维记录逐条告警并跳过（不整批拒绝，防止一条坏向量拖累整批正常记录） */
+function partitionByVectorDimensions(
+  records: BookmarkRecord[],
+): BookmarkRecord[] {
+  const matching = records.filter(
+    (r) => r.embedding && r.embedding.length === currentDim,
+  );
+  const skipped = records.filter(
+    (r) => !(r.embedding && r.embedding.length === currentDim),
+  );
+  for (const r of skipped) {
+    console.warn(
+      `[search] 跳过异维向量 id=${r.id}（维度 ${r.embedding?.length ?? 0} ≠ 引擎 ${currentDim}），待下次重建`,
+    );
   }
+  return matching;
 }
 
 /** 初始化搜索引擎（dim 省略时沿用上一次的维度） */
@@ -236,7 +242,8 @@ export async function upsertSearchEngine(
   await awaitSearchEngineReady();
   if (!engine) return;
   if (record.status !== "indexed" || !record.embedding?.length) return;
-  assertVectorDimensions([record]);
+  const [matching] = partitionByVectorDimensions([record]);
+  if (!matching) return;
   try {
     await removeMultiple(engine, [record.id]);
   } catch {
@@ -255,8 +262,10 @@ export async function upsertSearchEngineBatch(
     (r) => r.status === "indexed" && r.embedding?.length,
   );
   if (validRecords.length === 0) return;
-  assertVectorDimensions(validRecords);
-  const validDocs = validRecords.map(recordToDoc);
+  // 异维记录逐条跳过并告警，不再整批拒绝（保留在 Dexie，待启动维度守卫重建）
+  const matchingRecords = partitionByVectorDimensions(validRecords);
+  if (matchingRecords.length === 0) return;
+  const validDocs = matchingRecords.map(recordToDoc);
   // 先批量删除旧记录
   const ids = validDocs.map((d) => d.id);
   try {

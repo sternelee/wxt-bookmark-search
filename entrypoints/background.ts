@@ -52,6 +52,7 @@ import {
   flushSaveSearchEngine,
   registerSaveFn,
   registerSearchEngineReadyFn,
+  awaitSearchEngineReady,
   resetSearchEngine,
   SEARCH_TOKENIZER_VERSION,
   isSearchEngineReady,
@@ -450,15 +451,26 @@ async function importBookmarksData(
 
   await db.bookmarks.bulkPut([...inSpace, ...stale]);
 
+  let requeued = 0;
   if (inSpace.length > 0) {
-    const count = await populateSearchEngine(inSpace);
-    console.log(`[FlowSearch] Imported ${count} records into search engine`);
-    await flushSaveSearchEngine();
+    // 等待启动初始化完成（引擎维度已切换、存量索引已恢复），再导入文档，
+    // 避免写入未就绪引擎或被 init 的 loadSearchEngine 整体替换
+    await awaitSearchEngineReady();
+    try {
+      const count = await populateSearchEngine(inSpace);
+      console.log(`[FlowSearch] Imported ${count} records into search engine`);
+      await flushSaveSearchEngine();
+    } catch (err) {
+      // 引擎同步失败（如异维向量）：重排队走常规索引路径自愈
+      console.error("[FlowSearch] Import search engine sync failed:", err);
+      requeued += await enqueueBookmarksForReindex(
+        inSpace.map((r) => ({ id: r.id, url: r.url, title: r.title })),
+      );
+    }
   }
 
-  let requeued = 0;
   if (stale.length > 0) {
-    requeued = await enqueueBookmarksForReindex(
+    requeued += await enqueueBookmarksForReindex(
       stale.map((r) => ({ id: r.id, url: r.url, title: r.title })),
     );
   }

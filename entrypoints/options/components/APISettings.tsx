@@ -14,6 +14,7 @@ import { testApiKey } from "../../../src/embedding";
 import { testLlmModel } from "../../../src/llm";
 import { isEmbedConfigChanged } from "../../../src/service-config";
 import type { ReaderBackend } from "../../../src/types";
+import { normalizeReaderBackend } from "../../../src/types";
 import type { I18nKey } from "../../../src/i18n";
 import { useI18n } from "../../../src/i18n";
 
@@ -22,18 +23,9 @@ const READER_BACKEND_OPTIONS: ReadonlyArray<{
   value: ReaderBackend;
   labelKey: I18nKey;
 }> = [
-  { value: "markdown", labelKey: "options.api.readerBackendMarkdown" },
-  { value: "jina", labelKey: "options.api.readerBackendJina" },
-  { value: "cloudflare", labelKey: "options.api.readerBackendCloudflare" },
   { value: "wasm", labelKey: "options.api.readerBackendWasm" },
+  { value: "jina", labelKey: "options.api.readerBackendJina" },
 ];
-
-/** 校验并归一化存储中的 readerBackend，未知值降级为 markdown */
-function normalizeReaderBackend(value: unknown): ReaderBackend {
-  return READER_BACKEND_OPTIONS.some((option) => option.value === value)
-    ? (value as ReaderBackend)
-    : "markdown";
-}
 
 export default function APISettings() {
   const { t } = useI18n();
@@ -44,9 +36,7 @@ export default function APISettings() {
   const [enableLLMEnrichment, setEnableLLMEnrichment] = createSignal(true);
   const [aiProvider, setAIProvider] = createSignal<"remote" | "disabled">("remote");
   const [embedBackend, setEmbedBackend] = createSignal<"local" | "remote">("remote");
-  const [readerBackend, setReaderBackend] = createSignal<ReaderBackend>("markdown");
-  const [cloudflareReaderUrl, setCloudflareReaderUrl] = createSignal("");
-  const [cloudflareReaderToken, setCloudflareReaderToken] = createSignal("");
+  const [readerBackend, setReaderBackend] = createSignal<ReaderBackend>("wasm");
   const [localEngineInfo, setLocalEngineInfo] = createSignal("");
   const [embeddingTested, setEmbeddingTested] = createSignal(false);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
@@ -77,8 +67,6 @@ export default function APISettings() {
     );
     setEmbedBackend(settings.embedBackend === "local" ? "local" : "remote");
     setReaderBackend(normalizeReaderBackend(settings.readerBackend));
-    setCloudflareReaderUrl(settings.cloudflareReaderUrl || "");
-    setCloudflareReaderToken(settings.cloudflareReaderToken || "");
     // Per-service override 初始化
     setEmbedApiKey(settings.embedApiKey || "");
     setEmbedBaseURL(settings.embedBaseURL || "");
@@ -115,8 +103,6 @@ export default function APISettings() {
         embeddingModel: embeddingModel() || undefined,
         embedBackend: embedBackend(),
         readerBackend: readerBackend(),
-        cloudflareReaderUrl: cloudflareReaderUrl().trim() || undefined,
-        cloudflareReaderToken: cloudflareReaderToken().trim() || undefined,
         llmModel: llmModel() || undefined,
         enableLLMEnrichment: enableLLMEnrichment(),
         aiProvider: aiProvider(),
@@ -337,27 +323,6 @@ export default function APISettings() {
               <option value={option.value}>{t(option.labelKey)}</option>
             ))}
           </select>
-          {readerBackend() === "cloudflare" && (
-            <div class="mt-3 space-y-2">
-              <input
-                type="url"
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder={t("options.api.cloudflareReaderUrlPlaceholder")}
-                value={cloudflareReaderUrl()}
-                onInput={(e) => setCloudflareReaderUrl(e.currentTarget.value)}
-              />
-              <input
-                type="password"
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder={t("options.api.cloudflareReaderTokenPlaceholder")}
-                value={cloudflareReaderToken()}
-                onInput={(e) => setCloudflareReaderToken(e.currentTarget.value)}
-              />
-              <p class="text-xs text-muted-foreground">
-                {t("options.api.cloudflareReaderHint")}
-              </p>
-            </div>
-          )}
           <p class="text-xs text-muted-foreground mt-1">
             {t("options.api.readerBackendHint")}
           </p>

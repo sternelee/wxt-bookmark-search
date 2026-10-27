@@ -109,12 +109,6 @@ const embeddingLimiter = new RateLimiter("embedding", RATE_LIMITER_DEFAULTS);
 /** 第三方 reader 共用限流参数：基础延迟高于默认，降低触发 429 的频率 */
 const READER_LIMITER_OPTIONS = { ...RATE_LIMITER_DEFAULTS, minDelay: 500 };
 const jinaLimiter = new RateLimiter("jina", READER_LIMITER_OPTIONS);
-const markdownLimiter = new RateLimiter("markdown", READER_LIMITER_OPTIONS);
-// 自建服务无共享限流，保留限流器应对 Workers AI 配额触发的 429
-const cloudflareReaderLimiter = new RateLimiter(
-  "cloudflareReader",
-  READER_LIMITER_OPTIONS,
-);
 const githubLimiter = new RateLimiter("github", {
   ...RATE_LIMITER_DEFAULTS,
   maxDelay: 30000,
@@ -434,7 +428,7 @@ function errorMessage(e: unknown): string {
 }
 
 /**
- * 剥离 Markdown 开头的 YAML frontmatter（如 markdown.new 返回的 `---\ntitle: ...\n---`）。
+ * 剥离 Markdown 开头的 YAML frontmatter（部分 reader / 本地 WASM 转换会输出 `---\ntitle: ...\n---`）。
  * 返回正文与 frontmatter 中的 title（如有）。
  */
 function stripYamlFrontmatter(
@@ -927,7 +921,7 @@ function buildEmbeddingText(
   return parts.length > 0 ? parts.join("\n") : title;
 }
 
-/** 第三方 reader（markdown.new / Jina）提取的结果 */
+/** 第三方 reader（Jina）提取的结果 */
 interface ReaderExtraction {
   markdown: string;
   title?: string;
@@ -938,83 +932,6 @@ interface ReaderExtraction {
 interface ReaderOutcome {
   content: ReaderExtraction | null;
   error?: string;
-}
-
-/**
- * 通过 markdown.new (Cloudflare AI) 提取页面 markdown（默认 reader）
- */
-async function fetchWithMarkdownNew(
-  url: string,
-): Promise<ReaderOutcome> {
-  const safeUrl = sanitizeReaderUrl(url);
-  if (!safeUrl) {
-    console.warn(
-      `[indexer] markdown.new: Skipping private or unsupported URL: ${url}`,
-    );
-    return { content: null, error: "URL 不支持第三方提取" };
-  }
-
-  console.log(`[indexer] markdown.new: Requesting ${url}`);
-  try {
-    const markdownResponse = await fetch("https://markdown.new/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        url: safeUrl,
-        method: "auto",
-        retain_images: false,
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
-
-    // 429 与 439 均为 markdown.new 限流码
-    if (markdownResponse.status === 429 || markdownResponse.status === 439) {
-      markdownLimiter.onRateLimit();
-      return {
-        content: null,
-        error: `markdown.new HTTP ${markdownResponse.status}（限流）`,
-      };
-    }
-    if (!markdownResponse.ok) {
-      console.warn(
-        `[indexer] markdown.new: HTTP ${markdownResponse.status} for ${url}`,
-      );
-      return {
-        content: null,
-        error: `markdown.new HTTP ${markdownResponse.status}`,
-      };
-    }
-
-    markdownLimiter.onSuccess();
-    const data = (await markdownResponse.json().catch(() => null)) as {
-      success?: boolean;
-      content?: string;
-      title?: string;
-    } | null;
-    if (
-      data?.success &&
-      typeof data.content === "string" &&
-      data.content.trim().length > 0
-    ) {
-      const { body, title: frontTitle } = stripYamlFrontmatter(data.content);
-      const { title, summary } = extractFromMarkdown(
-        body,
-        frontTitle || data.title || "",
-      );
-      console.log(`[indexer] markdown.new: success for ${url}`);
-      return { content: { markdown: body, title, summary } };
-    }
-    return { content: null, error: "markdown.new 返回内容为空" };
-  } catch (e) {
-    console.warn(`[indexer] markdown.new: failed for ${url}:`, e);
-    return {
-      content: null,
-      error: `markdown.new 请求失败: ${e instanceof Error ? e.message : String(e)}`,
-    };
-  }
 }
 
 /**
@@ -1065,80 +982,6 @@ async function fetchWithJinaReader(
     return {
       content: null,
       error: `Jina Reader 请求失败: ${e instanceof Error ? e.message : String(e)}`,
-    };
-  }
-}
-
-/**
- * 通过自建 Cloudflare Markdown 服务（workers/markdown-reader）提取页面 markdown。
- * 部署在用户自己的 Cloudflare 账号（Workers AI toMarkdown），无第三方共享限流。
- */
-async function fetchWithCloudflareReader(
-  url: string,
-  settings: Settings,
-): Promise<ReaderOutcome> {
-  const base = (settings.cloudflareReaderUrl ?? "").trim();
-  if (!base) {
-    return { content: null, error: "未配置自建 Markdown 服务地址" };
-  }
-
-  const safeUrl = sanitizeReaderUrl(url);
-  if (!safeUrl) {
-    console.warn(
-      `[indexer] cloudflare reader: Skipping private or unsupported URL: ${url}`,
-    );
-    return { content: null, error: "URL 不支持第三方提取" };
-  }
-
-  const endpoint = `${base.replace(/\/+$/, "")}/markdown?url=${encodeURIComponent(safeUrl)}`;
-  console.log(`[indexer] cloudflare reader: Requesting ${url}`);
-  try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    const token = (settings.cloudflareReaderToken ?? "").trim();
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    // 服务端抓取 + AI 转换耗时较长，与服务端总超时（20s）对齐后留余量
-    const response = await fetch(endpoint, {
-      headers,
-      signal: AbortSignal.timeout(25000),
-    });
-
-    if (response.status === 429) {
-      cloudflareReaderLimiter.onRateLimit();
-      return { content: null, error: "自建 Markdown 服务 HTTP 429（限流）" };
-    }
-    if (!response.ok) {
-      console.warn(
-        `[indexer] cloudflare reader: HTTP ${response.status} for ${url}`,
-      );
-      return { content: null, error: `自建 Markdown 服务 HTTP ${response.status}` };
-    }
-
-    const data = (await response.json().catch(() => null)) as {
-      success?: boolean;
-      markdown?: string;
-      error?: string;
-    } | null;
-    if (
-      data?.success &&
-      typeof data.markdown === "string" &&
-      data.markdown.trim().length > 0
-    ) {
-      cloudflareReaderLimiter.onSuccess();
-      const { body, title: frontTitle } = stripYamlFrontmatter(data.markdown);
-      const { title, summary } = extractFromMarkdown(body, frontTitle || "");
-      console.log(`[indexer] cloudflare reader: success for ${url}`);
-      return { content: { markdown: body, title, summary } };
-    }
-    return {
-      content: null,
-      error: data?.error || "自建 Markdown 服务返回内容为空",
-    };
-  } catch (e) {
-    console.warn(`[indexer] cloudflare reader: failed for ${url}:`, e);
-    return {
-      content: null,
-      error: `自建 Markdown 服务请求失败: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }
@@ -1257,7 +1100,7 @@ export async function fetchPageContent(
       }
     }
 
-    // 策略 2、3 并行执行：本地 Fetch + 用户选择的 reader（markdown.new / Jina / 自建 / 本地 WASM）
+    // 策略 2、3 并行执行：本地 Fetch + 用户选择的 reader（Jina / 本地 WASM）
     // 原始 HTML 只抓一次，由 Readability 路径与本地 WASM 转换路径共享
     const htmlPromise = (async (): Promise<string | null> => {
       try {
@@ -1326,13 +1169,7 @@ export async function fetchPageContent(
     // wasm 后端是 CPU 密集型本机转换，不提前启动：等本地结果确定不足时才执行，
     // 避免 Readability 已高质量时白跑一次 4.5MB wasm 初始化 + 转换。
     const remoteReaderPromise =
-      settings.readerBackend === "jina"
-        ? fetchWithJinaReader(url)
-        : settings.readerBackend === "cloudflare"
-          ? fetchWithCloudflareReader(url, settings)
-          : settings.readerBackend === "wasm"
-            ? null
-            : fetchWithMarkdownNew(url);
+      settings.readerBackend === "jina" ? fetchWithJinaReader(url) : null;
 
     // 先等本地结果；高质量则直接返回
     const localResult = await localPromise;
@@ -1391,8 +1228,6 @@ function onRateLimit(): void {
 function isRateLimitError(error: string): boolean {
   return (
     error.includes("429") ||
-    // markdown.new 的限流码为 439
-    error.includes("439") ||
     error.includes("rate limit") ||
     error.includes("too many requests") ||
     error.includes("quota")
@@ -1479,7 +1314,7 @@ async function processQueue(): Promise<void> {
       async (job) => {
         try {
           // 每个 job 重新读取设置：用户在索引运行中切换 reader 后端
-          // （如 markdown.new 限流后切到 Jina）能立即生效，无需重启 SW
+          // （如 Jina 限流后切到本地 WASM）能立即生效，无需重启 SW
           const jobSettings = await getSettings();
           const { content, readerError } = await fetchPageContent(
             job.url,

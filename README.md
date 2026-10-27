@@ -143,7 +143,7 @@ entrypoints/
 - **Search engine**: Orama (full-text + vector + hybrid)
 - **Embedding**: SiliconFlow BGE-M3 (1024 dimensions)
 - **LLM**: SiliconFlow DeepSeek-V3 (summaries and tags)
-- **Content Extraction**: active tab → `@mozilla/readability` → Jina AI Reader
+- **Content Extraction**: active tab → `@mozilla/readability` → selected reader backend (local WASM default / Jina), no cross-backend fallback
 
 ## Commands
 
@@ -165,7 +165,7 @@ before finishing a change.
 ## API Requirements
 
 - **SiliconFlow API Key**: Required for semantic search and LLM enhancement (remote embedding backend)
-- **Jina AI Reader**: Free, no API key needed (content extraction fallback)
+- **Jina AI Reader**: Free, no API key needed (optional remote content extraction backend; the default backend is local WASM conversion)
 - **GitHub PAT**: Optional, for syncing starred repos and Gist sync
 - **Twitter/X Cookies**: Optional, auto-extracted from the browser (bookmarks sync)
 

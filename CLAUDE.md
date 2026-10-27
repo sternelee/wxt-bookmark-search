@@ -108,7 +108,7 @@ Broadcast (background → all listeners): `LINK_CHECK_PROGRESS`
 
 **Hybrid/vector/keyword search:** all go through `search-engine.ts`. Vector and hybrid require an embedding (uses LRU cache, then API). Keyword falls back when no API key. Orama handles fuzzy tolerance (`tolerance: 1`).
 
-**Indexing pipeline:** bookmark URL → content extraction (Active Tab → Local Readability + Turndown → reader backend from `settings.readerBackend`: markdown.new / Jina / self-hosted Cloudflare Worker / local WASM, no cross-backend fallback) → `ai-providers` LLM (summary + tags) → `embedding.ts` (vector via batch API) → Dexie write → `upsertSearchEngine` → `scheduleSaveSearchEngine`.
+**Indexing pipeline:** bookmark URL → content extraction (Active Tab → Local Readability + Turndown → reader backend from `settings.readerBackend`: local WASM (default) / Jina, no cross-backend fallback) → `ai-providers` LLM (summary + tags) → `embedding.ts` (vector via batch API) → Dexie write → `upsertSearchEngine` → `scheduleSaveSearchEngine`.
 
 **GitHub README re-indexing:** `initIndexer` checks `settings.githubReadmeVersion` against the target version constant. On mismatch, GitHub-sourced bookmarks are re-enqueued for enrichment via `extractReadmeSemanticContent` (markdown → semantically-meaningful text).
 
@@ -138,7 +138,7 @@ Broadcast (background → all listeners): `LINK_CHECK_PROGRESS`
 
 **AI provider abstraction:** `ai-providers/llm-base.ts` holds the current provider singleton; `autoCreateLLMProvider(settings)` picks based on `settings.aiProvider`. Chrome AI is deprecated (`detect.ts` always returns unavailable). Current sole live provider: remote OpenAI-compatible (`llm-remote.ts`).
 
-**Content extraction order:** Active Tab (fastest, uses Readability on live DOM) → Local Readability + Turndown on fetched HTML → the reader backend chosen in settings: `markdown.new` (default), Jina Reader (`https://r.jina.ai/*` host permission), self-hosted Cloudflare Worker, or local WASM conversion (`@xberg-io/html-to-markdown-wasm`, zero third-party requests). Each backend is used alone — there is no automatic fallback to another one.
+**Content extraction order:** Active Tab (fastest, uses Readability on live DOM) → Local Readability + Turndown on fetched HTML → the reader backend chosen in settings: local WASM conversion (`@xberg-io/html-to-markdown-wasm`, default, zero third-party requests) or Jina Reader (`https://r.jina.ai/*` host permission). Each backend is used alone — there is no automatic fallback to another one.
 
 **Early-exit pagination:** GitHub Stars sync exits when all URLs already indexed to avoid unnecessary pagination.
 

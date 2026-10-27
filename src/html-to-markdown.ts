@@ -11,8 +11,7 @@
  * - wasm 由 wxt.config.ts 构建钩子复制到 public/，运行时经
  *   chrome.runtime.getURL 获取（MV3 SW / offscreen / options 通用）
  *
- * 与第三方 reader（markdown.new / Jina / 自建 Cloudflare）通过
- * `settings.readerBackend` 设置切换
+ * 与第三方 reader（Jina）通过 `settings.readerBackend` 设置切换
  */
 
 import wasmPkg, {
@@ -24,10 +23,10 @@ import wasmPkg, {
 } from "@xberg-io/html-to-markdown-wasm";
 
 /**
- * 类型收窄说明：包的 `exports["."].types` 指向 nodejs 构建（无 default init），
+ * 类型收窄说明：包的 `exports["."].types` 指向 nodejs 构建（无 default init 导出），
  * 而浏览器运行时经 browser 条件加载 web 构建（default = 异步 init 函数，
- * 接受 fetch(request) 结果）。此差异为 wasm-bindgen 多目标产物所致，
- * 需显式收窄（同 untyped browser API 处理方式）。
+ * 接受 `{ module_or_path }` 对象、string/URL 或 fetch promise）。
+ * 此差异为 wasm-bindgen 多目标产物所致，需显式收窄（同 untyped browser API 处理方式）。
  */
 type WasmInitFn = (input?: unknown) => Promise<unknown>;
 const wasmInit = wasmPkg as unknown as WasmInitFn;
